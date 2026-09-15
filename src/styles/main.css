@@ -1654,6 +1654,17 @@ button { font-family: inherit; }
 .offline-banner.offline-banner-online { background: var(--accent-soft); color: var(--success); border-color: var(--accent-soft-strong); }
 
 /* ==========================================================================
+   Calendar Import/Export (Phase 12). The export/import cards reuse .card/
+   .meal-row/.hint/.btn-secondary as-is. The import preview modal reuses
+   the existing .board-modal-* / .board-breakdown-list / .board-breakdown-item
+   primitives from Phases 5/8 — only the two-line title+meta layout inside
+   each row is new.
+   ========================================================================== */
+.calendar-import-item-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.calendar-import-item-title { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-import-item-meta { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
    ========================================================================== */
 @media (max-width: 860px) {

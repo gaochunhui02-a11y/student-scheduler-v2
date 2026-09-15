@@ -201,6 +201,55 @@
         <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
       </div>
 
+      <div class="card" id="calendarExportCard">
+        <h2 data-i18n="calendar.exportTitle">Export Calendar</h2>
+        <p class="hint" data-i18n="calendar.exportHint">Save your schedule as a .ics file you can import into Google Calendar, Apple Calendar, or Outlook.</p>
+
+        <div class="row-2">
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="exportTypeClass" checked>
+            <label for="exportTypeClass" data-i18n="calendar.typeClasses">Classes</label>
+          </div>
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="exportTypeStudy" checked>
+            <label for="exportTypeStudy" data-i18n="calendar.typeStudy">Study Sessions</label>
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="exportTypeMeal">
+            <label for="exportTypeMeal" data-i18n="calendar.typeMeals">Meals</label>
+          </div>
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="exportTypeBreak">
+            <label for="exportTypeBreak" data-i18n="calendar.typeBreaks">Breaks</label>
+          </div>
+        </div>
+
+        <button type="button" class="btn-secondary" id="exportTodayBtn" style="width:100%;" data-i18n="calendar.exportToday">Export Today</button>
+
+        <div class="row-2" style="margin-top:10px;">
+          <div>
+            <label for="exportRangeStart" data-i18n="calendar.rangeStart">Start date</label>
+            <input type="date" id="exportRangeStart">
+          </div>
+          <div>
+            <label for="exportRangeEnd" data-i18n="calendar.rangeEnd">End date</label>
+            <input type="date" id="exportRangeEnd">
+          </div>
+        </div>
+        <button type="button" class="btn-secondary" id="exportRangeBtn" style="width:100%;" data-i18n="calendar.exportDateRange">Export Date Range</button>
+        <p class="hint" id="calendarExportStatus" hidden></p>
+      </div>
+
+      <div class="card" id="calendarImportCard">
+        <h2 data-i18n="calendar.importTitle">Import Calendar</h2>
+        <p class="hint" data-i18n="calendar.importHint">Import events from a .ics file as fixed events that block study time. You'll preview them before anything is saved.</p>
+        <input type="file" id="calendarFileInput" accept=".ics,text/calendar" style="display:none;">
+        <button type="button" class="btn-secondary" id="importCalendarBtn" style="width:100%;" data-i18n="calendar.chooseFile">Choose Calendar File</button>
+        <p class="hint" id="calendarImportStatus" hidden></p>
+      </div>
+
       <div class="card" id="copyToAnotherDayCard">
         <h2 data-i18n="copy.title">Copy to another day</h2>
         <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>

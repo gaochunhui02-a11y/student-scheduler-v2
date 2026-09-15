@@ -47,6 +47,7 @@ import { initAdvisorSection } from '../advisor/advisor.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
 import { initNotificationsSection } from '../notifications/notifications.js';
 import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
+import { initCalendarSection } from '../calendar/calendar.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -356,6 +357,46 @@ async function init(session) {
     getUpcomingSubjectsForReminders: () => listUpcomingStudySubjects(userId, addDaysToDateStr(tomorrowDateStr(), -1)),
   };
   initNotificationsSection(userId, notificationsHostApi);
+
+  // ---------------- Calendar import/export -> existing schedule/classes (Phase 12) ----------------
+  // calendar.js never imports data.js directly — it only calls these host
+  // functions. Export reads schedule_items read-only (today's own
+  // in-memory currentScheduleItems, or the exact same
+  // listSchedulesInRange/listScheduleItemsForScheduleIds the Phase 10
+  // Dashboard already uses for a date range). Import writes ONLY through
+  // the EXISTING getOrCreateScheduleForDate + insertClass — imported
+  // events become ordinary classes rows, not a second fixed-event system,
+  // and go through the same functions any manually-typed class already
+  // uses. The scheduling algorithm itself is never touched; imported
+  // classes simply become part of what it already treats as a fixed
+  // commitment on that date, exactly like any other class.
+  const calendarHostApi = {
+    getTodayExportData: () => ({
+      dateStr: schedule ? schedule.for_date : addDaysToDateStr(tomorrowDateStr(), -1),
+      items: currentScheduleItems.map((i) => ({ id: i.id, item_type: i.type, name: i.name, start_minutes: i.start, end_minutes: i.end })),
+    }),
+    getRangeExportData: async (startDate, endDate) => {
+      const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
+      const scheduleIds = schedulesInRange.map((s) => s.id);
+      const items = await listScheduleItemsForScheduleIds(scheduleIds);
+      return schedulesInRange.map((s) => ({
+        dateStr: s.for_date,
+        items: items.filter((i) => i.schedule_id === s.id),
+      }));
+    },
+    importClassesForDates: async (dateStr, fieldsList) => {
+      const targetSchedule = await getOrCreateScheduleForDate(userId, dateStr);
+      const isCurrentlyLoaded = Boolean(schedule) && schedule.id === targetSchedule.id;
+      const baseSortOrder = isCurrentlyLoaded ? classList.children.length : 0;
+      for (let i = 0; i < fieldsList.length; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const created = await insertClass(targetSchedule.id, userId, fieldsList[i], baseSortOrder + i);
+        if (isCurrentlyLoaded) addClassRow(created);
+      }
+      refreshHistoryList();
+    },
+  };
+  initCalendarSection(userId, calendarHostApi);
 
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
