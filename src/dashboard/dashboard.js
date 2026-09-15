@@ -23,6 +23,10 @@ import {
   setScheduleItemLocked,
   setScheduleItemCompleted,
   updateScheduleItemTime,
+  listSchedulesInRange,
+  listScheduleItemsForScheduleIds,
+  listStudySubjectsForScheduleIds,
+  listUpcomingStudySubjects,
 } from './data.js';
 import {
   generateSchedule,
@@ -38,7 +42,9 @@ import { computeDailySummary, computeSubjectProgress, formatDuration } from './s
 import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
+import { listBoards } from '../board/boardData.js';
 import { initAdvisorSection } from '../advisor/advisor.js';
+import { initAnalyticsSection } from '../analytics/analytics.js';
 
 // ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
 // Purely presentational — adds/removes a data-theme attribute on <html> and
@@ -137,17 +143,21 @@ async function init(session) {
     });
   }
 
-  // ---------------- alternate views (Board, AI Advisor) ----------------
-  // Board and Advisor are full alternate views, not anchors within the
-  // planner's continuous scroll — so "Planner"/"History"/etc. and
-  // "Board"/"AI Advisor" use two different nav-click patterns that
-  // coexist: data-scroll-target (existing, untouched below) smooth-scrolls
-  // within the always-mounted planner layout, while data-view-target swaps
-  // which top-level section is visible. All Board DOM/state lives in
-  // src/board/board.js and all Advisor DOM/state lives in
-  // src/advisor/advisor.js — this file only owns the show/hide toggle
-  // between #plannerForm and whichever alternate view is active.
-  const altViewEls = [document.getElementById('boardView'), document.getElementById('advisorView')].filter(Boolean);
+  // ---------------- alternate views (Board, AI Advisor, Dashboard) ----------------
+  // Board, Advisor, and the analytics Dashboard are full alternate views,
+  // not anchors within the planner's continuous scroll — so
+  // "Planner"/"History"/etc. and "Board"/"AI Advisor"/"Dashboard" use two
+  // different nav-click patterns that coexist: data-scroll-target
+  // (existing, untouched below) smooth-scrolls within the always-mounted
+  // planner layout, while data-view-target swaps which top-level section
+  // is visible. All Board DOM/state lives in src/board/board.js, all
+  // Advisor DOM/state lives in src/advisor/advisor.js, and all Dashboard/
+  // analytics DOM/state lives in src/analytics/analytics.js — this file
+  // only owns the show/hide toggle between #plannerForm and whichever
+  // alternate view is active.
+  const altViewEls = [document.getElementById('boardView'), document.getElementById('advisorView'), document.getElementById('analyticsView')].filter(
+    Boolean
+  );
   function showPlannerView() {
     altViewEls.forEach((el) => {
       el.hidden = true;
@@ -159,6 +169,18 @@ async function init(session) {
     altViewEls.forEach((el) => {
       el.hidden = el !== viewEl;
     });
+  }
+
+  // Shared by Board's/the Advisor's/Analytics' "go to Planner" bridges —
+  // switches back to the planner view, marks the Planner nav item active,
+  // and scrolls to the study-tasks card. One implementation, several
+  // callers, same as every other cross-feature bridge in this file.
+  function goToPlannerStudyList() {
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+    const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
+    if (plannerNavBtn) plannerNavBtn.classList.add('active');
+    showPlannerView();
+    if (studyList) studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ---------------- Board -> existing study-task system (Phase 5) ----------------
@@ -182,13 +204,7 @@ async function init(session) {
       refreshHistoryList();
       return created;
     },
-    viewInPlanner: () => {
-      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
-      const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
-      if (plannerNavBtn) plannerNavBtn.classList.add('active');
-      showPlannerView();
-      if (studyList) studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
+    viewInPlanner: goToPlannerStudyList,
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 
@@ -223,6 +239,38 @@ async function init(session) {
   };
   const advisorSection = initAdvisorSection(userId, advisorHostApi);
 
+  // ---------------- Dashboard/Analytics -> existing Planner + Board + Advisor (Phase 10) ----------------
+  // analytics.js never imports data.js/boardData.js/the Advisor directly —
+  // it only calls these host functions. Every number it shows is derived
+  // read-only from the exact same tables (schedules/schedule_items/
+  // study_subjects/boards) every other feature already reads; nothing here
+  // writes anything. "Ask AI Advisor" reuses the existing Advisor via
+  // advisorSection.prefillAndFocus — it never sends a message itself, and
+  // there is no second AI integration here.
+  const analyticsHostApi = {
+    getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
+    getWeekData: async (startDate, endDate) => {
+      const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
+      const scheduleIds = schedulesInRange.map((s) => s.id);
+      const [items, subjects] = await Promise.all([listScheduleItemsForScheduleIds(scheduleIds), listStudySubjectsForScheduleIds(scheduleIds)]);
+      return { schedules: schedulesInRange, items, subjects };
+    },
+    getUpcomingDeadlines: (fromDate) => listUpcomingStudySubjects(userId, fromDate),
+    getBoardsSummary: () => listBoards(userId),
+    viewInPlanner: goToPlannerStudyList,
+    openAdvisorWithMessage: (text) => {
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+      const advisorNavBtn = document.querySelector('.nav-item[data-view-target="advisorView"]');
+      if (advisorNavBtn) advisorNavBtn.classList.add('active');
+      showAltView(document.getElementById('advisorView'));
+      if (advisorSection) {
+        if (typeof advisorSection.onShow === 'function') advisorSection.onShow();
+        if (typeof advisorSection.prefillAndFocus === 'function') advisorSection.prefillAndFocus(text);
+      }
+    },
+  };
+  const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
+
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
@@ -236,6 +284,7 @@ async function init(session) {
   const altViewSections = {
     boardView: boardSection,
     advisorView: advisorSection,
+    analyticsView: analyticsSection,
   };
   document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {
     btn.addEventListener('click', () => {

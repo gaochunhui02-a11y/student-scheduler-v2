@@ -282,3 +282,56 @@ export async function updateScheduleItemTime(id, startMinutes, endMinutes) {
   const { error } = await supabase.from('schedule_items').update({ start_minutes: startMinutes, end_minutes: endMinutes }).eq('id', id);
   if (error) throw error;
 }
+
+// ---------------- Dashboard analytics (Phase 10) ----------------
+// Read-only queries reusing the exact same tables/RLS every other feature
+// already uses — no new table, no new column. Each is a small, differently
+// shaped SELECT on data this file already knows how to read one row/date at
+// a time; these just do it for several dates or subjects at once so the
+// analytics view isn't making 10+ round trips.
+
+// All of this user's schedule rows whose for_date falls within
+// [startDate, endDate] inclusive — the "This Week" window. Ordered oldest
+// first so callers can zip it directly against a list of date strings.
+export async function listSchedulesInRange(userId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from('schedules')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('for_date', startDate)
+    .lte('for_date', endDate)
+    .order('for_date', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function listScheduleItemsForScheduleIds(scheduleIds) {
+  if (!scheduleIds || scheduleIds.length === 0) return [];
+  const { data, error } = await supabase.from('schedule_items').select('*').in('schedule_id', scheduleIds);
+  if (error) throw error;
+  return data;
+}
+
+export async function listStudySubjectsForScheduleIds(scheduleIds) {
+  if (!scheduleIds || scheduleIds.length === 0) return [];
+  const { data, error } = await supabase.from('study_subjects').select('*').in('schedule_id', scheduleIds);
+  if (error) throw error;
+  return data;
+}
+
+// Every one of this user's study subjects with a due date on or after
+// `fromDate`, across every schedule/date they were created under — not
+// just the current week — for the Upcoming Deadlines list. Capped and
+// ordered soonest-first.
+export async function listUpcomingStudySubjects(userId, fromDate, limit = 25) {
+  const { data, error } = await supabase
+    .from('study_subjects')
+    .select('*')
+    .eq('user_id', userId)
+    .not('due_date', 'is', null)
+    .gte('due_date', fromDate)
+    .order('due_date', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}

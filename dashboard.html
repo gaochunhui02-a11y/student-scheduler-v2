@@ -21,6 +21,7 @@
       <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span data-i18n="nav.settings">Settings</span></button>
       <button type="button" class="nav-item" data-view-target="boardView"><span class="nav-dot"></span><span data-i18n="nav.board">Board</span></button>
       <button type="button" class="nav-item" data-view-target="advisorView"><span class="nav-dot"></span><span data-i18n="nav.advisor">AI Advisor</span></button>
+      <button type="button" class="nav-item" data-view-target="analyticsView"><span class="nav-dot"></span><span data-i18n="nav.dashboard">Dashboard</span></button>
     </nav>
 
     <div class="sidebar-bottom">
@@ -286,6 +287,72 @@
         <div class="advisor-input-row">
           <textarea id="advisorInput" class="advisor-input" rows="2" data-i18n-placeholder="advisor.inputPlaceholder" placeholder="Ask about your study plan" data-i18n-aria-label="advisor.inputPlaceholder" aria-label="Ask about your study plan"></textarea>
           <button type="button" class="btn-primary advisor-send-btn" id="advisorSendBtn" data-i18n="advisor.send">Send</button>
+        </div>
+      </section>
+
+      <section class="analytics-view" id="analyticsView" hidden>
+        <div class="analytics-header">
+          <h2 data-i18n="analytics.title">This Week</h2>
+        </div>
+
+        <p class="hint" id="analyticsStatus" hidden></p>
+
+        <div class="analytics-cards" id="analyticsCards">
+          <div class="analytics-card">
+            <span class="analytics-card-label" data-i18n="analytics.planned">Planned</span>
+            <span class="analytics-card-value" id="analyticsPlannedValue">—</span>
+          </div>
+          <div class="analytics-card">
+            <span class="analytics-card-label" data-i18n="analytics.completed">Completed</span>
+            <span class="analytics-card-value" id="analyticsCompletedValue">—</span>
+          </div>
+          <div class="analytics-card">
+            <span class="analytics-card-label" data-i18n="analytics.completionRate">Completion Rate</span>
+            <span class="analytics-card-value" id="analyticsCompletionRateValue">—</span>
+          </div>
+          <div class="analytics-card">
+            <span class="analytics-card-label" data-i18n="analytics.upcomingDeadlines">Upcoming Deadlines</span>
+            <span class="analytics-card-value" id="analyticsDeadlinesValue">—</span>
+          </div>
+          <div class="analytics-card">
+            <span class="analytics-card-label" data-i18n="analytics.atRisk">At Risk</span>
+            <span class="analytics-card-value" id="analyticsAtRiskValue">—</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="analytics.weeklyChartTitle">Planned vs Completed</h2>
+          <div class="analytics-chart-legend">
+            <span><i class="swatch analytics-swatch-planned"></i><span data-i18n="analytics.planned">Planned</span></span>
+            <span><i class="swatch analytics-swatch-completed"></i><span data-i18n="analytics.completed">Completed</span></span>
+          </div>
+          <div class="analytics-chart" id="analyticsChart"></div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="analytics.subjectBreakdown">Study Time by Subject</h2>
+          <div id="analyticsSubjectList">
+            <div class="placeholder" id="analyticsSubjectEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="analytics.productivity">Productivity</h2>
+          <div id="analyticsProductivity">
+            <div class="placeholder" id="analyticsProductivityEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 data-i18n="analytics.upcomingDeadlines">Upcoming Deadlines</h2>
+          <div id="analyticsUpcomingList">
+            <div class="placeholder" id="analyticsUpcomingEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
+          </div>
+        </div>
+
+        <div class="card" id="analyticsBoardsCard" hidden>
+          <h2 data-i18n="analytics.boardsTitle">Boards</h2>
+          <p class="hint" id="analyticsBoardsSummary"></p>
         </div>
       </section>
     </div>

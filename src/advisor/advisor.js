@@ -350,5 +350,16 @@ export function initAdvisorSection(userId, hostApi = {}) {
     }
   }
 
-  return { onShow };
+  // Used by the Phase 10 Dashboard's "Ask AI Advisor" button: drops a
+  // starting draft into the input and focuses it — the user still reviews
+  // and clicks Send themselves, exactly like typing it by hand. Never
+  // sends anything on its own.
+  function prefillAndFocus(text) {
+    if (!inputEl) return;
+    inputEl.value = text || '';
+    inputEl.focus();
+    focused = true;
+  }
+
+  return { onShow, prefillAndFocus };
 }

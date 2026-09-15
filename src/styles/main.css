@@ -1543,6 +1543,96 @@ button { font-family: inherit; }
 .advisor-add-selected-btn { width: auto; align-self: flex-start; padding: 0 16px; height: 32px; margin-top: 2px; }
 
 /* ==========================================================================
+   Dashboard + Analytics (Phase 10) — entirely read-only/derived. Reuses
+   .card, .swatch, .hint, .placeholder, and .board-node-link-btn rather
+   than a new visual language, plus --class/--study/--meal/--free-color
+   tokens for the chart (already dark-mode-correct) instead of new colors.
+   ========================================================================== */
+.analytics-view { margin-bottom: 16px; }
+.analytics-header { margin-bottom: 14px; }
+.analytics-header h2 { font-size: 18px; font-weight: 650; color: var(--text); margin: 0; }
+
+.analytics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.analytics-card-label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
+.analytics-card-value { font-size: 22px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.analytics-chart-legend { display: flex; gap: 16px; margin-bottom: 10px; }
+.analytics-swatch-planned { background: var(--muted-2); }
+.analytics-swatch-completed { background: var(--study-color); }
+
+.analytics-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 160px;
+  padding-top: 10px;
+}
+.analytics-chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.analytics-chart-bars {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+.analytics-chart-bar { width: 40%; border-radius: 3px 3px 0 0; min-height: 2px; transition: height var(--dur) var(--ease); }
+.analytics-chart-bar-planned { background: var(--surface-2); border: 1px solid var(--border-strong); }
+.analytics-chart-bar-completed { background: var(--study-color); }
+.analytics-chart-label { font-size: 11px; color: var(--muted); }
+
+.analytics-subject-row,
+.analytics-upcoming-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.analytics-subject-row:last-child,
+.analytics-upcoming-row:last-child { border-bottom: none; }
+.analytics-subject-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.analytics-subject-values { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.analytics-upcoming-row { cursor: pointer; gap: 12px; border-radius: var(--radius-sm); padding: 10px 8px; margin: 0 -8px; transition: background var(--dur) var(--ease); }
+.analytics-upcoming-row:hover, .analytics-upcoming-row:focus-visible { background: var(--surface-2); outline: none; }
+.analytics-upcoming-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.analytics-upcoming-title { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.analytics-upcoming-meta { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.analytics-risk-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  flex: none;
+  white-space: nowrap;
+}
+.analytics-risk-badge.risk-on_track { background: var(--surface-2); color: var(--muted); }
+.analytics-risk-badge.risk-needs_attention { background: var(--accent-soft); color: var(--accent-strong); }
+.analytics-risk-badge.risk-at_risk { background: var(--danger-soft); color: var(--danger); }
+
+.analytics-productivity-result { font-size: 15px; font-weight: 650; color: var(--text); margin: 0; }
+
+/* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
    ========================================================================== */
 @media (max-width: 860px) {
@@ -1590,4 +1680,6 @@ button { font-family: inherit; }
   .advisor-message { max-width: 92%; }
   .advisor-input-row { flex-direction: column; align-items: stretch; }
   .advisor-send-btn { width: 100%; }
+  .analytics-cards { grid-template-columns: repeat(2, 1fr); }
+  .analytics-upcoming-row { flex-wrap: wrap; }
 }
