@@ -1472,5 +1472,41 @@ export function initBoardSection(userId, hostApi = {}) {
     }
   }
 
-  return { onShow };
+  // ---------------- cross-feature bridges (Phase 9: AI Advisor) ----------------
+  // The Advisor never imports boardData.js or reaches into this module's
+  // internals — it only ever gets here through dashboard.js's hostApi, the
+  // same bridge pattern Board's own "Add to Planner" (Phase 5) already
+  // uses in the other direction. Board stays the sole owner of its
+  // Supabase calls and rendered state.
+
+  // A small, sanitized summary of the CURRENTLY LOADED board's nodes —
+  // titles and types only, capped, no ids — for the Advisor's planning
+  // context. Returns [] if no board has been loaded this session (the
+  // user never opened Board yet); this never triggers a fetch of its own.
+  function getGoalNodesSummary() {
+    return nodes.slice(0, 30).map((n) => ({ title: n.title, nodeType: n.node_type }));
+  }
+
+  // Creates a single top-level node on the currently active board from a
+  // plain title string — used by the Advisor's "Add to Board" action.
+  // Reuses the exact same createNodeDefaults placement + createNode call
+  // the "+ Add node" button already uses; the only difference is the
+  // caller-supplied title. Throws 'no_active_board' if the user hasn't
+  // opened/created a board yet this session, so the caller can show a
+  // clear, translated message rather than a silent failure.
+  async function addNodeFromExternal(title) {
+    if (!currentBoard) throw new Error('no_active_board');
+    const defaults = createNodeDefaults(nodes.length, 'task');
+    const created = await createNode(userId, currentBoard.id, {
+      nodeType: defaults.node_type,
+      title: title || defaults.title,
+      x: defaults.x_position,
+      y: defaults.y_position,
+    });
+    nodes.push(created);
+    renderNodes();
+    return created;
+  }
+
+  return { onShow, getGoalNodesSummary, addNodeFromExternal };
 }

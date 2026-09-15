@@ -1438,6 +1438,111 @@ button { font-family: inherit; }
 .board-breakdown-item input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
 
 /* ==========================================================================
+   AI Advisor (Phase 9) — chat workspace. Reuses the same premium tokens
+   and .board-node-link-btn button style as the rest of the Board/Planner
+   UI rather than inventing a separate visual language.
+   ========================================================================== */
+.advisor-view { margin-bottom: 16px; display: flex; flex-direction: column; height: 100%; }
+
+.advisor-header { margin-bottom: 14px; }
+.advisor-header h2 { font-size: 18px; font-weight: 650; color: var(--text); margin: 0; }
+
+.advisor-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: min(56vh, 520px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 12px;
+}
+.advisor-empty { margin: auto; max-width: 320px; }
+
+.advisor-message { max-width: 78%; display: flex; flex-direction: column; gap: 8px; }
+.advisor-message-text {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.advisor-message-user { align-self: flex-end; align-items: flex-end; }
+.advisor-message-user .advisor-message-text { background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 4px; }
+.advisor-message-assistant { align-self: flex-start; align-items: flex-start; }
+.advisor-message-assistant .advisor-message-text { background: var(--card); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.advisor-message-thinking .advisor-message-text { color: var(--muted); font-style: italic; }
+.advisor-message-error { align-self: flex-start; align-items: flex-start; }
+.advisor-message-error .advisor-message-text { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); border-bottom-left-radius: 4px; }
+
+.advisor-prompt-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.advisor-chip {
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-weight: 550;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.advisor-chip:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); }
+
+.advisor-input-row { display: flex; align-items: flex-end; gap: 10px; }
+.advisor-input {
+  flex: 1;
+  min-height: 42px;
+  max-height: 140px;
+  padding: 10px 12px;
+  margin-bottom: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  resize: vertical;
+}
+.advisor-send-btn { width: auto; padding: 0 22px; height: 42px; flex: none; }
+
+.advisor-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; width: 100%; }
+.advisor-suggestion-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.advisor-suggestion-top { display: flex; align-items: center; gap: 8px; }
+.advisor-suggestion-check { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+.advisor-suggestion-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+.advisor-suggestion-priority {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+.advisor-suggestion-priority.priority-low { background: var(--surface-2); color: var(--muted); }
+.advisor-suggestion-priority.priority-medium { background: var(--accent-soft); color: var(--accent-strong); }
+.advisor-suggestion-priority.priority-high { background: var(--danger-soft); color: var(--danger); }
+.advisor-suggestion-meta { font-size: 11.5px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.advisor-suggestion-reason { font-size: 11.5px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
+.advisor-suggestion-reason-label { font-weight: 600; color: var(--text-soft); }
+.advisor-suggestion-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.advisor-suggestion-actions .board-node-link-btn { padding: 4px 8px; }
+
+.advisor-add-selected-btn { width: auto; align-self: flex-start; padding: 0 16px; height: 32px; margin-top: 2px; }
+
+/* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
    ========================================================================== */
 @media (max-width: 860px) {
@@ -1481,4 +1586,8 @@ button { font-family: inherit; }
   .board-node-handle { opacity: 1; }
   .board-search { max-width: none; width: 100%; order: 1; }
   .board-select { max-width: none; flex: 1; }
+  .advisor-conversation { height: min(50vh, 420px); padding: 12px; }
+  .advisor-message { max-width: 92%; }
+  .advisor-input-row { flex-direction: column; align-items: stretch; }
+  .advisor-send-btn { width: 100%; }
 }

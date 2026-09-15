@@ -38,6 +38,7 @@ import { computeDailySummary, computeSubjectProgress, formatDuration } from './s
 import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
+import { initAdvisorSection } from '../advisor/advisor.js';
 
 // ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
 // Purely presentational — adds/removes a data-theme attribute on <html> and
@@ -136,31 +137,37 @@ async function init(session) {
     });
   }
 
-  // ---------------- Board section (view toggle) ----------------
-  // The Board is a full alternate view, not another anchor within the
-  // planner's continuous scroll — so "Planner"/"History"/etc. and "Board"
-  // use two different nav-click patterns that coexist: data-scroll-target
-  // (existing, untouched below) smooth-scrolls within the always-mounted
-  // planner layout, while data-view-target swaps which top-level section is
-  // visible. All Board DOM/state lives in src/board/board.js — this file
-  // only owns the show/hide toggle for #plannerForm vs #boardView.
-  const boardView = document.getElementById('boardView');
+  // ---------------- alternate views (Board, AI Advisor) ----------------
+  // Board and Advisor are full alternate views, not anchors within the
+  // planner's continuous scroll — so "Planner"/"History"/etc. and
+  // "Board"/"AI Advisor" use two different nav-click patterns that
+  // coexist: data-scroll-target (existing, untouched below) smooth-scrolls
+  // within the always-mounted planner layout, while data-view-target swaps
+  // which top-level section is visible. All Board DOM/state lives in
+  // src/board/board.js and all Advisor DOM/state lives in
+  // src/advisor/advisor.js — this file only owns the show/hide toggle
+  // between #plannerForm and whichever alternate view is active.
+  const altViewEls = [document.getElementById('boardView'), document.getElementById('advisorView')].filter(Boolean);
   function showPlannerView() {
-    if (boardView) boardView.hidden = true;
+    altViewEls.forEach((el) => {
+      el.hidden = true;
+    });
     plannerForm.style.display = '';
   }
-  function showBoardView() {
+  function showAltView(viewEl) {
     plannerForm.style.display = 'none';
-    if (boardView) boardView.hidden = false;
+    altViewEls.forEach((el) => {
+      el.hidden = el !== viewEl;
+    });
   }
 
   // ---------------- Board -> existing study-task system (Phase 5) ----------------
   // board.js never imports data.js or touches the study_subjects table
-  // itself — it only calls these three host functions, which route through
-  // the EXACT same insertStudySubject + addStudyRow code path a manually
-  // typed study-task row already uses below. This is the only bridge
-  // between the Board and the scheduler's data; nothing else about
-  // study-task creation, the scheduler, or Generate/Regenerate changes.
+  // itself — it only calls these host functions, which route through the
+  // EXACT same insertStudySubject + addStudyRow code path a manually typed
+  // study-task row already uses below. This is the only bridge between the
+  // Board and the scheduler's data; nothing else about study-task
+  // creation, the scheduler, or Generate/Regenerate changes.
   // addStudyRow/insertStudySubject/refreshHistoryList/schedule are declared
   // further down this function, but that's fine here: these closures are
   // only ever invoked later, after a user opens the Board's conversion
@@ -185,6 +192,37 @@ async function init(session) {
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 
+  // ---------------- AI Advisor -> existing Planner + Board (Phase 9) ----------------
+  // advisor.js never imports data.js or boardData.js directly — it only
+  // calls these host functions. Planner tasks go through the exact same
+  // insertStudySubject + addStudyRow path as Board's "Add to Planner"
+  // above; Board nodes go through boardSection.addNodeFromExternal, which
+  // itself just calls the existing boardData.createNode. Nothing here
+  // creates a second Planner-task or Board-node system.
+  const advisorHostApi = {
+    getPlannerContext: async () => {
+      if (!schedule) return null;
+      const [subjects, classesList] = await Promise.all([listStudySubjects(schedule.id), listClasses(schedule.id)]);
+      return { schedule, studySubjects: subjects, classes: classesList, scheduleItems: currentScheduleItems };
+    },
+    getBoardContext: () => (boardSection && typeof boardSection.getGoalNodesSummary === 'function' ? boardSection.getGoalNodesSummary() : []),
+    createStudyTaskFromAdvisor: async (fields) => {
+      if (!schedule) throw new Error('No active schedule to attach the study task to.');
+      const sortOrder = studyList.children.length;
+      const created = await insertStudySubject(schedule.id, userId, fields, sortOrder);
+      addStudyRow(created);
+      refreshHistoryList();
+      return created;
+    },
+    addBoardNodeFromAdvisor: (title) => {
+      if (!boardSection || typeof boardSection.addNodeFromExternal !== 'function') {
+        return Promise.reject(new Error('no_active_board'));
+      }
+      return boardSection.addNodeFromExternal(title);
+    },
+  };
+  const advisorSection = initAdvisorSection(userId, advisorHostApi);
+
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
@@ -195,12 +233,18 @@ async function init(session) {
     });
   });
 
+  const altViewSections = {
+    boardView: boardSection,
+    advisorView: advisorSection,
+  };
   document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
-      showBoardView();
-      if (boardSection) boardSection.onShow();
+      const key = btn.dataset.viewTarget;
+      showAltView(document.getElementById(key));
+      const section = altViewSections[key];
+      if (section && typeof section.onShow === 'function') section.onShow();
     });
   });
 
