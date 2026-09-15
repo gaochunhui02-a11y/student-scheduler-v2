@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { tomorrowDateStr, addDaysToDateStr } from './dateUtils.js';
 import { aggregateScheduleHistory } from './history.js';
+import { extractPlanningFields, buildCopiedClassRows, buildCopiedSubjectRows } from './copySchedule.js';
 
 export { tomorrowDateStr, addDaysToDateStr };
 
@@ -40,6 +41,81 @@ export async function getOrCreateScheduleForDate(userId, forDate) {
     .single();
   if (insertError) throw insertError;
   return created;
+}
+
+// Like getOrCreateScheduleForDate, but never creates one — null means the
+// user has never touched that date. Used by "Copy to another day" to decide
+// whether the destination needs an overwrite confirmation without the side
+// effect of creating an empty row just to check.
+export async function getScheduleForDateIfExists(userId, forDate) {
+  const { data, error } = await supabase
+    .from('schedules')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('for_date', forDate)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Whether a schedule already has planning input worth warning about before
+// overwriting — classes or study subjects. (Every schedule row always has
+// *some* wake/sleep/meal/preference values, defaulted or not, so those alone
+// don't distinguish "untouched" from "touched.")
+export async function scheduleHasPlanningData(scheduleId) {
+  const [classesRes, subjectsRes] = await Promise.all([
+    supabase.from('classes').select('id', { count: 'exact', head: true }).eq('schedule_id', scheduleId),
+    supabase.from('study_subjects').select('id', { count: 'exact', head: true }).eq('schedule_id', scheduleId),
+  ]);
+  if (classesRes.error) throw classesRes.error;
+  if (subjectsRes.error) throw subjectsRes.error;
+  return (classesRes.count || 0) > 0 || (subjectsRes.count || 0) > 0;
+}
+
+// Copies planning inputs only — day settings, meals, study preferences,
+// classes, and study subjects — from one date to another. Never touches the
+// generated schedule (schedule_items), lock state, or completion state on
+// either date. The destination keeps its own schedule row (created if it
+// doesn't exist yet, via getOrCreateScheduleForDate — never a duplicate row
+// for the same user+date) and gets entirely new class/subject rows with
+// fresh ids; nothing is copied by id, and due dates are copied exactly as
+// entered, never shifted. Caller is responsible for confirming an overwrite
+// first if the destination already has data (see scheduleHasPlanningData).
+export async function copyScheduleToDate(userId, sourceScheduleId, destForDate) {
+  const { data: source, error: sourceError } = await supabase
+    .from('schedules')
+    .select('*')
+    .eq('id', sourceScheduleId)
+    .single();
+  if (sourceError) throw sourceError;
+
+  const [sourceClassesRes, sourceSubjectsRes] = await Promise.all([
+    supabase.from('classes').select('*').eq('schedule_id', sourceScheduleId).order('sort_order', { ascending: true }),
+    supabase.from('study_subjects').select('*').eq('schedule_id', sourceScheduleId).order('sort_order', { ascending: true }),
+  ]);
+  if (sourceClassesRes.error) throw sourceClassesRes.error;
+  if (sourceSubjectsRes.error) throw sourceSubjectsRes.error;
+
+  const dest = await getOrCreateScheduleForDate(userId, destForDate);
+  const updatedDest = await updateSchedule(dest.id, extractPlanningFields(source));
+
+  const { error: deleteClassesError } = await supabase.from('classes').delete().eq('schedule_id', dest.id);
+  if (deleteClassesError) throw deleteClassesError;
+  const classRows = buildCopiedClassRows(sourceClassesRes.data, dest.id, userId);
+  if (classRows.length > 0) {
+    const { error } = await supabase.from('classes').insert(classRows);
+    if (error) throw error;
+  }
+
+  const { error: deleteSubjectsError } = await supabase.from('study_subjects').delete().eq('schedule_id', dest.id);
+  if (deleteSubjectsError) throw deleteSubjectsError;
+  const subjectRows = buildCopiedSubjectRows(sourceSubjectsRes.data, dest.id, userId);
+  if (subjectRows.length > 0) {
+    const { error } = await supabase.from('study_subjects').insert(subjectRows);
+    if (error) throw error;
+  }
+
+  return updatedDest;
 }
 
 // One row per date the user has touched, with lightweight counts for the

@@ -3,6 +3,9 @@ import { requireAuth } from '../shared/session.js';
 import {
   getMostRecentScheduleDate,
   getOrCreateScheduleForDate,
+  getScheduleForDateIfExists,
+  scheduleHasPlanningData,
+  copyScheduleToDate,
   listScheduleHistory,
   tomorrowDateStr,
   addDaysToDateStr,
@@ -22,6 +25,7 @@ import {
 } from './data.js';
 import { generateSchedule, resolveDayBounds, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
+import { validateCopyDestination } from './copySchedule.js';
 
 const session = await requireAuth();
 if (session) {
@@ -89,6 +93,9 @@ async function init(session) {
   }
   function escapeAttr(str) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+  function formatDateLabel(dateStr) {
+    return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   // ---------------- day settings ----------------
@@ -664,11 +671,7 @@ async function init(session) {
     }
     historyListEl.innerHTML = history
       .map((h) => {
-        const dateLabel = new Date(`${h.forDate}T00:00:00`).toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        });
+        const dateLabel = formatDateLabel(h.forDate);
         const bits = [`${h.classCount} class${h.classCount === 1 ? '' : 'es'}`, `${h.subjectCount} subject${h.subjectCount === 1 ? '' : 's'}`];
         if (h.studyBlockCount > 0) bits.push(`${h.completionPercent}% complete`);
         return `
@@ -699,6 +702,56 @@ async function init(session) {
     loadScheduleForDate(item.dataset.date);
   });
 
+  // ---------------- copy to another day ----------------
+  const copySourceDateLabel = document.getElementById('copySourceDateLabel');
+  const copyDestDateEl = document.getElementById('copyDestDate');
+  const copyStatusEl = document.getElementById('copyStatus');
+
+  document.getElementById('copyConfirmBtn').addEventListener('click', async () => {
+    const destDate = copyDestDateEl.value;
+    copyStatusEl.textContent = '';
+
+    const validationError = validateCopyDestination(schedule.for_date, destDate);
+    if (validationError) {
+      copyStatusEl.textContent = validationError;
+      return;
+    }
+
+    const sourceScheduleId = schedule.id;
+    const sourceDateLabel = formatDateLabel(schedule.for_date);
+    const destLabel = formatDateLabel(destDate);
+
+    try {
+      const existingDest = await getScheduleForDateIfExists(userId, destDate);
+      if (existingDest) {
+        const hasData = await scheduleHasPlanningData(existingDest.id);
+        if (hasData) {
+          const proceed = window.confirm(
+            `${destLabel} already has planning data. Copying will replace its classes, study subjects, meals, and preferences. Continue?`
+          );
+          if (!proceed) {
+            copyStatusEl.textContent = 'Copy canceled.';
+            return;
+          }
+        }
+      }
+
+      await copyScheduleToDate(userId, sourceScheduleId, destDate);
+      refreshHistoryList();
+
+      const openIt = window.confirm(`Copied successfully. Open ${destLabel}?`);
+      if (openIt) {
+        copyDestDateEl.value = '';
+        loadScheduleForDate(destDate);
+      } else {
+        copyStatusEl.textContent = `Copied ${sourceDateLabel} to ${destLabel}.`;
+      }
+    } catch (e) {
+      console.error(e);
+      copyStatusEl.textContent = 'Could not copy — check your connection.';
+    }
+  });
+
   // ---------------- loading a date (initial load, Prev/Next, date picker, history) ----------------
   async function loadScheduleForDate(dateStr) {
     const token = ++activeToken;
@@ -715,6 +768,7 @@ async function init(session) {
     renderShortfallWarning(null);
     regenerateBtn.hidden = true;
     loadError.textContent = '';
+    copyStatusEl.textContent = '';
 
     let loaded;
     try {
@@ -728,6 +782,7 @@ async function init(session) {
 
     schedule = loaded;
     forDateEl.value = schedule.for_date;
+    copySourceDateLabel.textContent = formatDateLabel(schedule.for_date);
     wakeTimeEl.value = toHHMM(schedule.wake_time);
     sleepTimeEl.value = toHHMM(schedule.sleep_time);
     meal.breakfast.on.checked = schedule.breakfast_on;

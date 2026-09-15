@@ -124,6 +124,20 @@
         <p class="hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
       </div>
 
+      <div class="card" id="copyToAnotherDayCard">
+        <h2>Copy to another day</h2>
+        <p class="hint">Copying from <strong id="copySourceDateLabel">—</strong>: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</p>
+        <div class="row-2">
+          <div>
+            <label for="copyDestDate">Destination date</label>
+            <input type="date" id="copyDestDate">
+          </div>
+          <div></div>
+        </div>
+        <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;">Copy to another day</button>
+        <p class="hint" id="copyStatus"></p>
+      </div>
+
       <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
       <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden>Regenerate Schedule</button>
       <p class="hint" id="saveStatus" style="text-align:center;"></p>
