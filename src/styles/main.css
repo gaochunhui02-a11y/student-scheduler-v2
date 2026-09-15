@@ -411,6 +411,62 @@ select {
 .done-btn:hover { background: rgba(255, 255, 255, 0.3); }
 .done-btn:disabled { opacity: 0.6; cursor: default; }
 
+.edit-btn {
+  display: inline-block;
+  margin-top: 6px;
+  margin-left: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.edit-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+.edit-panel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 7px;
+}
+.edit-panel label {
+  display: block;
+  color: #fff;
+  font-size: 11px;
+  opacity: 0.9;
+  margin-bottom: 3px;
+}
+.edit-panel input[type="time"] {
+  width: auto;
+  padding: 4px 6px;
+  font-size: 12.5px;
+}
+.edit-actions { display: flex; gap: 6px; margin-top: 8px; }
+.edit-actions button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.edit-actions button:hover { background: rgba(255, 255, 255, 0.35); }
+.edit-actions .edit-save-btn:disabled { opacity: 0.6; cursor: default; }
+.edit-error {
+  margin-top: 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+}
+.edit-error:empty { display: none; }
+
 .block.completed { opacity: 0.55; }
 .block.completed .time { text-decoration: line-through; }
 

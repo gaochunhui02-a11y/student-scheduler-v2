@@ -48,6 +48,14 @@ function periodOverlapMinutes(period, start, end) {
   return total;
 }
 
+// A clock value like "00:30" can mean "after midnight" on an overnight day —
+// only roll it to the next day when the day itself crosses midnight and the
+// value looks earlier than wake-up. Shared by earliest/latest study time and
+// by resolveClockTimeInDay (manual-edit time input) below.
+function rollForwardIfNeeded(raw, dayStart, dayEnd) {
+  return dayEnd > 1440 && raw < dayStart ? raw + 1440 : raw;
+}
+
 // "Earliest study time" can't sensibly be earlier than wake-up, so it's just
 // clamped — no next-day interpretation needed.
 function resolveEarliestStudyTime(timeStr, dayStart) {
@@ -56,14 +64,35 @@ function resolveEarliestStudyTime(timeStr, dayStart) {
   return Math.max(dayStart, raw);
 }
 
-// "Latest study time" can be a small clock value like "00:30" meaning "after
-// midnight" on an overnight day — only roll it to the next day when the day
-// itself crosses midnight and the value looks earlier than wake-up.
 function resolveLatestStudyTime(timeStr, dayStart, dayEnd) {
   const raw = timeToMinutes(timeStr);
   if (raw === null) return dayEnd;
-  const abs = dayEnd > 1440 && raw < dayStart ? raw + 1440 : raw;
-  return Math.min(dayEnd, abs);
+  return Math.min(dayEnd, rollForwardIfNeeded(raw, dayStart, dayEnd));
+}
+
+// Resolves a "HH:MM" clock value (e.g. from a manual-edit time input) to its
+// absolute minute within the given day, applying the same next-day rollover
+// rule as earliest/latest study time — WITHOUT clamping to dayEnd, so the
+// caller can validate the out-of-range case itself with a clear message
+// instead of it being silently clipped. Returns null for an empty/invalid input.
+export function resolveClockTimeInDay(timeStr, dayStart, dayEnd) {
+  const raw = timeToMinutes(timeStr);
+  if (raw === null) return null;
+  return rollForwardIfNeeded(raw, dayStart, dayEnd);
+}
+
+// Same "ignore an impossible window" fallback generateSchedule applies
+// inline (it additionally pushes a user-facing note when this happens, which
+// this standalone version leaves to the caller). Exported so callers that
+// need the resolved study window without generating a full schedule (e.g.
+// validating a manual edit) don't have to duplicate the logic.
+export function resolveStudyWindow(earliestStudyTime, latestStudyTime, dayStart, dayEnd) {
+  const studyWindowStart = resolveEarliestStudyTime(earliestStudyTime, dayStart);
+  const studyWindowEnd = resolveLatestStudyTime(latestStudyTime, dayStart, dayEnd);
+  if (studyWindowEnd <= studyWindowStart) {
+    return { studyWindowStart: dayStart, studyWindowEnd: dayEnd, collapsed: true };
+  }
+  return { studyWindowStart, studyWindowEnd, collapsed: false };
 }
 
 // Splits each free gap at the earliest/latest study-time boundaries so the
@@ -189,6 +218,75 @@ function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, study
 }
 
 /**
+ * Validates a proposed manual edit of a study block's START TIME (duration
+ * stays fixed — Phase 9 supports moving a block, not resizing it, so
+ * requested study minutes never change from a manual edit). Applies the
+ * same rules a locked block must satisfy — day bounds, the study-time
+ * window, and no overlap with a class/meal — plus a check no locked-block
+ * validation needs: it must not overlap any OTHER study block on the day
+ * either (locked or not), since a manual edit can put two blocks anywhere,
+ * unlike generation which places them itself.
+ *
+ * @param {object} input
+ * @param {number} input.newStart proposed new start, in absolute minutes (same space as every event's start/end)
+ * @param {number} input.duration the block's fixed duration in minutes — must stay positive
+ * @param {number} input.dayStart
+ * @param {number} input.dayEnd
+ * @param {number} input.studyWindowStart
+ * @param {number} input.studyWindowEnd
+ * @param {{type:string,name:string,start:number,end:number}[]} input.fixedEvents the day's actual class/meal events
+ * @param {{id?:string,name:string,start:number,end:number}[]} input.otherStudyBlocks every OTHER study block on the day (locked or not) — must exclude the block being edited
+ * @returns {{ ok: true, start: number, end: number } | { ok: false, error: string }}
+ */
+export function validateManualStudyEdit({
+  newStart,
+  duration,
+  dayStart,
+  dayEnd,
+  studyWindowStart,
+  studyWindowEnd,
+  fixedEvents,
+  otherStudyBlocks,
+}) {
+  if (!Number.isFinite(newStart) || !Number.isFinite(duration) || duration <= 0) {
+    return { ok: false, error: 'Please enter a valid time.' };
+  }
+  const newEnd = newStart + duration;
+
+  if (newStart < dayStart || newEnd > dayEnd) {
+    return {
+      ok: false,
+      error: `That time falls outside your wake-up (${formatClock(dayStart)}) to bedtime (${formatClock(dayEnd)}) window. Choose another time.`,
+    };
+  }
+  if (newStart < studyWindowStart || newEnd > studyWindowEnd) {
+    return {
+      ok: false,
+      error: `That time falls outside your earliest (${formatClock(studyWindowStart)}) to latest (${formatClock(studyWindowEnd)}) study time. Choose another time.`,
+    };
+  }
+
+  for (const f of fixedEvents || []) {
+    if (newStart < f.end && newEnd > f.start) {
+      return {
+        ok: false,
+        error: `This time conflicts with ${f.type} "${f.name}" (${clockRange(f.start, f.end)}). Choose another time.`,
+      };
+    }
+  }
+  for (const s of otherStudyBlocks || []) {
+    if (newStart < s.end && newEnd > s.start) {
+      return {
+        ok: false,
+        error: `This time conflicts with "${s.name}" (${clockRange(s.start, s.end)}). Choose another time.`,
+      };
+    }
+  }
+
+  return { ok: true, start: newStart, end: newEnd };
+}
+
+/**
  * @param {object} input
  * @param {string} input.wakeTime  "HH:MM"
  * @param {string} input.sleepTime "HH:MM" — at/before wakeTime means "next day"
@@ -238,12 +336,11 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   // ----- earliest/latest study-time window (bounds STUDY placement only — classes,
   // meals, and free time still use the full wake-to-bedtime day) -----
-  let studyWindowStart = resolveEarliestStudyTime(earliestStudyTime, dayStart);
-  let studyWindowEnd = resolveLatestStudyTime(latestStudyTime, dayStart, dayEnd);
-  if (studyWindowEnd <= studyWindowStart) {
+  const window = resolveStudyWindow(earliestStudyTime, latestStudyTime, dayStart, dayEnd);
+  const studyWindowStart = window.studyWindowStart;
+  const studyWindowEnd = window.studyWindowEnd;
+  if (window.collapsed) {
     notes.push("Your earliest/latest study time settings don't leave any room to study — ignoring them for today.");
-    studyWindowStart = dayStart;
-    studyWindowEnd = dayEnd;
   }
 
   // ----- classes -----

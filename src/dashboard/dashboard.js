@@ -22,8 +22,18 @@ import {
   saveGeneratedSchedule,
   setScheduleItemLocked,
   setScheduleItemCompleted,
+  updateScheduleItemTime,
 } from './data.js';
-import { generateSchedule, resolveDayBounds, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
+import {
+  generateSchedule,
+  resolveDayBounds,
+  resolveStudyWindow,
+  resolveClockTimeInDay,
+  validateManualStudyEdit,
+  formatClock,
+  timeToMinutes,
+  minutesToClock,
+} from './scheduler.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 
@@ -355,6 +365,18 @@ async function init(session) {
   // are locked. Populated on load and after every successful save.
   let currentScheduleItems = [];
 
+  // id of the study block currently showing its inline edit panel, if any —
+  // at most one open at a time, closed whenever the timeline re-renders for
+  // an unrelated reason (lock/done toggle, regenerate, date switch).
+  let editingItemId = null;
+
+  function minutesToInputTime(mins) {
+    const m = ((mins % 1440) + 1440) % 1440;
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+
   function buildSubjectsInput() {
     return Array.from(studyList.children).map((row) => ({
       id: row.dataset.id || null,
@@ -391,6 +413,7 @@ async function init(session) {
         let subtitle = '';
         let lockControl = '';
         let doneControl = '';
+        let editControl = '';
         let nameHtml = escapeAttr(e.name);
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
@@ -405,13 +428,30 @@ async function init(session) {
           if (e.id) {
             lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${e.locked ? '🔒 Locked' : '🔓 Lock'}</button>`;
             doneControl = `<button type="button" class="done-btn" data-id="${e.id}" data-completed="${e.completed ? '1' : '0'}">${e.completed ? 'Undo' : 'Mark Done'}</button>`;
+            // editing a locked block is blocked in favor of unlocking it first — see
+            // the Phase 9 note on validateManualStudyEdit for why
+            if (e.id === editingItemId) {
+              editControl = `
+                <div class="edit-panel">
+                  <label>Start time</label>
+                  <input type="time" class="edit-start-input" value="${minutesToInputTime(e.start)}">
+                  <div class="edit-actions">
+                    <button type="button" class="edit-save-btn" data-id="${e.id}">Save</button>
+                    <button type="button" class="edit-cancel-btn" data-id="${e.id}">Cancel</button>
+                  </div>
+                  <div class="edit-error"></div>
+                </div>
+              `;
+            } else if (!e.locked) {
+              editControl = `<button type="button" class="edit-btn" data-id="${e.id}">Edit</button>`;
+            }
           }
         }
 
         return `
           <div class="block ${e.type}${e.locked ? ' locked' : ''}${e.completed ? ' completed' : ''}">
             <div class="time">${formatClock(e.start)} – ${formatClock(e.end)}</div>
-            <div class="info">${nameHtml} <span class="dur">(${durText})</span>${subtitle}${lockControl}${doneControl}</div>
+            <div class="info">${nameHtml} <span class="dur">(${durText})</span>${subtitle}${lockControl}${doneControl}${editControl}</div>
           </div>
         `;
       })
@@ -461,6 +501,85 @@ async function init(session) {
         console.error(err);
         flashError('Could not update completion state — check your connection.');
         doneBtn.disabled = false;
+      }
+      return;
+    }
+
+    const editBtn = e.target.closest('.edit-btn');
+    if (editBtn) {
+      editingItemId = editBtn.dataset.id;
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const cancelBtn = e.target.closest('.edit-cancel-btn');
+    if (cancelBtn) {
+      editingItemId = null;
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const saveBtn = e.target.closest('.edit-save-btn');
+    if (saveBtn) {
+      const id = saveBtn.dataset.id;
+      const panel = saveBtn.closest('.edit-panel');
+      const input = panel.querySelector('.edit-start-input');
+      const errorEl = panel.querySelector('.edit-error');
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (!item) return;
+
+      const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
+      if (bounds.error) {
+        errorEl.textContent = bounds.error;
+        return;
+      }
+      const newStart = resolveClockTimeInDay(input.value, bounds.dayStart, bounds.dayEnd);
+      if (newStart === null) {
+        errorEl.textContent = 'Please enter a valid time.';
+        return;
+      }
+
+      const { studyWindowStart, studyWindowEnd } = resolveStudyWindow(
+        toHHMM(schedule.earliest_study_time) || null,
+        toHHMM(schedule.latest_study_time) || null,
+        bounds.dayStart,
+        bounds.dayEnd
+      );
+      const fixedEvents = currentScheduleItems.filter((i) => i.type === 'class' || i.type === 'meal');
+      const otherStudyBlocks = currentScheduleItems.filter((i) => i.type === 'study' && i.id !== id);
+
+      const result = validateManualStudyEdit({
+        newStart,
+        duration: item.end - item.start,
+        dayStart: bounds.dayStart,
+        dayEnd: bounds.dayEnd,
+        studyWindowStart,
+        studyWindowEnd,
+        fixedEvents,
+        otherStudyBlocks,
+      });
+
+      if (!result.ok) {
+        errorEl.textContent = result.error;
+        return;
+      }
+
+      const token = activeToken;
+      saveBtn.disabled = true;
+      try {
+        await updateScheduleItemTime(id, result.start, result.end);
+        if (token !== activeToken) return; // navigated away before this resolved
+        item.start = result.start;
+        item.end = result.end;
+        editingItemId = null;
+        currentScheduleItems.sort((a, b) => a.start - b.start);
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        renderDailySummaryFromCurrent();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = 'Could not save — check your connection.';
+        saveBtn.disabled = false;
       }
     }
   });
@@ -562,6 +681,7 @@ async function init(session) {
   async function runGeneration(lockedBlocks) {
     const scheduleId = schedule.id;
     const token = activeToken;
+    editingItemId = null; // the whole timeline is about to be replaced
 
     const classesInput = Array.from(classList.children).map((row) => ({
       name: row.querySelector('.class-name').value.trim(),
@@ -761,6 +881,7 @@ async function init(session) {
     classList.innerHTML = '';
     studyList.innerHTML = '';
     currentScheduleItems = [];
+    editingItemId = null;
     output.innerHTML = '<div class="placeholder">Loading…</div>';
     renderNotes([]);
     renderLockConflicts(null);

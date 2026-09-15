@@ -272,3 +272,13 @@ export async function setScheduleItemLocked(id, locked) {
   const { error } = await supabase.from('schedule_items').update({ locked }).eq('id', id);
   if (error) throw error;
 }
+
+// Manual edit (Phase 9): a targeted update of just the time columns, so
+// nothing else on the row — locked, completed, source_subject_id, name —
+// is ever touched by moving a block. That's what makes a completed and/or
+// locked block's other state automatically survive a manual edit: this
+// never replaces the row, only two of its columns.
+export async function updateScheduleItemTime(id, startMinutes, endMinutes) {
+  const { error } = await supabase.from('schedule_items').update({ start_minutes: startMinutes, end_minutes: endMinutes }).eq('id', id);
+  if (error) throw error;
+}
