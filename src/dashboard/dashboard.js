@@ -36,6 +36,7 @@ import {
 } from './scheduler.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
+import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
 
 // ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
 // Purely presentational — adds/removes a data-theme attribute on <html> and
@@ -62,6 +63,11 @@ try {
 } catch {
   // localStorage unavailable (e.g. a strict privacy mode) — fall back to the OS preference
 }
+
+// ---------------- language (applied immediately, before auth, to avoid a flash) ----------------
+// Purely presentational — sets textContent on [data-i18n] static labels only.
+// Never touches user-created content, dynamic JS-rendered strings, ids, or classes.
+applyTranslations();
 
 const session = await requireAuth();
 if (session) {
@@ -99,7 +105,7 @@ async function init(session) {
   const themeToggleBtn = document.getElementById('themeToggle');
   const themeToggleLabel = document.getElementById('themeToggleLabel');
   function refreshThemeToggleLabel() {
-    if (themeToggleLabel) themeToggleLabel.textContent = currentEffectiveTheme() === 'dark' ? 'Light mode' : 'Dark mode';
+    if (themeToggleLabel) themeToggleLabel.textContent = currentEffectiveTheme() === 'dark' ? t('theme.light') : t('theme.dark');
   }
   refreshThemeToggleLabel();
   if (themeToggleBtn) {
@@ -111,6 +117,20 @@ async function init(session) {
       } catch {
         // per-viewer convenience only — fine if it can't persist
       }
+      refreshThemeToggleLabel();
+    });
+  }
+
+  // ---------------- language selector ----------------
+  // Purely presentational — re-applies [data-i18n] static text app-wide and
+  // refreshes the one dynamically-set translated label (theme toggle).
+  // Does not touch scheduling, Supabase, or any other rendered content.
+  const langSelect = document.getElementById('langSelect');
+  if (langSelect) {
+    langSelect.value = getLanguage();
+    langSelect.addEventListener('change', () => {
+      setLanguage(langSelect.value);
+      applyTranslations();
       refreshThemeToggleLabel();
     });
   }

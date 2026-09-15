@@ -15,13 +15,21 @@
     </div>
 
     <nav class="sidebar-nav" id="sidebarNav">
-      <button type="button" class="nav-item active" data-scroll-target="dashTop"><span class="nav-dot"></span><span>Overview</span></button>
-      <button type="button" class="nav-item" data-scroll-target="plannerForm"><span class="nav-dot"></span><span>Planner</span></button>
-      <button type="button" class="nav-item" data-scroll-target="historyCard"><span class="nav-dot"></span><span>History</span></button>
-      <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span>Settings</span></button>
+      <button type="button" class="nav-item active" data-scroll-target="dashTop"><span class="nav-dot"></span><span data-i18n="nav.overview">Overview</span></button>
+      <button type="button" class="nav-item" data-scroll-target="plannerForm"><span class="nav-dot"></span><span data-i18n="nav.planner">Planner</span></button>
+      <button type="button" class="nav-item" data-scroll-target="historyCard"><span class="nav-dot"></span><span data-i18n="nav.history">History</span></button>
+      <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span data-i18n="nav.settings">Settings</span></button>
     </nav>
 
     <div class="sidebar-bottom">
+      <div class="lang-switch">
+        <label for="langSelect" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="langSelect" class="lang-select">
+          <option value="en">EN</option>
+          <option value="zh">简体中文</option>
+          <option value="ja">日本語</option>
+        </select>
+      </div>
       <button type="button" class="theme-toggle" id="themeToggle">
         <span id="themeToggleLabel">Dark mode</span>
       </button>
@@ -37,10 +45,10 @@
   <main class="workspace">
     <div class="workspace-inner">
       <header class="dash-header" id="dashTop">
-        <h1>Student Scheduler</h1>
+        <h1 data-i18n="header.title">Student Scheduler</h1>
         <div class="user-info">
           <span id="userName">Loading…</span>
-          <button class="btn-secondary" id="logoutBtn">Log out</button>
+          <button class="btn-secondary" id="logoutBtn" data-i18n="header.logout">Log out</button>
         </div>
       </header>
 
@@ -50,8 +58,8 @@
     <div>
       <div id="daySettingsForm">
       <div class="card">
-        <h2>Your Day</h2>
-        <label for="forDate">Planning for</label>
+        <h2 data-i18n="day.title">Your Day</h2>
+        <label for="forDate" data-i18n="day.planningFor">Planning for</label>
         <div class="date-nav-row">
           <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
           <input type="date" id="forDate">
@@ -59,132 +67,132 @@
         </div>
         <div class="row-2">
           <div>
-            <label for="wakeTime">Wake-up time</label>
+            <label for="wakeTime" data-i18n="day.wakeTime">Wake-up time</label>
             <input type="time" id="wakeTime">
           </div>
           <div>
-            <label for="sleepTime">Sleep time</label>
+            <label for="sleepTime" data-i18n="day.sleepTime">Sleep time</label>
             <input type="time" id="sleepTime">
           </div>
         </div>
-        <p class="hint">Staying up past midnight? Enter the early time as-is (e.g. <strong>1:00 AM</strong>) — it's read as after midnight, not before your wake-up time.</p>
+        <p class="hint"><span data-i18n="day.hintBefore">Staying up past midnight? Enter the early time as-is (e.g.</span> <strong>1:00 AM</strong><span data-i18n="day.hintAfter">) — it's read as after midnight, not before your wake-up time.</span></p>
         <p class="hint" id="dayLengthHint"></p>
       </div>
 
       <div class="card" id="historyCard">
-        <h2>History</h2>
+        <h2 data-i18n="history.title">History</h2>
         <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
       </div>
 
       <div class="card">
-        <h2>Meals to include</h2>
+        <h2 data-i18n="meals.title">Meals to include</h2>
         <div class="meal-row">
           <input type="checkbox" id="mealBreakfastOn">
-          <label for="mealBreakfastTime">Breakfast<span class="meal-dur">30 min</span></label>
+          <label for="mealBreakfastTime"><span data-i18n="meals.breakfast">Breakfast</span><span class="meal-dur" data-i18n="meals.min30">30 min</span></label>
           <input type="time" id="mealBreakfastTime">
         </div>
         <div class="meal-row">
           <input type="checkbox" id="mealLunchOn">
-          <label for="mealLunchTime">Lunch<span class="meal-dur">45 min</span></label>
+          <label for="mealLunchTime"><span data-i18n="meals.lunch">Lunch</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
           <input type="time" id="mealLunchTime">
         </div>
         <div class="meal-row">
           <input type="checkbox" id="mealDinnerOn">
-          <label for="mealDinnerTime">Dinner<span class="meal-dur">45 min</span></label>
+          <label for="mealDinnerTime"><span data-i18n="meals.dinner">Dinner</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
           <input type="time" id="mealDinnerTime">
         </div>
       </div>
       </div>
 
       <div class="card">
-        <h2>Classes</h2>
+        <h2 data-i18n="classes.title">Classes</h2>
         <div id="classList"></div>
-        <button class="add-btn" id="addClassBtn" type="button">+ Add class</button>
+        <button class="add-btn" id="addClassBtn" type="button">+ <span data-i18n="classes.add">Add class</span></button>
       </div>
 
       <div class="card">
-        <h2>Subjects to study</h2>
+        <h2 data-i18n="study.title">Subjects to study</h2>
         <div id="studyList"></div>
-        <button class="add-btn" id="addStudyBtn" type="button">+ Add subject</button>
+        <button class="add-btn" id="addStudyBtn" type="button">+ <span data-i18n="study.add">Add subject</span></button>
       </div>
 
       <div class="card" id="studyPrefsForm">
-        <h2>Study preferences</h2>
+        <h2 data-i18n="prefs.title">Study preferences</h2>
         <div class="row-2">
           <div>
-            <label for="preferredStudyPeriod">Preferred study time</label>
+            <label for="preferredStudyPeriod" data-i18n="prefs.preferredTime">Preferred study time</label>
             <select id="preferredStudyPeriod">
-              <option value="none">No preference</option>
-              <option value="morning">Morning</option>
-              <option value="afternoon">Afternoon</option>
-              <option value="evening">Evening</option>
+              <option value="none" data-i18n="prefs.periodNone">No preference</option>
+              <option value="morning" data-i18n="prefs.periodMorning">Morning</option>
+              <option value="afternoon" data-i18n="prefs.periodAfternoon">Afternoon</option>
+              <option value="evening" data-i18n="prefs.periodEvening">Evening</option>
             </select>
           </div>
           <div></div>
         </div>
         <div class="row-2">
           <div>
-            <label for="sessionCapMinutes">Max study session (min)</label>
+            <label for="sessionCapMinutes" data-i18n="prefs.maxSession">Max study session (min)</label>
             <input type="number" id="sessionCapMinutes" min="5" step="5">
           </div>
           <div>
-            <label for="breakMinutes">Break length (min)</label>
+            <label for="breakMinutes" data-i18n="prefs.breakLength">Break length (min)</label>
             <input type="number" id="breakMinutes" min="0" step="5">
           </div>
         </div>
         <div class="row-2">
           <div>
-            <label for="minBlockMinutes">Minimum study block (min)</label>
+            <label for="minBlockMinutes" data-i18n="prefs.minBlock">Minimum study block (min)</label>
             <input type="number" id="minBlockMinutes" min="5" step="5">
           </div>
           <div></div>
         </div>
         <div class="row-2">
           <div>
-            <label for="earliestStudyTime">Earliest study time</label>
+            <label for="earliestStudyTime" data-i18n="prefs.earliestTime">Earliest study time</label>
             <input type="time" id="earliestStudyTime">
           </div>
           <div>
-            <label for="latestStudyTime">Latest study time</label>
+            <label for="latestStudyTime" data-i18n="prefs.latestTime">Latest study time</label>
             <input type="time" id="latestStudyTime">
           </div>
         </div>
-        <p class="hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
+        <p class="hint" data-i18n="prefs.hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
       </div>
 
       <div class="card" id="copyToAnotherDayCard">
-        <h2>Copy to another day</h2>
-        <p class="hint">Copying from <strong id="copySourceDateLabel">—</strong>: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</p>
+        <h2 data-i18n="copy.title">Copy to another day</h2>
+        <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>
         <div class="row-2">
           <div>
-            <label for="copyDestDate">Destination date</label>
+            <label for="copyDestDate" data-i18n="copy.destDate">Destination date</label>
             <input type="date" id="copyDestDate">
           </div>
           <div></div>
         </div>
-        <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;">Copy to another day</button>
+        <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;" data-i18n="copy.button">Copy to another day</button>
         <p class="hint" id="copyStatus"></p>
       </div>
 
-      <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
-      <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden>Regenerate Schedule</button>
+      <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Schedule</button>
+      <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden data-i18n="actions.regenerate">Regenerate Schedule</button>
       <p class="hint" id="saveStatus" style="text-align:center;"></p>
     </div>
 
     <div>
       <div class="card warning-card" id="lockConflictWarning" hidden>
-        <h2>Locked block conflict</h2>
+        <h2 data-i18n="lockConflict.title">Locked block conflict</h2>
         <div id="lockConflictBody"></div>
       </div>
 
       <div class="card">
-        <h2>Your Schedule</h2>
+        <h2 data-i18n="schedule.title">Your Schedule</h2>
         <div class="legend">
-          <span><i class="swatch" style="background:var(--class-color)"></i>Class</span>
-          <span><i class="swatch" style="background:var(--meal-color)"></i>Meal</span>
-          <span><i class="swatch" style="background:var(--study-color)"></i>Study</span>
-          <span><i class="swatch" style="background:var(--break-color)"></i>Break</span>
-          <span><i class="swatch" style="background:var(--free-color)"></i>Free time</span>
+          <span><i class="swatch" style="background:var(--class-color)"></i><span data-i18n="legend.class">Class</span></span>
+          <span><i class="swatch" style="background:var(--meal-color)"></i><span data-i18n="legend.meal">Meal</span></span>
+          <span><i class="swatch" style="background:var(--study-color)"></i><span data-i18n="legend.study">Study</span></span>
+          <span><i class="swatch" style="background:var(--break-color)"></i><span data-i18n="legend.break">Break</span></span>
+          <span><i class="swatch" style="background:var(--free-color)"></i><span data-i18n="legend.free">Free time</span></span>
         </div>
         <div id="output">
           <div class="placeholder">Fill in your day, classes, and subjects, then click "Generate Schedule".</div>
@@ -193,12 +201,12 @@
       </div>
 
       <div class="card warning-card" id="shortfallWarning" hidden>
-        <h2>Not enough available time</h2>
+        <h2 data-i18n="shortfall.title">Not enough available time</h2>
         <div id="shortfallWarningBody"></div>
       </div>
 
       <div class="card" id="dailySummaryCard" hidden>
-        <h2>Daily Summary</h2>
+        <h2 data-i18n="summary.title">Daily Summary</h2>
         <div id="dailySummaryBody"></div>
       </div>
     </div>
