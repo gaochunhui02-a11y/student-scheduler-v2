@@ -283,17 +283,11 @@ async function init(session) {
     el.className = 'entry-row';
     if (row.id) el.dataset.id = row.id;
     el.innerHTML = `
-      <div class="field">
-        <label>Subject</label>
-        <input type="text" class="class-name" placeholder="e.g. Math" value="${escapeAttr(row.name || '')}">
-      </div>
-      <div class="field">
-        <label>Start</label>
-        <input type="time" class="class-start" value="${toHHMM(row.start_time)}">
-      </div>
-      <div class="field">
-        <label>End</label>
-        <input type="time" class="class-end" value="${toHHMM(row.end_time)}">
+      <input type="text" class="class-name" aria-label="Class name" placeholder="e.g. Math" value="${escapeAttr(row.name || '')}">
+      <div class="cls-time-group">
+        <input type="time" class="class-start" aria-label="Start time" value="${toHHMM(row.start_time)}">
+        <span class="cls-time-sep">–</span>
+        <input type="time" class="class-end" aria-label="End time" value="${toHHMM(row.end_time)}">
       </div>
       <button class="remove-btn" type="button" title="Remove">✕</button>
     `;
@@ -345,31 +339,26 @@ async function init(session) {
     if (row.id) el.dataset.id = row.id;
     const priority = row.priority || 'medium';
     el.innerHTML = `
-      <div class="field">
-        <label>Subject</label>
-        <input type="text" class="study-name" placeholder="e.g. Biology" value="${escapeAttr(row.name || '')}">
-      </div>
-      <div class="field">
-        <label>Minutes</label>
-        <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
-      </div>
-      <div class="field">
-        <label>Priority</label>
-        <select class="study-priority">
+      <div class="task-row-top">
+        <input type="text" class="study-name" aria-label="Study task name" placeholder="e.g. Biology" value="${escapeAttr(row.name || '')}">
+        <select class="study-priority" aria-label="Priority" data-priority="${priority}">
           <option value="low" ${priority === 'low' ? 'selected' : ''}>Low</option>
           <option value="medium" ${priority === 'medium' ? 'selected' : ''}>Medium</option>
           <option value="high" ${priority === 'high' ? 'selected' : ''}>High</option>
         </select>
+        <button class="remove-btn" type="button" title="Remove">✕</button>
       </div>
-      <div class="field">
-        <label>Due date</label>
-        <input type="date" class="study-due" value="${row.due_date || ''}">
+      <div class="task-row-meta">
+        <label class="task-mini-field">
+          <span>Minutes</span>
+          <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
+        </label>
+        <label class="task-mini-field">
+          <span>Due</span>
+          <input type="date" class="study-due" value="${row.due_date || ''}">
+        </label>
       </div>
-      <div class="field wide">
-        <label>Notes (optional)</label>
-        <input type="text" class="study-notes" placeholder="optional" value="${escapeAttr(row.notes || '')}">
-      </div>
-      <button class="remove-btn" type="button" title="Remove">✕</button>
+      <input type="text" class="study-notes" aria-label="Notes" placeholder="Notes (optional)" value="${escapeAttr(row.notes || '')}">
     `;
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
@@ -385,6 +374,11 @@ async function init(session) {
   }
 
   studyList.addEventListener('change', (e) => {
+    // purely visual: keeps the priority select's color-coded badge in sync —
+    // does not affect what gets saved below
+    if (e.target.classList.contains('study-priority')) {
+      e.target.dataset.priority = e.target.value;
+    }
     const row = e.target.closest('.entry-row');
     if (!row) return;
     const scheduleId = schedule.id;
@@ -472,19 +466,20 @@ async function init(session) {
       .map((e) => {
         const dur = e.end - e.start;
         const durText = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60 ? (dur % 60) + 'm' : ''}`.trim() : `${dur} min`;
+        const metaParts = [`${formatClock(e.start)} – ${formatClock(e.end)}`, durText];
 
-        let subtitle = '';
+        let priorityBadge = '';
         let lockControl = '';
         let doneControl = '';
         let editControl = '';
         let nameHtml = escapeAttr(e.name);
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
-          const parts = [];
-          if (subj?.priority) parts.push(`${subj.priority[0].toUpperCase()}${subj.priority.slice(1)} priority`);
+          if (subj?.priority) {
+            priorityBadge = `<span class="tl-badge tl-badge-${subj.priority}">${subj.priority.toUpperCase()}</span>`;
+          }
           const dueText = formatDueDate(subj?.dueDate);
-          if (dueText) parts.push(dueText);
-          if (parts.length > 0) subtitle = `<div class="block-subtitle">${escapeAttr(parts.join(' · '))}</div>`;
+          if (dueText) metaParts.push(dueText);
 
           if (e.completed) nameHtml = `✓ ${nameHtml}`;
 
@@ -511,10 +506,20 @@ async function init(session) {
           }
         }
 
+        const actionsHtml = lockControl || doneControl || editControl ? `<div class="tl-actions">${lockControl}${doneControl}${editControl}</div>` : '';
+
         return `
-          <div class="block ${e.type}${e.locked ? ' locked' : ''}${e.completed ? ' completed' : ''}">
-            <div class="time">${formatClock(e.start)} – ${formatClock(e.end)}</div>
-            <div class="info">${nameHtml} <span class="dur">(${durText})</span>${subtitle}${lockControl}${doneControl}${editControl}</div>
+          <div class="tl-row tl-${e.type}${e.locked ? ' tl-locked' : ''}${e.completed ? ' tl-completed' : ''}">
+            <div class="tl-time">${formatClock(e.start)}</div>
+            <div class="tl-rail"><span class="tl-dot"></span></div>
+            <div class="tl-card">
+              <div class="tl-card-top">
+                <span class="tl-name">${nameHtml}</span>
+                ${priorityBadge}
+              </div>
+              <div class="tl-meta">${escapeAttr(metaParts.join(' · '))}</div>
+              ${actionsHtml}
+            </div>
           </div>
         `;
       })
