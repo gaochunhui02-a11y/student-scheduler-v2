@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In — Student Scheduler</title>
+<link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>Log in</h1>
+    <p class="subtitle">Welcome back to your Student Scheduler.</p>
+
+    <div class="msg error" id="errorMsg"></div>
+    <div class="msg success" id="successMsg"></div>
+
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input type="email" id="email" required autocomplete="email">
+
+      <label for="password">Password</label>
+      <input type="password" id="password" required autocomplete="current-password">
+
+      <button type="submit" class="btn-primary" id="submitBtn">Log In</button>
+    </form>
+
+    <p class="auth-links"><a href="forgot-password.html">Forgot password?</a></p>
+    <p class="auth-links">Don't have an account? <a href="signup.html">Sign up</a></p>
+  </div>
+</div>
+<script type="module" src="/src/auth/login.js"></script>
+</body>
+</html>
