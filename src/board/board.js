@@ -51,12 +51,17 @@ import {
   hasChildren,
   computeHiddenNodeIds,
   computeAutoLayout,
+  selectBoardId,
+  filterNodesByBoard,
+  filterEdgesByBoard,
+  clearedBoardViewState,
 } from './boardModel.js';
 import {
   listBoards,
   createBoard,
   loadBoard,
   renameBoard,
+  deleteBoard,
   createNode,
   updateNode,
   deleteNode,
@@ -67,6 +72,23 @@ import {
 const ZOOM_STEP = 0.1;
 const SEARCH_RESULTS_LIMIT = 8;
 const HIGHLIGHT_DURATION_MS = 1600;
+const LAST_BOARD_STORAGE_KEY = 'student-scheduler-last-board-id';
+
+function rememberLastBoardId(boardId) {
+  try {
+    localStorage.setItem(LAST_BOARD_STORAGE_KEY, boardId);
+  } catch {
+    // per-viewer convenience only — fine if it can't persist
+  }
+}
+
+function getRememberedBoardId() {
+  try {
+    return localStorage.getItem(LAST_BOARD_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
 
 // Nominal card size used only for edge-anchor math (see computeEdgeGeometry
 // in boardModel.js) — matches .board-node's CSS width; height is an
@@ -104,8 +126,15 @@ export function initBoardSection(userId, hostApi = {}) {
   const autoArrangeBtn = document.getElementById('boardAutoArrangeBtn');
   const searchInput = document.getElementById('boardSearchInput');
   const searchResults = document.getElementById('boardSearchResults');
+  const selectorRow = document.getElementById('boardSelectorRow');
+  const boardSelect = document.getElementById('boardSelect');
+  const newBoardBtn = document.getElementById('boardNewBtn');
+  const renameBoardBtn = document.getElementById('boardRenameBtn');
+  const deleteBoardBtn = document.getElementById('boardDeleteBoardBtn');
 
   let currentBoard = null;
+  let allBoards = []; // every board this user owns — just {id,title,...}, for the selector
+  let switchToken = 0; // guards against a slow board load resolving after a newer switch started
   let nodes = [];
   let edges = [];
   let zoom = 1;
@@ -1001,6 +1030,7 @@ export function initBoardSection(userId, hostApi = {}) {
 
   function showNoBoardState() {
     if (workspace) workspace.hidden = true;
+    if (selectorRow) selectorRow.hidden = true;
     if (noBoardState) noBoardState.hidden = false;
     if (titleInput) titleInput.value = '';
   }
@@ -1008,6 +1038,7 @@ export function initBoardSection(userId, hostApi = {}) {
   function showWorkspaceState() {
     if (noBoardState) noBoardState.hidden = true;
     if (workspace) workspace.hidden = false;
+    if (selectorRow) selectorRow.hidden = false;
   }
 
   if (addNodeBtn) {
@@ -1029,21 +1060,106 @@ export function initBoardSection(userId, hostApi = {}) {
     });
   }
 
-  if (createBoardBtn) {
-    createBoardBtn.addEventListener('click', async () => {
-      try {
-        currentBoard = await createBoard(userId, 'Untitled board');
-        nodes = [];
-        edges = [];
-        collapsedNodeIds = new Set();
-        hideEdgeDeleteButton();
-        if (titleInput) titleInput.value = currentBoard.title;
-        showWorkspaceState();
-        renderNodes();
-        renderEdges();
-      } catch (err) {
-        console.error('Could not create board:', err);
+  // ---------------- multiple boards (Phase 7) ----------------
+
+  function refreshBoardSelect() {
+    if (!boardSelect) return;
+    boardSelect.innerHTML = '';
+    allBoards.forEach((b) => {
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = b.title; // user-created content — never translated
+      boardSelect.appendChild(opt);
+    });
+    if (currentBoard) boardSelect.value = currentBoard.id;
+  }
+
+  // The single place that loads a different board's data. Clears every bit
+  // of the previous board's rendered/selected state FIRST (before the new
+  // board has even started loading), so a slow connection never leaves the
+  // old board's nodes/edges visible while the new one is in flight — and
+  // switchToken guards against an old, slow switchToBoard call finishing
+  // AFTER a newer one and clobbering it with stale data.
+  async function switchToBoard(boardId) {
+    if (!boardId) return;
+    const token = ++switchToken;
+
+    const cleared = clearedBoardViewState();
+    nodes = cleared.nodes;
+    edges = cleared.edges;
+    collapsedNodeIds = cleared.collapsedNodeIds;
+    selectedEdgeId = cleared.selectedEdgeId;
+    connectingFromNodeId = cleared.connectingFromNodeId;
+    if (edgeDeleteBtn) edgeDeleteBtn.hidden = true;
+    closeSearchResults();
+    if (previewLine) previewLine.hidden = true;
+    renderNodes();
+    renderEdges();
+
+    // Reset the viewport for the new board rather than trying to remember
+    // a per-board scroll/zoom — simple and deterministic.
+    zoom = 1;
+    applyZoom();
+    if (canvasWrap) {
+      canvasWrap.scrollLeft = 0;
+      canvasWrap.scrollTop = 0;
+    }
+
+    try {
+      const data = await loadBoard(userId, boardId);
+      if (token !== switchToken) return; // a newer switch already started — discard this result
+      if (!data) {
+        console.error('Could not load board: it may have just been deleted.');
+        return;
       }
+      currentBoard = data.board;
+      nodes = filterNodesByBoard(data.nodes, currentBoard.id);
+      edges = filterEdgesByBoard(data.edges, currentBoard.id);
+      if (titleInput) titleInput.value = currentBoard.title;
+      refreshBoardSelect();
+      renderNodes();
+      renderEdges();
+      rememberLastBoardId(currentBoard.id);
+    } catch (err) {
+      if (token !== switchToken) return;
+      console.error('Could not load board:', err);
+    }
+  }
+
+  if (boardSelect) {
+    boardSelect.addEventListener('change', () => {
+      if (boardSelect.value && (!currentBoard || boardSelect.value !== currentBoard.id)) {
+        switchToBoard(boardSelect.value);
+      }
+    });
+  }
+
+  async function createNewBoard() {
+    const title = window.prompt(t('board.boardNameLabel'), '');
+    if (title === null) return; // cancelled
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      const created = await createBoard(userId, trimmed);
+      allBoards = [created, ...allBoards];
+      showWorkspaceState();
+      // switchToBoard itself calls refreshBoardSelect() once currentBoard
+      // is updated to this new board.
+      await switchToBoard(created.id);
+      showBoardStatus(t('board.boardCreated'));
+    } catch (err) {
+      console.error('Could not create board:', err);
+    }
+  }
+
+  if (createBoardBtn) createBoardBtn.addEventListener('click', createNewBoard);
+  if (newBoardBtn) newBoardBtn.addEventListener('click', createNewBoard);
+
+  if (renameBoardBtn) {
+    renameBoardBtn.addEventListener('click', () => {
+      if (!titleInput) return;
+      titleInput.focus();
+      titleInput.select();
     });
   }
 
@@ -1054,8 +1170,51 @@ export function initBoardSection(userId, hostApi = {}) {
       titleInput.value = nextTitle;
       try {
         currentBoard = await renameBoard(userId, currentBoard.id, nextTitle);
+        // Renaming never touches nodes/edges/linked study tasks — only the
+        // board's own title, here and in the local selector cache.
+        allBoards = allBoards.map((b) => (b.id === currentBoard.id ? currentBoard : b));
+        refreshBoardSelect();
+        showBoardStatus(t('board.boardRenamed'));
       } catch (err) {
         console.error('Could not rename board:', err);
+      }
+    });
+  }
+
+  if (deleteBoardBtn) {
+    deleteBoardBtn.addEventListener('click', async () => {
+      if (!currentBoard) return;
+      const message = `${t('board.deleteBoardWarning')}\n\n${t('board.deleteBoardQuestion')}`;
+      if (!window.confirm(message)) return;
+
+      const deletingId = currentBoard.id;
+      try {
+        // The database cascades this to the board's own board_nodes/
+        // board_edges (ON DELETE CASCADE, migration 0002). study_subjects
+        // has no reference back to boards/board_nodes, so any Planner
+        // tasks created from this board's nodes are never touched.
+        await deleteBoard(userId, deletingId);
+        allBoards = allBoards.filter((b) => b.id !== deletingId);
+        if (getRememberedBoardId() === deletingId) rememberLastBoardId('');
+
+        if (allBoards.length === 0) {
+          currentBoard = null;
+          const cleared = clearedBoardViewState();
+          nodes = cleared.nodes;
+          edges = cleared.edges;
+          collapsedNodeIds = cleared.collapsedNodeIds;
+          renderNodes();
+          renderEdges();
+          showNoBoardState();
+        } else {
+          showWorkspaceState();
+          // switchToBoard itself calls refreshBoardSelect() once
+          // currentBoard is updated to the new selection.
+          await switchToBoard(allBoards[0].id);
+        }
+        showBoardStatus(t('board.boardDeleted'));
+      } catch (err) {
+        console.error('Could not delete board:', err);
       }
     });
   }
@@ -1068,23 +1227,23 @@ export function initBoardSection(userId, hostApi = {}) {
     if (loaded || loading) return;
     loading = true;
     try {
-      const boards = await listBoards(userId);
-      if (!boards || boards.length === 0) {
+      allBoards = await listBoards(userId);
+      if (!allBoards || allBoards.length === 0) {
+        allBoards = [];
+        currentBoard = null;
         showNoBoardState();
         loaded = true;
         return;
       }
-      currentBoard = boards[0];
-      if (titleInput) titleInput.value = currentBoard.title;
       showWorkspaceState();
-      const data = await loadBoard(userId, currentBoard.id);
-      nodes = data ? data.nodes : [];
-      edges = data ? data.edges : [];
-      renderNodes();
-      renderEdges();
+      // switchToBoard populates the selector's options once it sets
+      // currentBoard — avoids briefly showing the wrong board selected if
+      // the remembered board isn't first in allBoards' order.
+      const chosenId = selectBoardId(allBoards, getRememberedBoardId());
+      await switchToBoard(chosenId);
       loaded = true;
     } catch (err) {
-      console.error('Could not load board:', err);
+      console.error('Could not load boards:', err);
     } finally {
       loading = false;
     }

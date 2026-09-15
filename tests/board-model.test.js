@@ -47,6 +47,10 @@ import {
   getDescendantNodeIds,
   computeHiddenNodeIds,
   computeAutoLayout,
+  selectBoardId,
+  filterNodesByBoard,
+  filterEdgesByBoard,
+  clearedBoardViewState,
 } from '../src/board/boardModel.js';
 
 let totalFailures = 0;
@@ -819,6 +823,115 @@ scenario('S. Auto layout (computeAutoLayout)', () => {
     ];
     const layout = computeAutoLayout(nodes, []);
     assert.ok(layout.LEFT.x_position < layout.RIGHT.x_position, 'the root that was already further left stays further left');
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('T. Selecting a Board to open (selectBoardId)', () => {
+  const boards = [
+    { id: 'b1', title: 'Fall Semester' },
+    { id: 'b2', title: 'Personal' },
+    { id: 'b3', title: 'Internship' },
+  ];
+
+  check('the remembered board is reopened when it still exists', () => {
+    assert.equal(selectBoardId(boards, 'b2'), 'b2');
+  });
+  check('falls back to the first board when nothing was remembered', () => {
+    assert.equal(selectBoardId(boards, null), 'b1');
+    assert.equal(selectBoardId(boards, undefined), 'b1');
+    assert.equal(selectBoardId(boards, ''), 'b1');
+  });
+  check('falls back to the first board when the remembered board no longer exists (e.g. it was deleted)', () => {
+    assert.equal(selectBoardId(boards, 'deleted-board-id'), 'b1');
+  });
+  check('returns null when the user has no boards at all, remembered or not', () => {
+    assert.equal(selectBoardId([], 'b2'), null);
+    assert.equal(selectBoardId(null, 'b2'), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('U. Board-specific node/edge filtering (filterNodesByBoard / filterEdgesByBoard)', () => {
+  const nodes = [
+    { id: 'n1', board_id: 'boardA', title: 'A1' },
+    { id: 'n2', board_id: 'boardA', title: 'A2' },
+    { id: 'n3', board_id: 'boardB', title: 'B1' },
+  ];
+  const edges = [
+    { id: 'e1', board_id: 'boardA', source_node_id: 'n1', target_node_id: 'n2' },
+    { id: 'e2', board_id: 'boardB', source_node_id: 'n3', target_node_id: 'n3' },
+  ];
+
+  check('filterNodesByBoard returns only nodes belonging to the given board', () => {
+    assert.deepEqual(filterNodesByBoard(nodes, 'boardA').map((n) => n.id).sort(), ['n1', 'n2']);
+    assert.deepEqual(filterNodesByBoard(nodes, 'boardB').map((n) => n.id), ['n3']);
+  });
+  check('filterEdgesByBoard returns only edges belonging to the given board', () => {
+    assert.deepEqual(filterEdgesByBoard(edges, 'boardA').map((e) => e.id), ['e1']);
+    assert.deepEqual(filterEdgesByBoard(edges, 'boardB').map((e) => e.id), ['e2']);
+  });
+  check('a board id with nothing in it returns an empty array, not everything', () => {
+    assert.deepEqual(filterNodesByBoard(nodes, 'boardC'), []);
+    assert.deepEqual(filterEdgesByBoard(edges, 'boardC'), []);
+  });
+  check('null/undefined input lists are handled without throwing', () => {
+    assert.deepEqual(filterNodesByBoard(null, 'boardA'), []);
+    assert.deepEqual(filterEdgesByBoard(undefined, 'boardA'), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('V. Switching Boards clears previous rendered state (clearedBoardViewState)', () => {
+  check('returns a fully empty slate', () => {
+    const state = clearedBoardViewState();
+    assert.deepEqual(state.nodes, []);
+    assert.deepEqual(state.edges, []);
+    assert.equal(state.collapsedNodeIds.size, 0);
+    assert.equal(state.selectedEdgeId, null);
+    assert.equal(state.connectingFromNodeId, null);
+  });
+  check('every call returns independent objects — no leakage between two consecutive switches', () => {
+    const first = clearedBoardViewState();
+    const second = clearedBoardViewState();
+    assert.notEqual(first.nodes, second.nodes);
+    assert.notEqual(first.collapsedNodeIds, second.collapsedNodeIds, 'each switch gets its own Set, never a shared reference');
+    first.collapsedNodeIds.add('leaked-from-board-A');
+    assert.equal(second.collapsedNodeIds.size, 0, 'mutating one switch\'s state must never affect another\'s');
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('W. FakeStore: deleting a Board does not delete Planner tasks', () => {
+  // Mirrors the architecture: boards/board_nodes are one store, study_subjects
+  // (the Planner's tasks) is a completely separate one with no reference
+  // back to boards — deleting a board can only ever touch the first.
+  let boards = [{ id: 'board1', title: 'Fall Semester' }];
+  let boardNodes = [
+    { id: 'n1', board_id: 'board1', title: 'Finish Python Assignment', linked_study_subject_id: 'study-1' },
+    { id: 'n2', board_id: 'board1', title: 'Read chapter 3', linked_study_subject_id: null },
+  ];
+  const studyTasks = [{ id: 'study-1', name: 'Finish Python Assignment', minutes_requested: 60 }];
+
+  // fakeDeleteBoard — exactly what boardData.deleteBoard + the database's
+  // ON DELETE CASCADE do at the model level: remove the board and every
+  // board_node scoped to it. It never reads or writes `studyTasks`.
+  function fakeDeleteBoard(boardId) {
+    boards = boards.filter((b) => b.id !== boardId);
+    boardNodes = boardNodes.filter((n) => n.board_id !== boardId);
+  }
+
+  fakeDeleteBoard('board1');
+
+  check('the board and all of its nodes are gone', () => {
+    assert.equal(boards.length, 0);
+    assert.equal(boardNodes.length, 0);
+  });
+  check('the study task that had been linked from this board still exists, completely untouched', () => {
+    assert.equal(studyTasks.length, 1);
+    assert.equal(studyTasks[0].id, 'study-1');
+    assert.equal(studyTasks[0].name, 'Finish Python Assignment');
+    assert.equal(studyTasks[0].minutes_requested, 60);
   });
 });
 

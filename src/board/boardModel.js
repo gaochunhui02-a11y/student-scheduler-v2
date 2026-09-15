@@ -459,3 +459,39 @@ export function computeAutoLayout(nodes, edges, { columnWidth = 220, rowHeight =
   });
   return positions;
 }
+
+// ---------------------------------------------------------------------------
+// Multiple Boards / Projects (Phase 7)
+// ---------------------------------------------------------------------------
+
+// Which board to open when the Board section is shown: the remembered
+// (last-opened, from localStorage) board if it still exists among the
+// user's current boards, otherwise the first board in the list (whatever
+// order boardData.listBoards returned — most-recently-updated first).
+// Returns null only when the user has no boards at all.
+export function selectBoardId(boards, rememberedId) {
+  if (!boards || boards.length === 0) return null;
+  if (rememberedId && boards.some((b) => b.id === rememberedId)) return rememberedId;
+  return boards[0].id;
+}
+
+// Defensive client-side scoping — boardData.loadBoard already filters by
+// board_id (and RLS scopes by user) server-side, so in correct operation
+// these are no-ops; they exist so a bug can never let one board's nodes
+// render while another board is "current."
+export function filterNodesByBoard(nodes, boardId) {
+  return (nodes || []).filter((n) => n.board_id === boardId);
+}
+
+export function filterEdgesByBoard(edges, boardId) {
+  return (edges || []).filter((e) => e.board_id === boardId);
+}
+
+// The exact clean-slate shape the canvas is reset to at the START of every
+// board switch (before the new board's data has even loaded) — this is
+// what keeps a fast switch from ever showing the previous board's nodes or
+// edges, even briefly. A fresh Set is returned every call (never a shared
+// reference) so two switches in a row can never share collapse state.
+export function clearedBoardViewState() {
+  return { nodes: [], edges: [], collapsedNodeIds: new Set(), selectedEdgeId: null, connectingFromNodeId: null };
+}

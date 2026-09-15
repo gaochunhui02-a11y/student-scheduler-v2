@@ -114,6 +114,17 @@ const en = {
   'board.collapse': 'Collapse',
   'board.expand': 'Expand',
   'board.noMatchingNodes': 'No matching nodes',
+  'board.boardsLabel': 'Boards',
+  'board.newBoard': 'New Board',
+  'board.renameBoard': 'Rename Board',
+  'board.deleteBoard': 'Delete Board',
+  'board.boardNameLabel': 'Board name',
+  'board.createFirstBoard': 'Create your first Board',
+  'board.deleteBoardWarning': 'Deleting this board will delete its nodes and connections. Planner tasks previously created from this board will NOT be deleted.',
+  'board.deleteBoardQuestion': 'Delete this Board?',
+  'board.boardDeleted': 'Board deleted',
+  'board.boardCreated': 'Board created',
+  'board.boardRenamed': 'Board renamed',
 };
 
 const zh = {
@@ -216,6 +227,17 @@ const zh = {
   'board.collapse': '折叠',
   'board.expand': '展开',
   'board.noMatchingNodes': '没有匹配的节点',
+  'board.boardsLabel': '看板列表',
+  'board.newBoard': '新建看板',
+  'board.renameBoard': '重命名看板',
+  'board.deleteBoard': '删除看板',
+  'board.boardNameLabel': '看板名称',
+  'board.createFirstBoard': '创建你的第一个看板',
+  'board.deleteBoardWarning': '删除此看板将删除其节点和连接。此前从该看板创建的计划任务不会被删除。',
+  'board.deleteBoardQuestion': '要删除此看板吗？',
+  'board.boardDeleted': '看板已删除',
+  'board.boardCreated': '看板已创建',
+  'board.boardRenamed': '看板已重命名',
 };
 
 const ja = {
@@ -318,6 +340,17 @@ const ja = {
   'board.collapse': '折りたたむ',
   'board.expand': '展開',
   'board.noMatchingNodes': '一致するノードがありません',
+  'board.boardsLabel': 'ボード一覧',
+  'board.newBoard': '新規ボード',
+  'board.renameBoard': 'ボード名を変更',
+  'board.deleteBoard': 'ボードを削除',
+  'board.boardNameLabel': 'ボード名',
+  'board.createFirstBoard': '最初のボードを作成',
+  'board.deleteBoardWarning': 'このボードを削除すると、そのノードと接続も削除されます。このボードから作成されたプランナーのタスクは削除されません。',
+  'board.deleteBoardQuestion': 'このボードを削除しますか？',
+  'board.boardDeleted': 'ボードを削除しました',
+  'board.boardCreated': 'ボードを作成しました',
+  'board.boardRenamed': 'ボード名を変更しました',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];
