@@ -23,6 +23,15 @@
 // 6 brief. Search is read-only. Auto Arrange only ever writes
 // x_position/y_position via the existing updateNode — it never touches an
 // edge or a relationship.
+//
+// "Break down with AI" (Phase 8): the only AI feature in this codebase.
+// Its network call is fully isolated in aiBreakdownClient.js (the sole
+// caller of the board-ai-breakdown Edge Function — no AI provider secret
+// ever reaches the browser), and every response is re-validated by the
+// pure functions in aiBreakdownModel.js before the user ever sees a
+// suggestion. Nothing the AI returns is used to create a node until the
+// user explicitly checks it and clicks "Add selected" — there is no path
+// from a raw AI response straight to boardData.createNode.
 
 import { t } from '../shared/i18n.js';
 import {
@@ -68,6 +77,8 @@ import {
   createEdge,
   deleteEdge,
 } from './boardData.js';
+import { buildBreakdownContext, validateBreakdownResponse, mapSuggestionsToChildNodes, breakdownErrorMessageKey } from './aiBreakdownModel.js';
+import { requestBoardBreakdown } from './aiBreakdownClient.js';
 
 const ZOOM_STEP = 0.1;
 const SEARCH_RESULTS_LIMIT = 8;
@@ -348,6 +359,209 @@ export function initBoardSection(userId, hostApi = {}) {
     conversionModal.errorMsg.hidden = true;
     conversionModal.overlay.hidden = false;
     conversionModal.nameInput.focus();
+  }
+
+  // ---------------- break down with AI (Phase 8) ----------------
+
+  let breakdownModal = null; // built lazily on first use
+  let breakdownTargetNode = null;
+  let breakdownSuggestions = []; // the last validated response — only ever read via checkbox selection, never auto-applied
+
+  function buildBreakdownModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'board-modal-overlay';
+    overlay.hidden = true;
+
+    const modal = document.createElement('div');
+    modal.className = 'board-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+
+    const heading = document.createElement('h3');
+    heading.className = 'board-modal-title';
+    heading.dataset.i18n = 'board.breakdownModalTitle';
+    heading.textContent = t('board.breakdownModalTitle');
+
+    const loading = document.createElement('p');
+    loading.className = 'hint';
+    loading.dataset.i18n = 'board.breakdownLoading';
+    loading.textContent = t('board.breakdownLoading');
+    loading.hidden = true;
+
+    const errorMsg = document.createElement('p');
+    errorMsg.className = 'hint board-modal-error';
+    errorMsg.hidden = true;
+
+    // Each row is a plain checkbox + the AI-suggested title as plain text
+    // (never innerHTML — AI output is untrusted content, same discipline
+    // as the rest of this app's [data-i18n] handling never touching
+    // markup). Nothing here is translated: this is AI-generated content,
+    // not app UI text.
+    const list = document.createElement('div');
+    list.className = 'board-breakdown-list';
+    list.hidden = true;
+
+    const actions = document.createElement('div');
+    actions.className = 'board-modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.dataset.i18n = 'board.cancel';
+    cancelBtn.textContent = t('board.cancel');
+
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'btn-secondary';
+    retryBtn.dataset.i18n = 'board.breakdownRetry';
+    retryBtn.textContent = t('board.breakdownRetry');
+    retryBtn.hidden = true;
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'btn-primary';
+    submitBtn.dataset.i18n = 'board.breakdownAddSelected';
+    submitBtn.textContent = t('board.breakdownAddSelected');
+    submitBtn.hidden = true;
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(retryBtn);
+    actions.appendChild(submitBtn);
+
+    modal.appendChild(heading);
+    modal.appendChild(loading);
+    modal.appendChild(errorMsg);
+    modal.appendChild(list);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+
+    // Appended to <body>, same reasoning as the conversion modal above:
+    // #boardCanvas has a zoom transform, which would break a
+    // position:fixed descendant's viewport-relative positioning.
+    document.body.appendChild(overlay);
+
+    cancelBtn.addEventListener('click', closeBreakdownModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeBreakdownModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlay.hidden) closeBreakdownModal();
+    });
+
+    retryBtn.addEventListener('click', () => {
+      if (breakdownTargetNode) runBreakdown(breakdownTargetNode);
+    });
+
+    // The ONLY place a suggestion can turn into a real board_node — gated
+    // on the user having explicitly opened this modal, waited for a
+    // validated response, checked at least one box, and clicked this
+    // button. There is no other path from an AI response to createNode.
+    submitBtn.addEventListener('click', async () => {
+      const node = breakdownTargetNode;
+      if (!node || !currentBoard) return;
+      const checkedIndexes = Array.from(list.querySelectorAll('input[type="checkbox"]'))
+        .filter((cb) => cb.checked)
+        .map((cb) => Number(cb.dataset.index));
+      if (checkedIndexes.length === 0) return;
+
+      const fieldsList = mapSuggestionsToChildNodes(breakdownSuggestions, checkedIndexes, node);
+      submitBtn.disabled = true;
+      try {
+        for (const fields of fieldsList) {
+          const created = await createNode(userId, currentBoard.id, {
+            nodeType: fields.node_type,
+            title: fields.title,
+            x: fields.x_position,
+            y: fields.y_position,
+            color: fields.color,
+          });
+          nodes.push(created);
+          try {
+            // Reuses the existing Phase 4 edge layer, exactly like any
+            // other connection — a subtask is genuinely a child node.
+            const edge = await createEdge(userId, currentBoard.id, node.id, created.id, 'parent');
+            edges.push(edge);
+          } catch (edgeErr) {
+            console.error('Could not connect subtask to its parent node:', edgeErr);
+          }
+        }
+        renderNodes();
+        renderEdges();
+        closeBreakdownModal();
+        showBoardStatus(t('board.breakdownChildrenAdded'));
+      } catch (err) {
+        console.error('Could not add AI-suggested subtasks:', err);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    return { overlay, loading, errorMsg, list, cancelBtn, retryBtn, submitBtn };
+  }
+
+  function closeBreakdownModal() {
+    if (breakdownModal) breakdownModal.overlay.hidden = true;
+    breakdownTargetNode = null;
+    breakdownSuggestions = [];
+  }
+
+  function renderBreakdownList(suggestions) {
+    breakdownModal.list.innerHTML = '';
+    suggestions.forEach((s, i) => {
+      const row = document.createElement('label');
+      row.className = 'board-breakdown-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true; // all selected by default — the user deselects what they don't want
+      cb.dataset.index = String(i);
+      const span = document.createElement('span');
+      span.textContent = s.title; // AI-generated content — plain text, never markup, never run through the static i18n dictionary
+      row.appendChild(cb);
+      row.appendChild(span);
+      breakdownModal.list.appendChild(row);
+    });
+  }
+
+  async function runBreakdown(node) {
+    if (!breakdownModal) return;
+    breakdownModal.loading.hidden = false;
+    breakdownModal.errorMsg.hidden = true;
+    breakdownModal.list.hidden = true;
+    breakdownModal.submitBtn.hidden = true;
+    breakdownModal.retryBtn.hidden = true;
+
+    const context = buildBreakdownContext(node); // the only thing sent to the AI: title + type
+    const result = await requestBoardBreakdown(context);
+    if (breakdownTargetNode !== node) return; // the modal was closed/retargeted before this resolved
+
+    breakdownModal.loading.hidden = true;
+
+    if (!result.ok) {
+      breakdownModal.errorMsg.textContent = t(breakdownErrorMessageKey(result.error));
+      breakdownModal.errorMsg.hidden = false;
+      breakdownModal.retryBtn.hidden = false;
+      return;
+    }
+
+    const validated = validateBreakdownResponse(result.data);
+    if (!validated.valid) {
+      breakdownModal.errorMsg.textContent = t(breakdownErrorMessageKey(validated.error));
+      breakdownModal.errorMsg.hidden = false;
+      breakdownModal.retryBtn.hidden = false;
+      return;
+    }
+
+    breakdownSuggestions = validated.suggestions;
+    renderBreakdownList(breakdownSuggestions);
+    breakdownModal.list.hidden = false;
+    breakdownModal.submitBtn.hidden = false;
+  }
+
+  function openBreakdownModal(node) {
+    if (!breakdownModal) breakdownModal = buildBreakdownModal();
+    breakdownTargetNode = node;
+    breakdownModal.overlay.hidden = false;
+    runBreakdown(node);
   }
 
   // The small footer row on every node card: either "Add to Planner", or —
@@ -897,6 +1111,15 @@ export function initBoardSection(userId, hostApi = {}) {
     });
     stopDragStart(duplicateBtn);
     row.appendChild(duplicateBtn);
+
+    const breakdownBtn = document.createElement('button');
+    breakdownBtn.type = 'button';
+    breakdownBtn.className = 'board-node-link-btn';
+    breakdownBtn.dataset.i18n = 'board.breakdownWithAi';
+    breakdownBtn.textContent = t('board.breakdownWithAi');
+    breakdownBtn.addEventListener('click', () => openBreakdownModal(node));
+    stopDragStart(breakdownBtn);
+    row.appendChild(breakdownBtn);
 
     if (hasChildren(edges, node.id)) {
       const collapsed = collapsedNodeIds.has(node.id);

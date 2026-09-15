@@ -125,6 +125,16 @@ const en = {
   'board.boardDeleted': 'Board deleted',
   'board.boardCreated': 'Board created',
   'board.boardRenamed': 'Board renamed',
+  'board.breakdownWithAi': 'Break down with AI',
+  'board.breakdownModalTitle': 'AI Breakdown',
+  'board.breakdownLoading': 'Generating suggestions…',
+  'board.breakdownAddSelected': 'Add selected',
+  'board.breakdownRetry': 'Retry',
+  'board.breakdownGenericError': 'Could not generate a breakdown right now. Try again later.',
+  'board.breakdownNetworkError': 'Network error. Check your connection and try again.',
+  'board.breakdownRateLimited': 'Too many requests. Please wait a moment and try again.',
+  'board.breakdownProviderError': 'The AI service is unavailable right now. Try again later.',
+  'board.breakdownChildrenAdded': 'Subtasks added',
 };
 
 const zh = {
@@ -238,6 +248,16 @@ const zh = {
   'board.boardDeleted': '看板已删除',
   'board.boardCreated': '看板已创建',
   'board.boardRenamed': '看板已重命名',
+  'board.breakdownWithAi': '用 AI 拆解',
+  'board.breakdownModalTitle': 'AI 拆解',
+  'board.breakdownLoading': '正在生成建议…',
+  'board.breakdownAddSelected': '添加所选',
+  'board.breakdownRetry': '重试',
+  'board.breakdownGenericError': '暂时无法生成拆解建议，请稍后再试。',
+  'board.breakdownNetworkError': '网络错误，请检查网络连接后重试。',
+  'board.breakdownRateLimited': '请求过于频繁，请稍等片刻后重试。',
+  'board.breakdownProviderError': 'AI 服务暂时不可用，请稍后再试。',
+  'board.breakdownChildrenAdded': '子任务已添加',
 };
 
 const ja = {
@@ -351,6 +371,16 @@ const ja = {
   'board.boardDeleted': 'ボードを削除しました',
   'board.boardCreated': 'ボードを作成しました',
   'board.boardRenamed': 'ボード名を変更しました',
+  'board.breakdownWithAi': 'AIで分解する',
+  'board.breakdownModalTitle': 'AI分解',
+  'board.breakdownLoading': '提案を生成しています…',
+  'board.breakdownAddSelected': '選択項目を追加',
+  'board.breakdownRetry': '再試行',
+  'board.breakdownGenericError': '現在、分解案を生成できません。しばらくしてからもう一度お試しください。',
+  'board.breakdownNetworkError': 'ネットワークエラーです。接続を確認してからもう一度お試しください。',
+  'board.breakdownRateLimited': 'リクエストが多すぎます。少し待ってからもう一度お試しください。',
+  'board.breakdownProviderError': 'AIサービスが現在利用できません。しばらくしてからもう一度お試しください。',
+  'board.breakdownChildrenAdded': 'サブタスクを追加しました',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];

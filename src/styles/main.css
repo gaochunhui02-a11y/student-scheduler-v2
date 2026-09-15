@@ -1412,6 +1412,31 @@ button { font-family: inherit; }
 .board-modal-actions .btn-secondary,
 .board-modal-actions .btn-primary { width: auto; flex: 1; }
 
+/* Phase 8: "Break down with AI" suggestion checklist */
+.board-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+.board-breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+.board-breakdown-item:hover { background: var(--surface-2); }
+.board-breakdown-item input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+
 /* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
    ========================================================================== */
