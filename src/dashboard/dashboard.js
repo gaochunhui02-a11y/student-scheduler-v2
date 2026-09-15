@@ -37,6 +37,29 @@ import {
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 
+// ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
+const THEME_STORAGE_KEY = 'student-scheduler-theme';
+
+function applyTheme(theme) {
+  if (theme === 'dark' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+function currentEffectiveTheme() {
+  const explicit = document.documentElement.getAttribute('data-theme');
+  if (explicit) return explicit;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+try {
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
+} catch {
+  // localStorage unavailable (e.g. a strict privacy mode) — fall back to the OS preference
+}
+
 const session = await requireAuth();
 if (session) {
   init(session).catch((e) => {
@@ -58,8 +81,50 @@ async function init(session) {
     window.location.href = 'login.html';
   });
 
+  // ---------------- theme toggle ----------------
+  const themeToggleBtn = document.getElementById('themeToggle');
+  const themeToggleLabel = document.getElementById('themeToggleLabel');
+  const themeIconDark = document.getElementById('themeIconDark');
+  const themeIconLight = document.getElementById('themeIconLight');
+
+  function refreshThemeToggleUI() {
+    const isDark = currentEffectiveTheme() === 'dark';
+    themeIconDark.hidden = isDark;
+    themeIconLight.hidden = !isDark;
+    themeToggleLabel.textContent = isDark ? 'Light mode' : 'Dark mode';
+  }
+  refreshThemeToggleUI();
+
+  themeToggleBtn.addEventListener('click', () => {
+    const next = currentEffectiveTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // per-viewer convenience only — fine if it can't persist
+    }
+    refreshThemeToggleUI();
+  });
+
+  // ---------------- sidebar nav (in-page scrolling, no separate views) ----------------
+  document.querySelectorAll('.nav-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = document.getElementById(btn.dataset.scrollTarget);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
   const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
-  nameEl.textContent = `Hi, ${profile?.name || session.user.email}`;
+  const displayName = profile?.name || session.user.email;
+  nameEl.textContent = displayName;
+  document.getElementById('userAvatar').textContent = displayName.trim().charAt(0).toUpperCase() || '·';
+
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  const firstName = displayName.includes('@') ? displayName : displayName.split(' ')[0];
+  document.getElementById('greeting').textContent = `Good ${timeOfDay}, ${firstName}`;
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that
@@ -119,7 +184,24 @@ async function init(session) {
     lunch: { on: document.getElementById('mealLunchOn'), time: document.getElementById('mealLunchTime') },
     dinner: { on: document.getElementById('mealDinnerOn'), time: document.getElementById('mealDinnerTime') },
   };
-  const preferredPeriodEl = document.getElementById('preferredStudyPeriod');
+function getPreferredStudyPeriod() {
+  return document.querySelector(
+    'input[name="preferredStudyPeriod"]:checked'
+  )?.value || 'none';
+}
+
+function setPreferredStudyPeriod(value) {
+  const allowed = ['none', 'morning', 'afternoon', 'evening'];
+  const safeValue = allowed.includes(value) ? value : 'none';
+
+  const radio = document.querySelector(
+    `input[name="preferredStudyPeriod"][value="${safeValue}"]`
+  );
+
+  if (radio) {
+    radio.checked = true;
+  }
+}
   const sessionCapEl = document.getElementById('sessionCapMinutes');
   const breakMinutesEl = document.getElementById('breakMinutes');
   const minBlockEl = document.getElementById('minBlockMinutes');
@@ -160,7 +242,7 @@ async function init(session) {
     const minBlock = parseInt(minBlockEl.value, 10);
     if (!sessionCap || !minBlock || !Number.isFinite(breakMinutes) || breakMinutes < 0) return null;
     return {
-      preferred_study_period: preferredPeriodEl.value,
+preferred_study_period: getPreferredStudyPeriod(),
       session_cap_minutes: sessionCap,
       switch_break_minutes: breakMinutes,
       min_block_minutes: minBlock,
@@ -912,7 +994,7 @@ async function init(session) {
     meal.lunch.time.value = toHHMM(schedule.lunch_time);
     meal.dinner.on.checked = schedule.dinner_on;
     meal.dinner.time.value = toHHMM(schedule.dinner_time);
-    preferredPeriodEl.value = schedule.preferred_study_period || 'none';
+setPreferredStudyPeriod(schedule.preferred_study_period || 'none');
     sessionCapEl.value = schedule.session_cap_minutes;
     breakMinutesEl.value = schedule.switch_break_minutes;
     minBlockEl.value = schedule.min_block_minutes;

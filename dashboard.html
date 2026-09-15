@@ -7,175 +7,335 @@
 <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
-<header class="dash-header">
-  <h1>Student Scheduler</h1>
-  <div class="user-info">
-    <span id="userName">Loading…</span>
-    <button class="btn-secondary" id="logoutBtn">Log out</button>
-  </div>
-</header>
-
-<main class="dash-body">
-  <div id="loadError" class="msg error"></div>
-
-  <div class="layout" id="plannerForm" style="display:none;">
-    <div>
-      <div id="daySettingsForm">
-      <div class="card">
-        <h2>Your Day</h2>
-        <label for="forDate">Planning for</label>
-        <div class="date-nav-row">
-          <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
-          <input type="date" id="forDate">
-          <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day">→</button>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="wakeTime">Wake-up time</label>
-            <input type="time" id="wakeTime">
-          </div>
-          <div>
-            <label for="sleepTime">Sleep time</label>
-            <input type="time" id="sleepTime">
-          </div>
-        </div>
-        <p class="hint">Staying up past midnight? Enter the early time as-is (e.g. <strong>1:00 AM</strong>) — it's read as after midnight, not before your wake-up time.</p>
-        <p class="hint" id="dayLengthHint"></p>
-      </div>
-
-      <div class="card" id="historyCard">
-        <h2>History</h2>
-        <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
-      </div>
-
-      <div class="card">
-        <h2>Meals to include</h2>
-        <div class="meal-row">
-          <input type="checkbox" id="mealBreakfastOn">
-          <label for="mealBreakfastTime">Breakfast<span class="meal-dur">30 min</span></label>
-          <input type="time" id="mealBreakfastTime">
-        </div>
-        <div class="meal-row">
-          <input type="checkbox" id="mealLunchOn">
-          <label for="mealLunchTime">Lunch<span class="meal-dur">45 min</span></label>
-          <input type="time" id="mealLunchTime">
-        </div>
-        <div class="meal-row">
-          <input type="checkbox" id="mealDinnerOn">
-          <label for="mealDinnerTime">Dinner<span class="meal-dur">45 min</span></label>
-          <input type="time" id="mealDinnerTime">
-        </div>
-      </div>
-      </div>
-
-      <div class="card">
-        <h2>Classes</h2>
-        <div id="classList"></div>
-        <button class="add-btn" id="addClassBtn" type="button">+ Add class</button>
-      </div>
-
-      <div class="card">
-        <h2>Subjects to study</h2>
-        <div id="studyList"></div>
-        <button class="add-btn" id="addStudyBtn" type="button">+ Add subject</button>
-      </div>
-
-      <div class="card" id="studyPrefsForm">
-        <h2>Study preferences</h2>
-        <div class="row-2">
-          <div>
-            <label for="preferredStudyPeriod">Preferred study time</label>
-            <select id="preferredStudyPeriod">
-              <option value="none">No preference</option>
-              <option value="morning">Morning</option>
-              <option value="afternoon">Afternoon</option>
-              <option value="evening">Evening</option>
-            </select>
-          </div>
-          <div></div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="sessionCapMinutes">Max study session (min)</label>
-            <input type="number" id="sessionCapMinutes" min="5" step="5">
-          </div>
-          <div>
-            <label for="breakMinutes">Break length (min)</label>
-            <input type="number" id="breakMinutes" min="0" step="5">
-          </div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="minBlockMinutes">Minimum study block (min)</label>
-            <input type="number" id="minBlockMinutes" min="5" step="5">
-          </div>
-          <div></div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="earliestStudyTime">Earliest study time</label>
-            <input type="time" id="earliestStudyTime">
-          </div>
-          <div>
-            <label for="latestStudyTime">Latest study time</label>
-            <input type="time" id="latestStudyTime">
-          </div>
-        </div>
-        <p class="hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
-      </div>
-
-      <div class="card" id="copyToAnotherDayCard">
-        <h2>Copy to another day</h2>
-        <p class="hint">Copying from <strong id="copySourceDateLabel">—</strong>: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</p>
-        <div class="row-2">
-          <div>
-            <label for="copyDestDate">Destination date</label>
-            <input type="date" id="copyDestDate">
-          </div>
-          <div></div>
-        </div>
-        <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;">Copy to another day</button>
-        <p class="hint" id="copyStatus"></p>
-      </div>
-
-      <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
-      <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden>Regenerate Schedule</button>
-      <p class="hint" id="saveStatus" style="text-align:center;"></p>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18"></path><path d="M8 15l2 2 4-4"></path></svg>
+      </span>
+      <span class="brand-name">Scheduler</span>
     </div>
 
-    <div>
-      <div class="card warning-card" id="lockConflictWarning" hidden>
-        <h2>Locked block conflict</h2>
-        <div id="lockConflictBody"></div>
-      </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button type="button" class="nav-item active" data-scroll-target="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+        <span>Overview</span>
+      </button>
+      <button type="button" class="nav-item" data-scroll-target="plannerSection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+        <span>Planner</span>
+      </button>
+      <button type="button" class="nav-item" data-scroll-target="historyPanel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>
+        <span>History</span>
+      </button>
+      <button type="button" class="nav-item" data-scroll-target="settingsPanel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H4a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10a1.7 1.7 0 0 0 1-1.55V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V10a1.7 1.7 0 0 0 1.55 1H20a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"></path></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
 
-      <div class="card">
-        <h2>Your Schedule</h2>
-        <div class="legend">
-          <span><i class="swatch" style="background:var(--class-color)"></i>Class</span>
-          <span><i class="swatch" style="background:var(--meal-color)"></i>Meal</span>
-          <span><i class="swatch" style="background:var(--study-color)"></i>Study</span>
-          <span><i class="swatch" style="background:var(--break-color)"></i>Break</span>
-          <span><i class="swatch" style="background:var(--free-color)"></i>Free time</span>
+    <div class="sidebar-bottom">
+      <button type="button" class="theme-toggle" id="themeToggle">
+        <svg id="themeIconDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5A8.5 8.5 0 1 1 11.5 3a7 7 0 0 0 9.5 9.5z"></path></svg>
+        <svg id="themeIconLight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8"></path></svg>
+        <span id="themeToggleLabel">Dark mode</span>
+      </button>
+      <div class="sidebar-user">
+        <span class="avatar" id="userAvatar">·</span>
+        <div class="user-meta">
+          <span class="user-name" id="userName">Loading…</span>
+          <button type="button" class="logout-link" id="logoutBtn">Log out</button>
         </div>
-        <div id="output">
-          <div class="placeholder">Fill in your day, classes, and subjects, then click "Generate Schedule".</div>
-        </div>
-        <div class="notes" id="notes"></div>
-      </div>
-
-      <div class="card warning-card" id="shortfallWarning" hidden>
-        <h2>Not enough available time</h2>
-        <div id="shortfallWarningBody"></div>
-      </div>
-
-      <div class="card" id="dailySummaryCard" hidden>
-        <h2>Daily Summary</h2>
-        <div id="dailySummaryBody"></div>
       </div>
     </div>
+  </aside>
+
+  <main class="workspace">
+    <div class="workspace-inner">
+      <div id="loadError" class="msg error"></div>
+
+      <div id="plannerForm" hidden>
+        <header class="workspace-header" id="overview">
+          <div>
+            <h1 id="greeting">Welcome back</h1>
+            <p class="subtitle">Plan your day without overthinking it.</p>
+          </div>
+          <div class="date-pill">
+            <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day" aria-label="Previous day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+            </button>
+            <input type="date" id="forDate" aria-label="Planning date">
+            <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day" aria-label="Next day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="summary-grid" aria-label="Daily summary">
+          <div class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Classes</span>
+              <span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg></span>
+            </div>
+            <div class="metric-value" id="metricClasses">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Study</span>
+              <span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"></path><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-3"></path></svg></span>
+            </div>
+            <div class="metric-value" id="metricStudy">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Free time</span>
+              <span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></span>
+            </div>
+            <div class="metric-value" id="metricFree">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Progress</span>
+              <span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11"></path></svg></span>
+            </div>
+            <div class="metric-value" id="metricProgressValue">—</div>
+            <div class="metric-bar"><div class="metric-bar-fill" id="metricProgressBar" style="width:0%"></div></div>
+            <div class="metric-sub" id="metricProgressSub"></div>
+          </div>
+        </section>
+
+        <div class="workspace-grid" id="plannerSection">
+          <div class="planner-column">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></span>
+                <span class="panel-title">Your day</span>
+              </div>
+              <div class="panel-body" id="daySettingsForm">
+                <div class="field-block row-2">
+                  <div>
+                    <label for="wakeTime">Wake-up time</label>
+                    <input type="time" id="wakeTime">
+                  </div>
+                  <div>
+                    <label for="sleepTime">Sleep time</label>
+                    <input type="time" id="sleepTime">
+                  </div>
+                </div>
+                <p class="hint">Staying up past midnight? Enter the early time as-is (e.g. <strong>1:00 AM</strong>) — it's read as after midnight, not before your wake-up time.</p>
+                <p class="hint" id="dayLengthHint"></p>
+
+                <div class="list-rows" style="margin-top:6px;">
+                  <div class="meal-row">
+                    <input type="checkbox" id="mealBreakfastOn">
+                    <label for="mealBreakfastTime">Breakfast<span class="meal-dur">30 min</span></label>
+                    <input type="time" id="mealBreakfastTime">
+                  </div>
+                  <div class="meal-row">
+                    <input type="checkbox" id="mealLunchOn">
+                    <label for="mealLunchTime">Lunch<span class="meal-dur">45 min</span></label>
+                    <input type="time" id="mealLunchTime">
+                  </div>
+                  <div class="meal-row">
+                    <input type="checkbox" id="mealDinnerOn">
+                    <label for="mealDinnerTime">Dinner<span class="meal-dur">45 min</span></label>
+                    <input type="time" id="mealDinnerTime">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg></span>
+                <span class="panel-title">Classes</span>
+              </div>
+              <div class="panel-body">
+                <div class="list-rows" id="classList"></div>
+                <div class="empty-row" id="classListEmpty" hidden>No classes yet. Add your first class to start planning.</div>
+                <button class="btn-ghost btn-block" id="addClassBtn" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+                  Add class
+                </button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"></path><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-3"></path></svg></span>
+                <span class="panel-title">Study tasks</span>
+              </div>
+              <p class="panel-helper">What you want to work on — priority and due date help the planner decide what comes first.</p>
+              <div class="panel-body">
+                <div class="list-rows" id="studyList"></div>
+                <div class="empty-row" id="studyListEmpty" hidden>No study tasks. Add something you want to work on today.</div>
+                <button class="btn-ghost btn-block" id="addStudyBtn" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+                  Add study task
+                </button>
+              </div>
+            </div>
+
+            <div class="panel" id="settingsPanel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H4a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10a1.7 1.7 0 0 0 1-1.55V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V10a1.7 1.7 0 0 0 1.55 1H20a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"></path></svg></span>
+                <span class="panel-title">Study preferences</span>
+              </div>
+              <div class="panel-body" id="studyPrefsForm">
+                <div class="field-block">
+                  <label>Preferred study time</label>
+                  <div class="segmented">
+                    <label class="segmented-opt"><input type="radio" name="preferredStudyPeriod" value="none">Any</label>
+                    <label class="segmented-opt"><input type="radio" name="preferredStudyPeriod" value="morning">Morning</label>
+                    <label class="segmented-opt"><input type="radio" name="preferredStudyPeriod" value="afternoon">Afternoon</label>
+                    <label class="segmented-opt"><input type="radio" name="preferredStudyPeriod" value="evening">Evening</label>
+                  </div>
+                </div>
+                <div class="row-2">
+                  <div>
+                    <label for="sessionCapMinutes">Max session (min)</label>
+                    <input type="number" id="sessionCapMinutes" min="5" step="5">
+                  </div>
+                  <div>
+                    <label for="breakMinutes">Break length (min)</label>
+                    <input type="number" id="breakMinutes" min="0" step="5">
+                  </div>
+                </div>
+                <div class="row-2">
+                  <div>
+                    <label for="minBlockMinutes">Min. study block (min)</label>
+                    <input type="number" id="minBlockMinutes" min="5" step="5">
+                  </div>
+                  <div></div>
+                </div>
+                <div class="row-2">
+                  <div>
+                    <label for="earliestStudyTime">Earliest study time</label>
+                    <input type="time" id="earliestStudyTime">
+                  </div>
+                  <div>
+                    <label for="latestStudyTime">Latest study time</label>
+                    <input type="time" id="latestStudyTime">
+                  </div>
+                </div>
+                <p class="hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
+              </div>
+            </div>
+
+            <div class="panel" id="historyPanel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></span>
+                <span class="panel-title">History</span>
+              </div>
+              <div class="history-list" id="historyList"></div>
+            </div>
+
+            <button class="btn-ghost btn-block" id="openCopyModalBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy to another day
+            </button>
+
+            <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
+            <button class="btn-secondary btn-block" id="regenerateBtn" type="button" hidden>Regenerate Schedule</button>
+            <p class="hint" id="saveStatus" style="text-align:center;"></p>
+          </div>
+
+          <div class="timeline-column">
+            <div class="alert alert-danger" id="lockConflictWarning" hidden>
+              <div class="alert-header">
+                <span class="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></span>
+                <span class="alert-title">Locked block conflict</span>
+              </div>
+              <div class="warning-list" id="lockConflictBody"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg></span>
+                <span class="panel-title">Your schedule</span>
+              </div>
+              <div class="timeline-legend">
+                <span><i class="legend-dot" style="background:var(--class-dot)"></i>Class</span>
+                <span><i class="legend-dot" style="background:var(--meal-dot)"></i>Meal</span>
+                <span><i class="legend-dot" style="background:var(--study-dot)"></i>Study</span>
+                <span><i class="legend-dot" style="background:var(--break-dot)"></i>Break</span>
+                <span><i class="legend-dot" style="background:var(--free-dot)"></i>Free time</span>
+              </div>
+              <div id="output">
+                <div class="empty-state">
+                  <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></div>
+                  <div class="empty-title">No schedule generated</div>
+                  <div class="empty-sub">Add your day and tasks, then generate your plan.</div>
+                </div>
+              </div>
+              <div class="notes" id="notes"></div>
+            </div>
+
+            <div class="alert" id="shortfallWarning" hidden>
+              <div class="alert-header">
+                <span class="alert-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg></span>
+                <span class="alert-title">Not enough study time</span>
+              </div>
+              <div id="shortfallWarningBody"></div>
+            </div>
+
+            <div class="panel" id="dailySummaryCard" hidden>
+              <div class="panel-header">
+                <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11"></path></svg></span>
+                <span class="panel-title">Daily summary</span>
+              </div>
+              <div id="dailySummaryBody"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal" id="editModal" hidden role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <h2 class="modal-title" id="editModalTitle">Edit study block</h2>
+    <p class="modal-message" id="editModalSubtitle"></p>
+    <div class="modal-body">
+      <div>
+        <label for="editStartInput">Start time</label>
+        <input type="time" id="editStartInput">
+      </div>
+      <div class="hint error" id="editError" style="display:none;"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="editCancelBtn">Cancel</button>
+      <button type="button" class="btn-primary" id="editSaveBtn">Save</button>
+    </div>
   </div>
-</main>
+
+  <div class="modal" id="copyModal" hidden role="dialog" aria-modal="true" aria-labelledby="copyModalTitle">
+    <h2 class="modal-title" id="copyModalTitle">Copy to another day</h2>
+    <p class="modal-message">Copying from <strong id="copySourceDateLabel">—</strong>: wake/sleep time, meals, classes, study tasks, and study preferences. Not copied: the generated schedule, locks, or completion.</p>
+    <div class="modal-body">
+      <div>
+        <label for="copyDestDate">Destination date</label>
+        <input type="date" id="copyDestDate">
+      </div>
+      <div class="hint" id="copyStatus"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="copyModalCancelBtn">Cancel</button>
+      <button type="button" class="btn-primary" id="copyConfirmBtn">Copy</button>
+    </div>
+  </div>
+
+  <div class="modal" id="confirmModal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <h2 class="modal-title" id="confirmModalTitle">Are you sure?</h2>
+    <p class="modal-message" id="confirmModalMessage"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="confirmModalCancel">Cancel</button>
+      <button type="button" class="btn-primary" id="confirmModalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <script type="module" src="/src/dashboard/dashboard.js"></script>
 </body>
