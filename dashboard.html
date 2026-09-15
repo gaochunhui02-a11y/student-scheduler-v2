@@ -7,18 +7,46 @@
 <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
-<header class="dash-header">
-  <h1>Student Scheduler</h1>
-  <div class="user-info">
-    <span id="userName">Loading…</span>
-    <button class="btn-secondary" id="logoutBtn">Log out</button>
-  </div>
-</header>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">S</span>
+      <span class="brand-name">Scheduler</span>
+    </div>
 
-<main class="dash-body">
-  <div id="loadError" class="msg error"></div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button type="button" class="nav-item active" data-scroll-target="dashTop"><span class="nav-dot"></span><span>Overview</span></button>
+      <button type="button" class="nav-item" data-scroll-target="plannerForm"><span class="nav-dot"></span><span>Planner</span></button>
+      <button type="button" class="nav-item" data-scroll-target="historyCard"><span class="nav-dot"></span><span>History</span></button>
+      <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span>Settings</span></button>
+    </nav>
 
-  <div class="layout" id="plannerForm" style="display:none;">
+    <div class="sidebar-bottom">
+      <button type="button" class="theme-toggle" id="themeToggle">
+        <span id="themeToggleLabel">Dark mode</span>
+      </button>
+      <div class="sidebar-user">
+        <span class="avatar" id="userAvatar">·</span>
+        <div class="user-meta">
+          <span class="user-name" id="userNameSidebar">Loading…</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <div class="workspace-inner">
+      <header class="dash-header" id="dashTop">
+        <h1>Student Scheduler</h1>
+        <div class="user-info">
+          <span id="userName">Loading…</span>
+          <button class="btn-secondary" id="logoutBtn">Log out</button>
+        </div>
+      </header>
+
+      <div id="loadError" class="msg error"></div>
+
+      <div class="layout" id="plannerForm" style="display:none;">
     <div>
       <div id="daySettingsForm">
       <div class="card">
@@ -175,7 +203,9 @@
       </div>
     </div>
   </div>
-</main>
+    </div>
+  </main>
+</div>
 
 <script type="module" src="/src/dashboard/dashboard.js"></script>
 </body>

@@ -37,6 +37,32 @@ import {
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 
+// ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
+// Purely presentational — adds/removes a data-theme attribute on <html> and
+// remembers the choice in localStorage. Touches no existing element/id and
+// has no effect on any scheduling, Supabase, or auth logic.
+const THEME_STORAGE_KEY = 'student-scheduler-theme';
+
+function applyTheme(theme) {
+  if (theme === 'dark' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+function currentEffectiveTheme() {
+  const explicit = document.documentElement.getAttribute('data-theme');
+  if (explicit) return explicit;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+try {
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
+} catch {
+  // localStorage unavailable (e.g. a strict privacy mode) — fall back to the OS preference
+}
+
 const session = await requireAuth();
 if (session) {
   init(session).catch((e) => {
@@ -60,6 +86,43 @@ async function init(session) {
 
   const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
   nameEl.textContent = `Hi, ${profile?.name || session.user.email}`;
+
+  // ---------------- sidebar: name/avatar mirror, theme toggle, nav scroll ----------------
+  // All purely presentational additions — none of this reads/writes anything
+  // beyond the DOM, and none of it replaces or renames an existing element.
+  const displayName = profile?.name || session.user.email;
+  const sidebarNameEl = document.getElementById('userNameSidebar');
+  if (sidebarNameEl) sidebarNameEl.textContent = displayName;
+  const avatarEl = document.getElementById('userAvatar');
+  if (avatarEl) avatarEl.textContent = displayName.trim().charAt(0).toUpperCase() || '·';
+
+  const themeToggleBtn = document.getElementById('themeToggle');
+  const themeToggleLabel = document.getElementById('themeToggleLabel');
+  function refreshThemeToggleLabel() {
+    if (themeToggleLabel) themeToggleLabel.textContent = currentEffectiveTheme() === 'dark' ? 'Light mode' : 'Dark mode';
+  }
+  refreshThemeToggleLabel();
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const next = currentEffectiveTheme() === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // per-viewer convenience only — fine if it can't persist
+      }
+      refreshThemeToggleLabel();
+    });
+  }
+
+  document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = document.getElementById(btn.dataset.scrollTarget);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that
