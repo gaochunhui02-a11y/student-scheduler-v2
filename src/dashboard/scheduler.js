@@ -131,6 +131,14 @@ function clockRange(start, end) {
   return `${formatClock(start)} – ${formatClock(end)}`;
 }
 
+// Identifies a subject by its database id when available, falling back to its
+// name (e.g. for a subject that hasn't been saved yet, or a locked block
+// carried over from before source_subject_id existed). Used to match locked
+// blocks and newly-placed study blocks back to the subject they belong to.
+function subjectKey(id, name) {
+  return id != null ? `id:${id}` : `name:${name}`;
+}
+
 /**
  * Checks locked study blocks against the day bounds, the study-time window,
  * fixed events (classes/meals), and each other — WITHOUT moving or dropping
@@ -186,10 +194,10 @@ function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, study
  * @param {string} input.sleepTime "HH:MM" — at/before wakeTime means "next day"
  * @param {{name:string, start:string, end:string}[]} input.classes
  * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
- * @param {{name:string, minutes:number, priority?:'low'|'medium'|'high', dueDate?:string|null}[]} input.subjects
+ * @param {{id?:string|null, name:string, minutes:number, priority?:'low'|'medium'|'high', dueDate?:string|null}[]} input.subjects
  * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number, preferredPeriod?:'none'|'morning'|'afternoon'|'evening', earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
- * @param {{name:string, start:number, end:number}[]} [input.lockedBlocks] previously-locked study blocks (absolute minutes, same space as event start/end) to keep fixed during regeneration
- * @returns {{ events: {type:string,name:string,start:number,end:number,locked?:boolean}[], notes: string[], error?: string, lockConflicts?: string[] }}
+ * @param {{name:string, start:number, end:number, sourceSubjectId?:string|null}[]} [input.lockedBlocks] previously-locked study blocks (absolute minutes, same space as event start/end) to keep fixed during regeneration
+ * @returns {{ events: {type:string,name:string,start:number,end:number,locked?:boolean,sourceSubjectId?:string|null}[], notes: string[], error?: string, lockConflicts?: string[] }}
  */
 export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects, prefs, lockedBlocks }) {
   const notes = [];
@@ -277,7 +285,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   // ----- locked study blocks (kept exactly where they are; never moved) -----
   const lockedEvents = (lockedBlocks || [])
     .filter((b) => b.name && Number.isFinite(b.start) && Number.isFinite(b.end) && b.end > b.start)
-    .map((b) => ({ type: 'study', name: b.name, start: b.start, end: b.end, locked: true }))
+    .map((b) => ({ type: 'study', name: b.name, start: b.start, end: b.end, locked: true, sourceSubjectId: b.sourceSubjectId ?? null }))
     .sort((a, b) => a.start - b.start);
 
   const lockConflicts = validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd);
@@ -299,16 +307,20 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
 
   // ----- study subjects -----
-  const lockedMinutesByName = new Map();
-  lockedEvents.forEach((b) => lockedMinutesByName.set(b.name, (lockedMinutesByName.get(b.name) || 0) + (b.end - b.start)));
+  const lockedMinutesBySubjectKey = new Map();
+  lockedEvents.forEach((b) => {
+    const key = subjectKey(b.sourceSubjectId, b.name);
+    lockedMinutesBySubjectKey.set(key, (lockedMinutesBySubjectKey.get(key) || 0) + (b.end - b.start));
+  });
 
   const subjectQueue = (subjects || [])
     .filter((s) => s.name && s.minutes > 0)
     .map((s) => ({
+      id: s.id ?? null,
       name: s.name,
       // minutes already covered by a locked block count toward the request —
       // only the remainder still needs to be found room for
-      remaining: Math.max(0, s.minutes - (lockedMinutesByName.get(s.name) || 0)),
+      remaining: Math.max(0, s.minutes - (lockedMinutesBySubjectKey.get(subjectKey(s.id, s.name)) || 0)),
       priority: PRIORITY_RANK[s.priority] ? s.priority : 'medium',
       dueDate: s.dueDate || null,
     }));
@@ -331,7 +343,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     let remaining = amount;
     while (remaining > 0) {
       const session = Math.min(remaining, sessionCap);
-      studyEvents.push({ type: 'study', name: subject.name, start: gap.start, end: gap.start + session });
+      studyEvents.push({ type: 'study', name: subject.name, start: gap.start, end: gap.start + session, sourceSubjectId: subject.id });
       gap.start += session;
       subject.remaining -= session;
       remaining -= session;

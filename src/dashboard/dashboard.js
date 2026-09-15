@@ -14,6 +14,7 @@ import {
   listScheduleItems,
   saveGeneratedSchedule,
   setScheduleItemLocked,
+  setScheduleItemCompleted,
 } from './data.js';
 import { generateSchedule, resolveDayBounds, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
@@ -335,6 +336,7 @@ async function init(session) {
 
   function buildSubjectsInput() {
     return Array.from(studyList.children).map((row) => ({
+      id: row.dataset.id || null,
       name: row.querySelector('.study-name').value.trim(),
       minutes: parseInt(row.querySelector('.study-minutes').value, 10),
       priority: row.querySelector('.study-priority').value,
@@ -367,6 +369,8 @@ async function init(session) {
 
         let subtitle = '';
         let lockControl = '';
+        let doneControl = '';
+        let nameHtml = escapeAttr(e.name);
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
           const parts = [];
@@ -375,15 +379,18 @@ async function init(session) {
           if (dueText) parts.push(dueText);
           if (parts.length > 0) subtitle = `<div class="block-subtitle">${escapeAttr(parts.join(' · '))}</div>`;
 
+          if (e.completed) nameHtml = `✓ ${nameHtml}`;
+
           if (e.id) {
             lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${e.locked ? '🔒 Locked' : '🔓 Lock'}</button>`;
+            doneControl = `<button type="button" class="done-btn" data-id="${e.id}" data-completed="${e.completed ? '1' : '0'}">${e.completed ? 'Undo' : 'Mark Done'}</button>`;
           }
         }
 
         return `
-          <div class="block ${e.type}${e.locked ? ' locked' : ''}">
+          <div class="block ${e.type}${e.locked ? ' locked' : ''}${e.completed ? ' completed' : ''}">
             <div class="time">${formatClock(e.start)} – ${formatClock(e.end)}</div>
-            <div class="info">${escapeAttr(e.name)} <span class="dur">(${durText})</span>${subtitle}${lockControl}</div>
+            <div class="info">${nameHtml} <span class="dur">(${durText})</span>${subtitle}${lockControl}${doneControl}</div>
           </div>
         `;
       })
@@ -392,21 +399,43 @@ async function init(session) {
   }
 
   output.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.lock-btn');
-    if (!btn) return;
-    const id = btn.dataset.id;
-    const newLocked = btn.dataset.locked !== '1';
-    btn.disabled = true;
-    try {
-      await setScheduleItemLocked(id, newLocked);
-      const item = currentScheduleItems.find((i) => i.id === id);
-      if (item) item.locked = newLocked;
-      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
-      flashSaved();
-    } catch (err) {
-      console.error(err);
-      flashError('Could not update lock state — check your connection.');
-      btn.disabled = false;
+    const lockBtn = e.target.closest('.lock-btn');
+    if (lockBtn) {
+      const id = lockBtn.dataset.id;
+      const newLocked = lockBtn.dataset.locked !== '1';
+      lockBtn.disabled = true;
+      try {
+        await setScheduleItemLocked(id, newLocked);
+        const item = currentScheduleItems.find((i) => i.id === id);
+        if (item) item.locked = newLocked;
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        renderDailySummaryFromCurrent();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        flashError('Could not update lock state — check your connection.');
+        lockBtn.disabled = false;
+      }
+      return;
+    }
+
+    const doneBtn = e.target.closest('.done-btn');
+    if (doneBtn) {
+      const id = doneBtn.dataset.id;
+      const newCompleted = doneBtn.dataset.completed !== '1';
+      doneBtn.disabled = true;
+      try {
+        await setScheduleItemCompleted(id, newCompleted);
+        const item = currentScheduleItems.find((i) => i.id === id);
+        if (item) item.completed = newCompleted;
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        renderDailySummaryFromCurrent();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        flashError('Could not update completion state — check your connection.');
+        doneBtn.disabled = false;
+      }
     }
   });
 
@@ -479,10 +508,25 @@ async function init(session) {
       html += `<div class="summary-row"><span class="label">Sleep</span><span class="value">${formatDuration(summary.sleepMinutes)}</span></div>`;
     }
     if (progress) {
-      html += `<div class="summary-progress">Study tasks scheduled: <strong>${progress.scheduledCount} / ${progress.subjects.length}</strong></div>`;
+      const total = progress.subjects.length;
+      html += `<div class="summary-progress">Study Progress: <strong>${progress.completedCount} / ${total}</strong> tasks completed`;
+      if (total > 0) html += ` <span class="summary-percent">(${progress.completionPercent}% complete)</span>`;
+      html += `</div>`;
     }
     dailySummaryBody.innerHTML = html;
     dailySummaryCard.hidden = false;
+  }
+
+  // Recomputes and re-renders the daily summary + shortfall warning from
+  // whatever is currently in `currentScheduleItems` — used after a lock or
+  // completion toggle, where the timeline itself doesn't change but the
+  // progress numbers do.
+  function renderDailySummaryFromCurrent() {
+    const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
+    if (bounds.error) return;
+    const progress = computeSubjectProgress(currentScheduleItems, buildSubjectsInput());
+    renderDailySummary(computeDailySummary(currentScheduleItems, bounds.dayStart, bounds.dayEnd), progress);
+    renderShortfallWarning(progress);
   }
 
   function updateRegenerateVisibility() {
@@ -552,7 +596,16 @@ async function init(session) {
       const lockedRows = currentScheduleItems.filter((i) => i.type === 'study' && i.locked);
       currentScheduleItems = [
         ...lockedRows,
-        ...savedRows.map((r) => ({ id: r.id, type: r.item_type, name: r.name, start: r.start_minutes, end: r.end_minutes, locked: r.locked })),
+        ...savedRows.map((r) => ({
+          id: r.id,
+          type: r.item_type,
+          name: r.name,
+          start: r.start_minutes,
+          end: r.end_minutes,
+          locked: r.locked,
+          completed: r.completed,
+          sourceSubjectId: r.source_subject_id,
+        })),
       ].sort((a, b) => a.start - b.start);
       renderScheduleEvents(currentScheduleItems, subjectsInput);
       updateRegenerateVisibility();
@@ -570,7 +623,7 @@ async function init(session) {
   function lockedBlocksFromCurrent() {
     return currentScheduleItems
       .filter((i) => i.type === 'study' && i.locked)
-      .map((i) => ({ name: i.name, start: i.start, end: i.end }));
+      .map((i) => ({ name: i.name, start: i.start, end: i.end, sourceSubjectId: i.sourceSubjectId }));
   }
 
   document.getElementById('generateBtn').addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
@@ -581,18 +634,20 @@ async function init(session) {
     const savedItems = await listScheduleItems(schedule.id);
     if (savedItems.length > 0) {
       currentScheduleItems = savedItems
-        .map((i) => ({ id: i.id, type: i.item_type, name: i.name, start: i.start_minutes, end: i.end_minutes, locked: i.locked }))
+        .map((i) => ({
+          id: i.id,
+          type: i.item_type,
+          name: i.name,
+          start: i.start_minutes,
+          end: i.end_minutes,
+          locked: i.locked,
+          completed: i.completed,
+          sourceSubjectId: i.source_subject_id,
+        }))
         .sort((a, b) => a.start - b.start);
       renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       updateRegenerateVisibility();
-
-      const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
-      if (!bounds.error) {
-        const loadedSubjects = existingSubjects.map((s) => ({ name: s.name, minutes: s.minutes_requested }));
-        const progress = computeSubjectProgress(currentScheduleItems, loadedSubjects);
-        renderDailySummary(computeDailySummary(currentScheduleItems, bounds.dayStart, bounds.dayEnd), progress);
-        renderShortfallWarning(progress);
-      }
+      renderDailySummaryFromCurrent();
     }
   } catch (e) {
     console.error('Could not load saved schedule:', e);

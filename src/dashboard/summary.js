@@ -7,6 +7,13 @@ function sumEventType(events, type) {
   return events.filter((e) => e.type === type).reduce((total, e) => total + (e.end - e.start), 0);
 }
 
+// Same identity rule scheduler.js uses: prefer the subject's database id when
+// available, falling back to its name (e.g. for legacy blocks saved before
+// source_subject_id existed, or a subject not yet persisted).
+function subjectKey(id, name) {
+  return id != null ? `id:${id}` : `name:${name}`;
+}
+
 /**
  * @param {{type:string,start:number,end:number}[]} events
  * @param {number} dayStart wake-up, in minutes since midnight
@@ -30,35 +37,63 @@ export function computeDailySummary(events, dayStart, dayEnd) {
 
 /**
  * Compares each requested study subject against how much of it actually made
- * it onto the timeline, by name (the same key the scheduler itself uses to
- * group study blocks).
- * @param {{type:string,name:string,start:number,end:number}[]} events
- * @param {{name:string, minutes:number}[]} subjects the original requested subjects
+ * it onto the timeline, and against how much of what's there is marked done.
+ * Blocks are matched to a subject by sourceSubjectId when present, falling
+ * back to name — same rule scheduler.js uses to attribute locked minutes.
+ *
+ * A subject counts as "completed" only when it has at least one scheduled
+ * study block AND every one of its study blocks is completed — a subject
+ * split across two blocks isn't done until both are.
+ *
+ * @param {{type:string,name:string,start:number,end:number,sourceSubjectId?:string|null,completed?:boolean}[]} events
+ * @param {{id?:string|null, name:string, minutes:number}[]} subjects the original requested subjects
  */
 export function computeSubjectProgress(events, subjects) {
-  const scheduledByName = new Map();
+  const byKey = new Map(); // key -> { scheduled, blockCount, completedBlockCount }
   events
     .filter((e) => e.type === 'study')
-    .forEach((e) => scheduledByName.set(e.name, (scheduledByName.get(e.name) || 0) + (e.end - e.start)));
+    .forEach((e) => {
+      const key = subjectKey(e.sourceSubjectId, e.name);
+      const entry = byKey.get(key) || { scheduled: 0, blockCount: 0, completedBlockCount: 0 };
+      entry.scheduled += e.end - e.start;
+      entry.blockCount += 1;
+      if (e.completed) entry.completedBlockCount += 1;
+      byKey.set(key, entry);
+    });
 
   const list = (subjects || [])
     .filter((s) => s.name && s.minutes > 0)
     .map((s) => {
-      const scheduled = scheduledByName.get(s.name) || 0;
-      return { name: s.name, requested: s.minutes, scheduled, unscheduled: Math.max(0, s.minutes - scheduled) };
+      const entry = byKey.get(subjectKey(s.id, s.name)) || { scheduled: 0, blockCount: 0, completedBlockCount: 0 };
+      const completed = entry.blockCount > 0 && entry.completedBlockCount === entry.blockCount;
+      return {
+        name: s.name,
+        requested: s.minutes,
+        scheduled: entry.scheduled,
+        unscheduled: Math.max(0, s.minutes - entry.scheduled),
+        blockCount: entry.blockCount,
+        completed,
+      };
     });
 
   const requestedTotal = list.reduce((sum, s) => sum + s.requested, 0);
   const scheduledTotal = list.reduce((sum, s) => sum + s.scheduled, 0);
   const scheduledCount = list.filter((s) => s.unscheduled === 0).length;
+  const completedCount = list.filter((s) => s.completed).length;
+  const completionPercent = list.length > 0 ? Math.round((completedCount / list.length) * 100) : 0;
 
   return {
     subjects: list,
     requestedTotal,
     scheduledTotal,
     unscheduledTotal: Math.max(0, requestedTotal - scheduledTotal),
+    // "fully scheduled" (Phase 4 meaning — did the requested time fit at all)
     scheduledCount,
     remainingCount: list.length - scheduledCount,
+    // "done" (Phase 6 meaning — has the student finished studying it)
+    completedCount,
+    notCompletedCount: list.length - completedCount,
+    completionPercent,
   };
 }
 

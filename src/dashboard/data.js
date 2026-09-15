@@ -122,7 +122,9 @@ export async function listScheduleItems(scheduleId) {
 // something generation produced this time around; it's already sitting there
 // from before. `events` is the full timeline generateSchedule() returned,
 // including the locked blocks it echoed back — those are skipped here since
-// they don't need to be (re)written.
+// they don't need to be (re)written. Freshly (re)inserted rows always start
+// completed = false — a brand new/replacement block was never marked done by
+// the student, no matter what a same-named block used to say.
 export async function saveGeneratedSchedule(scheduleId, userId, events) {
   const { error: deleteError } = await supabase
     .from('schedule_items')
@@ -143,11 +145,18 @@ export async function saveGeneratedSchedule(scheduleId, userId, events) {
     end_minutes: item.end,
     sort_order: i,
     locked: false,
+    completed: false,
+    source_subject_id: item.sourceSubjectId || null,
   }));
 
   const { data, error: insertError } = await supabase.from('schedule_items').insert(rows).select();
   if (insertError) throw insertError;
   return data;
+}
+
+export async function setScheduleItemCompleted(id, completed) {
+  const { error } = await supabase.from('schedule_items').update({ completed }).eq('id', id);
+  if (error) throw error;
 }
 
 export async function setScheduleItemLocked(id, locked) {

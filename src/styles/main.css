@@ -358,6 +358,27 @@ select {
 .lock-btn:hover { background: rgba(255, 255, 255, 0.3); }
 .lock-btn:disabled { opacity: 0.6; cursor: default; }
 
+.done-btn {
+  display: inline-block;
+  margin-top: 6px;
+  margin-left: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.done-btn:hover { background: rgba(255, 255, 255, 0.3); }
+.done-btn:disabled { opacity: 0.6; cursor: default; }
+
+.block.completed { opacity: 0.55; }
+.block.completed .time { text-decoration: line-through; }
+
+.summary-percent { color: var(--muted); font-weight: 400; }
+
 .notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .note {
   background: #fcf1de;
