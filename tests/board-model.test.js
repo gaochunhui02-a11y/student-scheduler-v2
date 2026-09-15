@@ -20,6 +20,9 @@ import {
   validateNewEdge,
   removeEdgesForNode,
   edgesTouchingNode,
+  nextNodePosition,
+  createNodeDefaults,
+  computeDragPosition,
 } from '../src/board/boardModel.js';
 
 let totalFailures = 0;
@@ -145,6 +148,113 @@ scenario('F. Deleting a node invalidates its edges at the model level', () => {
 });
 
 // ---------------------------------------------------------------------------
+scenario('G. New-node placement (nextNodePosition / createNodeDefaults)', () => {
+  check('the first node (count 0) lands at the grid origin/margin', () => {
+    assert.deepEqual(nextNodePosition(0), { x_position: 40, y_position: 40 });
+  });
+  check('the second node is placed one column over, same row', () => {
+    const first = nextNodePosition(0);
+    const second = nextNodePosition(1);
+    assert.equal(second.y_position, first.y_position);
+    assert.notEqual(second.x_position, first.x_position);
+  });
+  check('the 5th node (count 4) wraps to a new row, back to the first column', () => {
+    const wrapped = nextNodePosition(4);
+    const first = nextNodePosition(0);
+    assert.equal(wrapped.x_position, first.x_position);
+    assert.notEqual(wrapped.y_position, first.y_position);
+  });
+  check('positions are deterministic — the same count always gives the same spot', () => {
+    assert.deepEqual(nextNodePosition(7), nextNodePosition(7));
+  });
+  check('a negative or non-finite count falls back to the first slot', () => {
+    assert.deepEqual(nextNodePosition(-3), nextNodePosition(0));
+    assert.deepEqual(nextNodePosition(NaN), nextNodePosition(0));
+  });
+
+  check('createNodeDefaults defaults to node_type "note" and an empty title', () => {
+    const node = createNodeDefaults(0);
+    assert.equal(node.node_type, 'note');
+    assert.equal(node.title, '');
+    assert.deepEqual({ x_position: node.x_position, y_position: node.y_position }, nextNodePosition(0));
+  });
+  check('createNodeDefaults honors a valid requested type', () => {
+    assert.equal(createNodeDefaults(0, 'goal').node_type, 'goal');
+  });
+  check('createNodeDefaults falls back to "note" for an invalid type rather than saving garbage', () => {
+    assert.equal(createNodeDefaults(0, 'project').node_type, 'note');
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('H. Drag-end position calculation (computeDragPosition)', () => {
+  check('no pointer movement means no position change', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: 300, pointerCurrentY: 200,
+      zoom: 1,
+    });
+    assert.deepEqual(result, { x_position: 100, y_position: 60 });
+  });
+  check('a pointer move at 1x zoom translates the node by the same amount', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: 350, pointerCurrentY: 180,
+      zoom: 1,
+    });
+    assert.deepEqual(result, { x_position: 150, y_position: 40 });
+  });
+  check('at 2x zoom, a screen-pixel move covers half as much canvas distance', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: 340, pointerCurrentY: 200,
+      zoom: 2,
+    });
+    assert.deepEqual(result, { x_position: 120, y_position: 60 });
+  });
+  check('at 0.5x zoom, a screen-pixel move covers double the canvas distance', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: 320, pointerCurrentY: 200,
+      zoom: 0.5,
+    });
+    assert.deepEqual(result, { x_position: 140, y_position: 60 });
+  });
+  check('dragging left/up of the start point produces negative-going coordinates correctly', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: 260, pointerCurrentY: 150,
+      zoom: 1,
+    });
+    assert.deepEqual(result, { x_position: 60, y_position: 10 });
+  });
+  check('a zoom of 0 is treated as 1x rather than dividing by zero', () => {
+    const result = computeDragPosition({
+      nodeStartX: 0, nodeStartY: 0,
+      pointerStartX: 0, pointerStartY: 0,
+      pointerCurrentX: 10, pointerCurrentY: 10,
+      zoom: 0,
+    });
+    assert.deepEqual(result, { x_position: 10, y_position: 10 });
+  });
+  check('a non-finite pointer value normalizes to 0 rather than producing NaN', () => {
+    const result = computeDragPosition({
+      nodeStartX: 100, nodeStartY: 60,
+      pointerStartX: 300, pointerStartY: 200,
+      pointerCurrentX: NaN, pointerCurrentY: 200,
+      zoom: 1,
+    });
+    assert.equal(result.x_position, 0);
+    assert.equal(Number.isFinite(result.x_position), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FakeStore simulation: a minimal in-memory stand-in for the Supabase tables
 // created by migration 0002, reusing the real pure model functions to
 // mirror the ON DELETE CASCADE behavior board_edges has on
@@ -153,7 +263,7 @@ scenario('F. Deleting a node invalidates its edges at the model level', () => {
 // *-schedule test files: src/board/boardData.js imports the real Supabase
 // client and needs live Vite env vars, so it isn't importable from plain
 // Node.
-scenario('G. FakeStore: create nodes + edges, then delete a node', () => {
+scenario('I. FakeStore: create nodes + edges, then delete a node', () => {
   const store = { nodes: [], edges: [] };
   let nextId = 1;
 

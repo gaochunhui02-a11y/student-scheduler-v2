@@ -67,3 +67,50 @@ export function removeEdgesForNode(edges, nodeId) {
 export function edgesTouchingNode(edges, nodeId) {
   return edges.filter((e) => e.source_node_id === nodeId || e.target_node_id === nodeId);
 }
+
+// ---------------------------------------------------------------------------
+// Node creation defaults (Phase 3: canvas + draggable nodes)
+// ---------------------------------------------------------------------------
+
+const NODE_GRID_COLUMNS = 4;
+const NODE_GRID_COL_SPACING = 220;
+const NODE_GRID_ROW_SPACING = 150;
+const NODE_GRID_MARGIN = 40;
+
+// Deterministic staggered placement for a newly created node, so "+ Add
+// node" clicked repeatedly doesn't stack every card exactly on top of the
+// last one. Purely a function of how many nodes already exist — no random
+// numbers, so it's testable and reproducible.
+export function nextNodePosition(existingNodeCount) {
+  const count = Number.isFinite(existingNodeCount) && existingNodeCount > 0 ? Math.floor(existingNodeCount) : 0;
+  const col = count % NODE_GRID_COLUMNS;
+  const row = Math.floor(count / NODE_GRID_COLUMNS);
+  return {
+    x_position: NODE_GRID_MARGIN + col * NODE_GRID_COL_SPACING,
+    y_position: NODE_GRID_MARGIN + row * NODE_GRID_ROW_SPACING,
+  };
+}
+
+// A brand-new node's full default field set, before it's sent to
+// boardData.createNode. node_type defaults to 'note' — the lowest-commitment
+// type, since the user hasn't chosen one yet.
+export function createNodeDefaults(existingNodeCount, nodeType = 'note') {
+  return { node_type: isValidNodeType(nodeType) ? nodeType : 'note', title: '', ...nextNodePosition(existingNodeCount) };
+}
+
+// ---------------------------------------------------------------------------
+// Drag-end position calculation (Phase 3)
+// ---------------------------------------------------------------------------
+
+// Pure math behind dragging a node: given where the node started, where the
+// pointer started, and where the pointer is now, returns the node's new
+// position. Dividing the pointer delta by `zoom` is what keeps dragging
+// accurate when the canvas is zoomed in/out (a screen-pixel pointer move of
+// 10px is only a 5px move in canvas space at 2x zoom). The result is run
+// through normalizeNodePosition so a drag can never persist NaN/Infinity.
+export function computeDragPosition({ nodeStartX, nodeStartY, pointerStartX, pointerStartY, pointerCurrentX, pointerCurrentY, zoom = 1 }) {
+  const safeZoom = typeof zoom === 'number' && Number.isFinite(zoom) && zoom !== 0 ? zoom : 1;
+  const dx = (pointerCurrentX - pointerStartX) / safeZoom;
+  const dy = (pointerCurrentY - pointerStartY) / safeZoom;
+  return normalizeNodePosition(nodeStartX + dx, nodeStartY + dy);
+}

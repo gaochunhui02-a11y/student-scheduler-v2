@@ -19,6 +19,7 @@
       <button type="button" class="nav-item" data-scroll-target="plannerForm"><span class="nav-dot"></span><span data-i18n="nav.planner">Planner</span></button>
       <button type="button" class="nav-item" data-scroll-target="historyCard"><span class="nav-dot"></span><span data-i18n="nav.history">History</span></button>
       <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span data-i18n="nav.settings">Settings</span></button>
+      <button type="button" class="nav-item" data-view-target="boardView"><span class="nav-dot"></span><span data-i18n="nav.board">Board</span></button>
     </nav>
 
     <div class="sidebar-bottom">
@@ -211,6 +212,34 @@
       </div>
     </div>
   </div>
+
+      <section class="board-view" id="boardView" hidden>
+        <div class="board-header">
+          <input type="text" id="boardTitleInput" class="board-title-input" data-i18n-aria-label="board.titleLabel" aria-label="Board title" data-i18n-placeholder="board.titleLabel" placeholder="Board title">
+          <div class="board-toolbar">
+            <button type="button" class="board-add-btn" id="boardAddNodeBtn">+ <span data-i18n="board.addNode">Add node</span></button>
+            <div class="board-zoom">
+              <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out">−</button>
+              <span class="board-zoom-label" id="boardZoomLabel">100%</span>
+              <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in">+</button>
+              <button type="button" class="board-zoom-btn board-zoom-reset" id="boardZoomResetBtn" data-i18n="board.zoomReset">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="board-workspace" id="boardWorkspace" hidden>
+          <div class="board-canvas-wrap" id="boardCanvasWrap">
+            <div class="board-canvas" id="boardCanvas">
+              <div class="placeholder board-empty" id="boardEmptyState" data-i18n="board.emptyState" hidden>No nodes yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card board-no-board" id="boardNoBoardState" hidden>
+          <p class="hint" data-i18n="board.noBoardHint">You don't have a board yet.</p>
+          <button type="button" class="btn-primary" id="boardCreateBtn" data-i18n="board.createBoard">Create board</button>
+        </div>
+      </section>
     </div>
   </main>
 </div>

@@ -37,6 +37,7 @@ import {
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
+import { initBoardSection } from '../board/board.js';
 
 // ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
 // Purely presentational — adds/removes a data-theme attribute on <html> and
@@ -135,12 +136,41 @@ async function init(session) {
     });
   }
 
+  // ---------------- Board section (view toggle) ----------------
+  // The Board is a full alternate view, not another anchor within the
+  // planner's continuous scroll — so "Planner"/"History"/etc. and "Board"
+  // use two different nav-click patterns that coexist: data-scroll-target
+  // (existing, untouched below) smooth-scrolls within the always-mounted
+  // planner layout, while data-view-target swaps which top-level section is
+  // visible. All Board DOM/state lives in src/board/board.js — this file
+  // only owns the show/hide toggle for #plannerForm vs #boardView.
+  const boardView = document.getElementById('boardView');
+  function showPlannerView() {
+    if (boardView) boardView.hidden = true;
+    plannerForm.style.display = '';
+  }
+  function showBoardView() {
+    plannerForm.style.display = 'none';
+    if (boardView) boardView.hidden = false;
+  }
+  const boardSection = initBoardSection(userId);
+
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
+      showPlannerView();
       const target = document.getElementById(btn.dataset.scrollTarget);
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      showBoardView();
+      if (boardSection) boardSection.onShow();
     });
   });
 

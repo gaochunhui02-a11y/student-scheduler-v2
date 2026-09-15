@@ -69,6 +69,22 @@ const en = {
   'legend.free': 'Free time',
   'shortfall.title': 'Not enough available time',
   'summary.title': 'Daily Summary',
+  'nav.board': 'Board',
+  'board.titleLabel': 'Board title',
+  'board.addNode': 'Add node',
+  'board.emptyState': 'No nodes yet.',
+  'board.noBoardHint': "You don't have a board yet.",
+  'board.createBoard': 'Create board',
+  'board.zoomIn': 'Zoom in',
+  'board.zoomOut': 'Zoom out',
+  'board.zoomReset': 'Reset',
+  'board.deleteNode': 'Delete node',
+  'board.nodeTypeLabel': 'Node type',
+  'board.nodeTitlePlaceholder': 'Untitled node',
+  'nodeType.goal': 'Goal',
+  'nodeType.subject': 'Subject',
+  'nodeType.task': 'Task',
+  'nodeType.note': 'Note',
 };
 
 const zh = {
@@ -126,6 +142,22 @@ const zh = {
   'legend.free': '空闲时间',
   'shortfall.title': '学习时间不足',
   'summary.title': '每日总结',
+  'nav.board': '看板',
+  'board.titleLabel': '看板标题',
+  'board.addNode': '添加节点',
+  'board.emptyState': '暂无节点。',
+  'board.noBoardHint': '你还没有看板。',
+  'board.createBoard': '创建看板',
+  'board.zoomIn': '放大',
+  'board.zoomOut': '缩小',
+  'board.zoomReset': '重置',
+  'board.deleteNode': '删除节点',
+  'board.nodeTypeLabel': '节点类型',
+  'board.nodeTitlePlaceholder': '未命名节点',
+  'nodeType.goal': '目标',
+  'nodeType.subject': '科目',
+  'nodeType.task': '任务',
+  'nodeType.note': '备注',
 };
 
 const ja = {
@@ -183,6 +215,22 @@ const ja = {
   'legend.free': '空き時間',
   'shortfall.title': '学習時間が不足しています',
   'summary.title': 'デイリーサマリー',
+  'nav.board': 'ボード',
+  'board.titleLabel': 'ボードタイトル',
+  'board.addNode': 'ノードを追加',
+  'board.emptyState': 'ノードはまだありません。',
+  'board.noBoardHint': 'まだボードがありません。',
+  'board.createBoard': 'ボードを作成',
+  'board.zoomIn': '拡大',
+  'board.zoomOut': '縮小',
+  'board.zoomReset': 'リセット',
+  'board.deleteNode': 'ノードを削除',
+  'board.nodeTypeLabel': 'ノードの種類',
+  'board.nodeTitlePlaceholder': '無題のノード',
+  'nodeType.goal': '目標',
+  'nodeType.subject': '科目',
+  'nodeType.task': 'タスク',
+  'nodeType.note': 'メモ',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];
@@ -217,9 +265,24 @@ export function t(key) {
 // element carrying the attribute, it can never remove a nested functional
 // child or id — the HTML is written so translatable text and functional
 // sub-elements are always siblings, never parent/child of a translated node.
+//
+// [data-i18n-placeholder] and [data-i18n-aria-label] additionally translate
+// the `placeholder` and `aria-label` attributes (added in Phase 3 for the
+// Board's node title/type controls) — attribute-only, so these never touch
+// an element's children either.
+//
+// Called on every language switch, so it re-sweeps the whole document,
+// including Board nodes rendered after the page loaded (they carry the
+// same data-i18n* attributes at render time — see src/board/board.js).
 export function applyTranslations(root = document) {
   root.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  root.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria-label')));
   });
   document.documentElement.lang = getLanguage();
 }
