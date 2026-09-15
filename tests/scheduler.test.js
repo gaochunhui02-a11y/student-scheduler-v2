@@ -1,105 +1,297 @@
-// Plain Node test for the pure scheduling algorithm — no framework, no DOM,
+// Plain Node tests for the pure scheduling algorithm — no framework, no DOM,
 // no Supabase. Run with `npm test` or `node tests/scheduler.test.js`.
 
 import assert from 'node:assert/strict';
-import { generateSchedule, formatClock } from '../src/dashboard/scheduler.js';
+import { generateSchedule, formatClock, timeToMinutes } from '../src/dashboard/scheduler.js';
 
-const DAY_END = 25 * 60; // 1:00 AM next day, measured from midnight of day 1
+let totalFailures = 0;
 
-const input = {
-  wakeTime: '07:00',
-  sleepTime: '01:00', // <= wakeTime, so the algorithm treats it as "next day"
-  classes: [
-    { name: 'Math', start: '09:00', end: '10:00' },
-    { name: 'History', start: '11:00', end: '12:00' },
-  ],
-  meals: [
-    { name: 'Breakfast', duration: 30, on: true, time: '08:00' },
-    { name: 'Lunch', duration: 45, on: true, time: '12:30' },
-    { name: 'Dinner', duration: 45, on: true, time: '19:00' },
-  ],
-  subjects: [
-    { name: 'Physics', minutes: 60 },
-    { name: 'English essay', minutes: 45 },
-  ],
-  // matches the DB defaults in supabase/schema.sql
-  prefs: { sessionCap: 60, staminaBreak: 15, switchBreak: 10, minNewBlock: 30 },
-};
-
-const result = generateSchedule(input);
-
-console.log('--- Scheduler output ---');
-if (result.error) {
-  console.log('error:', result.error);
-} else {
-  for (const e of result.events) {
-    console.log(`${formatClock(e.start)} - ${formatClock(e.end)}  [${e.type}] ${e.name}`);
+function scenario(name, fn) {
+  console.log(`\n=== ${name} ===`);
+  try {
+    fn();
+  } catch (e) {
+    totalFailures++;
+    console.log(`  FAIL  (scenario threw) ${e.message}`);
   }
 }
-if (result.notes.length) {
-  console.log('--- Notes ---');
-  result.notes.forEach((n) => console.log(n));
-}
-console.log('------------------------');
 
-let failures = 0;
 function check(label, fn) {
   try {
     fn();
-    console.log(`PASS  ${label}`);
+    console.log(`  PASS  ${label}`);
   } catch (e) {
-    failures++;
-    console.log(`FAIL  ${label}`);
-    console.log(`      ${e.message}`);
+    totalFailures++;
+    console.log(`  FAIL  ${label}`);
+    console.log(`        ${e.message}`);
   }
 }
 
-check('generateSchedule ran without an error', () => {
-  assert.equal(result.error, undefined);
-});
+function printEvents(events) {
+  events.forEach((e) => console.log(`  ${formatClock(e.start)} - ${formatClock(e.end)}  [${e.type}] ${e.name}`));
+}
 
-check('Physics is a single continuous 60-minute block', () => {
-  const blocks = result.events.filter((e) => e.type === 'study' && e.name === 'Physics');
-  assert.equal(blocks.length, 1, `expected 1 Physics block, found ${blocks.length}`);
-  assert.equal(blocks[0].end - blocks[0].start, 60, `expected 60 minutes, got ${blocks[0].end - blocks[0].start}`);
-});
-
-check('English essay is a single continuous 45-minute block', () => {
-  const blocks = result.events.filter((e) => e.type === 'study' && e.name === 'English essay');
-  assert.equal(blocks.length, 1, `expected 1 English essay block, found ${blocks.length}`);
-  assert.equal(blocks[0].end - blocks[0].start, 45, `expected 45 minutes, got ${blocks[0].end - blocks[0].start}`);
-});
-
-check('No study block overlaps a class or meal', () => {
-  const study = result.events.filter((e) => e.type === 'study');
-  const fixed = result.events.filter((e) => e.type === 'class' || e.type === 'meal');
-  for (const s of study) {
-    for (const f of fixed) {
-      const overlaps = s.start < f.end && s.end > f.start;
-      assert.ok(!overlaps, `"${s.name}" (${formatClock(s.start)}-${formatClock(s.end)}) overlaps "${f.name}" (${formatClock(f.start)}-${formatClock(f.end)})`);
-    }
-  }
-});
-
-check('Nothing is scheduled after 1:00 AM next day', () => {
-  for (const e of result.events) {
-    assert.ok(e.end <= DAY_END, `"${e.name}" ends at ${formatClock(e.end)}, after the 1:00 AM cutoff`);
-  }
-});
-
-check('The full schedule has no overlaps at all', () => {
-  const sorted = [...result.events].sort((a, b) => a.start - b.start);
+function assertNoOverlaps(events) {
+  const sorted = [...events].sort((a, b) => a.start - b.start);
   for (let i = 1; i < sorted.length; i++) {
     assert.ok(
       sorted[i].start >= sorted[i - 1].end,
       `"${sorted[i - 1].name}" (${formatClock(sorted[i - 1].start)}-${formatClock(sorted[i - 1].end)}) overlaps "${sorted[i].name}" (${formatClock(sorted[i].start)}-${formatClock(sorted[i].end)})`
     );
   }
+}
+
+function assertWithinDay(events, dayStart, dayEnd) {
+  for (const e of events) {
+    assert.ok(e.start >= dayStart && e.end <= dayEnd, `"${e.name}" (${formatClock(e.start)}-${formatClock(e.end)}) is outside the wake-to-bedtime day`);
+  }
+}
+
+function studyMinutesFor(events, name) {
+  return events
+    .filter((e) => e.type === 'study' && e.name === name)
+    .reduce((sum, e) => sum + (e.end - e.start), 0);
+}
+
+const OFF_MEALS = [
+  { name: 'Breakfast', duration: 30, on: false, time: '08:00' },
+  { name: 'Lunch', duration: 45, on: false, time: '12:00' },
+  { name: 'Dinner', duration: 45, on: false, time: '18:00' },
+];
+
+const DEFAULT_PREFS = { sessionCap: 60, staminaBreak: 15, switchBreak: 10, minNewBlock: 30 };
+
+// ---------------------------------------------------------------------------
+scenario('1. Overnight day with classes, meals, and two study subjects (A/B/C/D/J/K/L)', () => {
+  const input = {
+    wakeTime: '07:00',
+    sleepTime: '01:00', // next day
+    classes: [
+      { name: 'Math', start: '09:00', end: '10:00' },
+      { name: 'History', start: '11:00', end: '12:00' },
+    ],
+    meals: [
+      { name: 'Breakfast', duration: 30, on: true, time: '08:00' },
+      { name: 'Lunch', duration: 45, on: true, time: '12:30' },
+      { name: 'Dinner', duration: 45, on: true, time: '19:00' },
+    ],
+    subjects: [
+      { name: 'Physics', minutes: 60 },
+      { name: 'English essay', minutes: 45 },
+    ],
+    prefs: DEFAULT_PREFS,
+  };
+  const result = generateSchedule(input);
+  printEvents(result.events);
+  const dayStart = timeToMinutes('07:00');
+  const dayEnd = 25 * 60; // 1:00 AM next day
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('Physics is a single continuous 60-minute block', () => {
+    const blocks = result.events.filter((e) => e.type === 'study' && e.name === 'Physics');
+    assert.equal(blocks.length, 1, `expected 1 block, found ${blocks.length}`);
+    assert.equal(blocks[0].end - blocks[0].start, 60);
+  });
+  check('English essay is a single continuous 45-minute block', () => {
+    const blocks = result.events.filter((e) => e.type === 'study' && e.name === 'English essay');
+    assert.equal(blocks.length, 1, `expected 1 block, found ${blocks.length}`);
+    assert.equal(blocks[0].end - blocks[0].start, 45);
+  });
+  check('no study block overlaps a class or meal', () => {
+    const study = result.events.filter((e) => e.type === 'study');
+    const fixed = result.events.filter((e) => e.type === 'class' || e.type === 'meal');
+    for (const s of study) {
+      for (const f of fixed) {
+        assert.ok(!(s.start < f.end && s.end > f.start), `"${s.name}" overlaps "${f.name}"`);
+      }
+    }
+  });
+  check('nothing is scheduled before wake or after 1:00 AM next day', () => assertWithinDay(result.events, dayStart, dayEnd));
+  check('no overlaps anywhere in the full schedule', () => assertNoOverlaps(result.events));
 });
 
-console.log('------------------------');
-if (failures > 0) {
-  console.log(`${failures} check(s) FAILED`);
+// ---------------------------------------------------------------------------
+scenario('2. Minimum block does not pad or split a short request (12 min, min block 30)', () => {
+  const result = generateSchedule({
+    wakeTime: '08:00',
+    sleepTime: '20:00',
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [{ name: 'Quick review', minutes: 12 }],
+    prefs: DEFAULT_PREFS,
+  });
+  printEvents(result.events);
+  const dayStart = timeToMinutes('08:00');
+  const dayEnd = timeToMinutes('20:00');
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('scheduled as one 12-minute block, not padded to 30 or split', () => {
+    const blocks = result.events.filter((e) => e.type === 'study' && e.name === 'Quick review');
+    assert.equal(blocks.length, 1, `expected 1 block, found ${blocks.length}`);
+    assert.equal(blocks[0].end - blocks[0].start, 12);
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+  check('everything stays within the wake-to-bedtime day', () => assertWithinDay(result.events, dayStart, dayEnd));
+});
+
+// ---------------------------------------------------------------------------
+scenario('3. Insufficient available time (E)', () => {
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '22:00',
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [{ name: 'Marathon reading', minutes: 1000 }],
+    prefs: DEFAULT_PREFS,
+  });
+  printEvents(result.events);
+  const dayStart = timeToMinutes('07:00');
+  const dayEnd = timeToMinutes('22:00');
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('scheduled less than the full request instead of forcing it in', () => {
+    const scheduled = studyMinutesFor(result.events, 'Marathon reading');
+    assert.ok(scheduled > 0 && scheduled < 1000, `scheduled ${scheduled} of 1000 requested minutes`);
+  });
+  check('a shortfall note names the subject', () => {
+    assert.ok(
+      result.notes.some((n) => n.includes('Marathon reading') && /short/i.test(n)),
+      `notes were: ${JSON.stringify(result.notes)}`
+    );
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+  check('everything stays within the wake-to-bedtime day', () => assertWithinDay(result.events, dayStart, dayEnd));
+});
+
+// ---------------------------------------------------------------------------
+scenario('4. High priority is scheduled before low priority when time is tight (F)', () => {
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '22:00',
+    classes: [{ name: 'Busy', start: '10:00', end: '22:00' }], // leaves a single 180-min gap: 7:00-10:00
+    meals: OFF_MEALS,
+    subjects: [
+      { name: 'Low priority task', minutes: 120, priority: 'low' },
+      { name: 'High priority task', minutes: 120, priority: 'high' },
+    ],
+    prefs: DEFAULT_PREFS,
+  });
+  printEvents(result.events);
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('high-priority task is fully scheduled (120 min)', () => {
+    assert.equal(studyMinutesFor(result.events, 'High priority task'), 120);
+  });
+  check('low-priority task only gets what is left over (less than the full 120 min)', () => {
+    const mins = studyMinutesFor(result.events, 'Low priority task');
+    assert.ok(mins > 0 && mins < 120, `scheduled ${mins} of 120 requested minutes`);
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+});
+
+// ---------------------------------------------------------------------------
+scenario('5. Earlier deadline is scheduled before a later one at equal priority (G)', () => {
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '22:00',
+    classes: [{ name: 'Busy', start: '10:00', end: '22:00' }], // same tight single 180-min gap
+    meals: OFF_MEALS,
+    subjects: [
+      { name: 'Due later', minutes: 120, priority: 'medium', dueDate: '2026-12-01' },
+      { name: 'Due soon', minutes: 120, priority: 'medium', dueDate: '2026-09-20' },
+    ],
+    prefs: DEFAULT_PREFS,
+  });
+  printEvents(result.events);
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('earlier-deadline task is fully scheduled (120 min)', () => {
+    assert.equal(studyMinutesFor(result.events, 'Due soon'), 120);
+  });
+  check('later-deadline task only gets what is left over (less than the full 120 min)', () => {
+    const mins = studyMinutesFor(result.events, 'Due later');
+    assert.ok(mins > 0 && mins < 120, `scheduled ${mins} of 120 requested minutes`);
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+});
+
+// ---------------------------------------------------------------------------
+scenario('6. Preferred study period is honored without breaking placement rules (I)', () => {
+  const classes = [
+    { name: 'Morning block', start: '06:00', end: '08:00' },
+    { name: 'Midday block', start: '09:00', end: '13:00' },
+    { name: 'Evening block', start: '16:00', end: '22:00' },
+  ];
+  // leaves two gaps: 8:00-9:00 (60 min, morning) and 13:00-16:00 (180 min, afternoon)
+  const subjects = [{ name: 'Reading', minutes: 60 }];
+
+  const withoutPreference = generateSchedule({
+    wakeTime: '06:00',
+    sleepTime: '22:00',
+    classes,
+    meals: OFF_MEALS,
+    subjects,
+    prefs: { ...DEFAULT_PREFS, preferredPeriod: 'none' },
+  });
+  const withPreference = generateSchedule({
+    wakeTime: '06:00',
+    sleepTime: '22:00',
+    classes,
+    meals: OFF_MEALS,
+    subjects,
+    prefs: { ...DEFAULT_PREFS, preferredPeriod: 'morning' },
+  });
+
+  console.log('  -- without preference --');
+  printEvents(withoutPreference.events);
+  console.log('  -- with morning preference --');
+  printEvents(withPreference.events);
+
+  check('without a preference, the larger 3-hour afternoon gap is used', () => {
+    const b = withoutPreference.events.find((e) => e.type === 'study' && e.name === 'Reading');
+    assert.ok(b, 'no study block scheduled');
+    assert.equal(formatClock(b.start), '1:00 PM');
+  });
+  check('with a morning preference, the smaller 1-hour morning gap is used instead', () => {
+    const b = withPreference.events.find((e) => e.type === 'study' && e.name === 'Reading');
+    assert.ok(b, 'no study block scheduled');
+    assert.equal(formatClock(b.start), '8:00 AM');
+  });
+  check('no overlaps anywhere (with preference)', () => assertNoOverlaps(withPreference.events));
+});
+
+// ---------------------------------------------------------------------------
+scenario('7. Earliest/latest study time confines study placement (window)', () => {
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '23:00',
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [{ name: 'Late reading', minutes: 60 }],
+    prefs: { ...DEFAULT_PREFS, earliestStudyTime: '20:00', latestStudyTime: '23:00' },
+  });
+  printEvents(result.events);
+  const dayStart = timeToMinutes('07:00');
+  const dayEnd = timeToMinutes('23:00');
+
+  check('ran without an error', () => assert.equal(result.error, undefined));
+  check('study is placed at or after the earliest study time (8:00 PM)', () => {
+    const b = result.events.find((e) => e.type === 'study' && e.name === 'Late reading');
+    assert.ok(b, 'no study block was scheduled');
+    assert.ok(b.start >= timeToMinutes('20:00'), `started at ${formatClock(b.start)}`);
+  });
+  check('the hours before the study window stay free, not study', () => {
+    const earlyFree = result.events.filter((e) => e.type === 'free' && e.start < timeToMinutes('20:00'));
+    assert.ok(earlyFree.length > 0, 'expected free time before 8:00 PM');
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+  check('everything stays within the wake-to-bedtime day', () => assertWithinDay(result.events, dayStart, dayEnd));
+});
+
+// ---------------------------------------------------------------------------
+console.log('\n------------------------');
+if (totalFailures > 0) {
+  console.log(`${totalFailures} check(s) FAILED`);
   process.exit(1);
 } else {
   console.log('All checks passed');

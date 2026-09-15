@@ -364,6 +364,8 @@ async function init(session) {
     const subjectsInput = Array.from(studyList.children).map((row) => ({
       name: row.querySelector('.study-name').value.trim(),
       minutes: parseInt(row.querySelector('.study-minutes').value, 10),
+      priority: row.querySelector('.study-priority').value,
+      dueDate: row.querySelector('.study-due').value || null,
     }));
 
     const mealsInput = [
@@ -383,6 +385,9 @@ async function init(session) {
         staminaBreak: schedule.stamina_break_minutes,
         switchBreak: schedule.switch_break_minutes,
         minNewBlock: schedule.min_block_minutes,
+        preferredPeriod: schedule.preferred_study_period,
+        earliestStudyTime: toHHMM(schedule.earliest_study_time) || null,
+        latestStudyTime: toHHMM(schedule.latest_study_time) || null,
       },
     });
 

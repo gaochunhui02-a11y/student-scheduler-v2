@@ -21,6 +21,72 @@ export function formatClock(mins) {
   return mins >= 1440 ? `${minutesToClock(mins)} (next day)` : minutesToClock(mins);
 }
 
+const PRIORITY_RANK = { high: 3, medium: 2, low: 1 };
+
+// Clock-time windows (minutes since midnight) used for the "preferred study
+// time" soft preference. Not configurable — matches the Morning/Afternoon/
+// Evening choices in the UI.
+const PERIOD_RANGES = {
+  morning: [6 * 60, 12 * 60],
+  afternoon: [12 * 60, 17 * 60],
+  evening: [17 * 60, 21 * 60],
+};
+
+// How many minutes of [start, end) fall inside the given preferred period,
+// accounting for the period recurring once per calendar day even when the
+// schedule itself spans past midnight. Returns 0 for 'none'/unknown periods.
+function periodOverlapMinutes(period, start, end) {
+  const range = PERIOD_RANGES[period];
+  if (!range || end <= start) return 0;
+  const [windowStart, windowEnd] = range;
+  let total = 0;
+  for (let base = Math.floor(start / 1440) * 1440; base < end; base += 1440) {
+    const occStart = base + windowStart;
+    const occEnd = base + windowEnd;
+    total += Math.max(0, Math.min(end, occEnd) - Math.max(start, occStart));
+  }
+  return total;
+}
+
+// "Earliest study time" can't sensibly be earlier than wake-up, so it's just
+// clamped — no next-day interpretation needed.
+function resolveEarliestStudyTime(timeStr, dayStart) {
+  const raw = timeToMinutes(timeStr);
+  if (raw === null) return dayStart;
+  return Math.max(dayStart, raw);
+}
+
+// "Latest study time" can be a small clock value like "00:30" meaning "after
+// midnight" on an overnight day — only roll it to the next day when the day
+// itself crosses midnight and the value looks earlier than wake-up.
+function resolveLatestStudyTime(timeStr, dayStart, dayEnd) {
+  const raw = timeToMinutes(timeStr);
+  if (raw === null) return dayEnd;
+  const abs = dayEnd > 1440 && raw < dayStart ? raw + 1440 : raw;
+  return Math.min(dayEnd, abs);
+}
+
+// Splits each free gap at the earliest/latest study-time boundaries so the
+// portions outside that window are excluded from study placement but still
+// end up reported as free time (they're just gaps nothing ever gets placed
+// in). When no window is configured this is a no-op — every gap comes back
+// unchanged and fully eligible, so existing behavior is unaffected.
+function splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd) {
+  const segments = [];
+  for (const g of gaps) {
+    const ws = Math.max(g.start, studyWindowStart);
+    const we = Math.min(g.end, studyWindowEnd);
+    if (we > ws) {
+      if (ws > g.start) segments.push({ start: g.start, end: ws, studyAllowed: false });
+      segments.push({ start: ws, end: we, studyAllowed: true });
+      if (we < g.end) segments.push({ start: we, end: g.end, studyAllowed: false });
+    } else {
+      segments.push({ start: g.start, end: g.end, studyAllowed: false });
+    }
+  }
+  return segments;
+}
+
 // Places a fixed-length event as close to `desiredStart` as possible without
 // overlapping anything already in `existingEvents`, or returns null if it
 // can't fit before `dayEnd` at all.
@@ -48,13 +114,21 @@ function placeEvent(desiredStart, duration, existingEvents, dayStart, dayEnd) {
  * @param {string} input.sleepTime "HH:MM" — at/before wakeTime means "next day"
  * @param {{name:string, start:string, end:string}[]} input.classes
  * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
- * @param {{name:string, minutes:number}[]} input.subjects
- * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number}} input.prefs
+ * @param {{name:string, minutes:number, priority?:'low'|'medium'|'high', dueDate?:string|null}[]} input.subjects
+ * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number, preferredPeriod?:'none'|'morning'|'afternoon'|'evening', earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
  * @returns {{ events: {type:string,name:string,start:number,end:number}[], notes: string[], error?: string }}
  */
 export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects, prefs }) {
   const notes = [];
-  const { sessionCap, staminaBreak, switchBreak, minNewBlock } = prefs;
+  const {
+    sessionCap,
+    staminaBreak,
+    switchBreak,
+    minNewBlock,
+    preferredPeriod = 'none',
+    earliestStudyTime = null,
+    latestStudyTime = null,
+  } = prefs;
 
   function spanNeeded(minutes) {
     if (minutes <= sessionCap) return minutes;
@@ -88,6 +162,16 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
       notes: [],
       error: 'Your sleep time must be later than your wake-up time, with at least an hour in between.',
     };
+  }
+
+  // ----- earliest/latest study-time window (bounds STUDY placement only — classes,
+  // meals, and free time still use the full wake-to-bedtime day) -----
+  let studyWindowStart = resolveEarliestStudyTime(earliestStudyTime, dayStart);
+  let studyWindowEnd = resolveLatestStudyTime(latestStudyTime, dayStart, dayEnd);
+  if (studyWindowEnd <= studyWindowStart) {
+    notes.push("Your earliest/latest study time settings don't leave any room to study — ignoring them for today.");
+    studyWindowStart = dayStart;
+    studyWindowEnd = dayEnd;
   }
 
   // ----- classes -----
@@ -138,14 +222,22 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   // ----- study subjects -----
   const subjectQueue = (subjects || [])
     .filter((s) => s.name && s.minutes > 0)
-    .map((s) => ({ name: s.name, remaining: s.minutes }));
+    .map((s) => ({
+      name: s.name,
+      remaining: s.minutes,
+      priority: PRIORITY_RANK[s.priority] ? s.priority : 'medium',
+      dueDate: s.dueDate || null,
+    }));
 
   if (subjectQueue.length === 0) {
     notes.push('No study subjects were entered — schedule shows only classes, meals, and free time.');
   }
 
   const studyEvents = [];
-  const workingGaps = gaps.map((g) => ({ start: g.start, end: g.end, lastSubject: null }));
+  const workingGaps = splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd).map((g) => ({
+    ...g,
+    lastSubject: null,
+  }));
 
   function placeInGap(gap, subject, amount, switchBreakLen) {
     if (switchBreakLen > 0) {
@@ -167,23 +259,41 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     gap.lastSubject = subject.name;
   }
 
-  // largest requests first, so a big subject claims a whole free block before it gets nibbled away
-  const queue = subjectQueue.filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
+  // highest priority first, then earlier deadline first, then largest request first —
+  // within the same priority/deadline tier a big subject still claims a whole free
+  // block before it gets nibbled away by smaller ones
+  const queue = subjectQueue.filter((s) => s.remaining > 0).sort((a, b) => {
+    const priorityDiff = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
+    if (priorityDiff !== 0) return priorityDiff;
+    const aDue = a.dueDate ? Date.parse(a.dueDate) : Infinity;
+    const bDue = b.dueDate ? Date.parse(b.dueDate) : Infinity;
+    if (aDue !== bDue) return aDue - bDue;
+    return b.remaining - a.remaining;
+  });
 
   for (const subject of queue) {
     while (subject.remaining > 0) {
-      // 1) a single gap that fits the ENTIRE remaining amount, preferring the LARGEST such
-      //    gap — favors big open stretches later in the day over small gaps before a class
+      // 1) a single gap that fits the ENTIRE remaining amount. Among those, prefer
+      //    whichever overlaps the preferred study period the most (a soft preference —
+      //    when there's no preference, or none of them overlap it, this collapses to
+      //    the old behavior of just preferring the LARGEST such gap).
       let target = null;
       let targetExtra = 0;
+      let targetScore = -1;
+      let targetSize = -1;
       for (const g of workingGaps) {
+        if (!g.studyAllowed) continue;
         const cap = g.end - g.start;
         if (cap <= 0) continue;
         const extra = g.lastSubject && g.lastSubject !== subject.name ? switchBreak : 0;
         const needed = spanNeeded(subject.remaining) + extra;
-        if (cap >= needed && (!target || cap > target.end - target.start)) {
+        if (cap < needed) continue;
+        const score = periodOverlapMinutes(preferredPeriod, g.start + extra, g.start + extra + subject.remaining);
+        if (!target || score > targetScore || (score === targetScore && cap > targetSize)) {
           target = g;
           targetExtra = extra;
+          targetScore = score;
+          targetSize = cap;
         }
       }
 
@@ -193,10 +303,13 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
       }
 
       // 2) nothing fits it whole — fall back to the LARGEST remaining gap so we create as few
-      //    fragments as possible, and only if it's big enough to be worth studying in at all
+      //    fragments as possible, and only if it's big enough to be worth studying in at all.
+      //    (Preferred period isn't applied here — minimizing fragments matters more than
+      //    honoring a soft preference once we're already splitting a subject up.)
       let best = null;
       let bestExtra = 0;
       for (const g of workingGaps) {
+        if (!g.studyAllowed) continue;
         const cap = g.end - g.start;
         if (cap <= 0) continue;
         const extra = g.lastSubject && g.lastSubject !== subject.name ? switchBreak : 0;
