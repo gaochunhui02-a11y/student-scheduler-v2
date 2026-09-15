@@ -85,6 +85,12 @@ const en = {
   'nodeType.subject': 'Subject',
   'nodeType.task': 'Task',
   'nodeType.note': 'Note',
+  'board.connect': 'Connect',
+  'board.dragToConnect': 'Drag to connect',
+  'board.deleteConnection': 'Delete connection',
+  'board.connectionLabel': 'Connection',
+  'board.invalidConnection': 'Invalid connection.',
+  'board.connectionExists': 'These nodes are already connected.',
 };
 
 const zh = {
@@ -158,6 +164,12 @@ const zh = {
   'nodeType.subject': '科目',
   'nodeType.task': '任务',
   'nodeType.note': '备注',
+  'board.connect': '连接',
+  'board.dragToConnect': '拖动以连接',
+  'board.deleteConnection': '删除连接',
+  'board.connectionLabel': '连接',
+  'board.invalidConnection': '无效的连接。',
+  'board.connectionExists': '这两个节点已经连接。',
 };
 
 const ja = {
@@ -231,6 +243,12 @@ const ja = {
   'nodeType.subject': '科目',
   'nodeType.task': 'タスク',
   'nodeType.note': 'メモ',
+  'board.connect': '接続',
+  'board.dragToConnect': 'ドラッグして接続',
+  'board.deleteConnection': '接続を削除',
+  'board.connectionLabel': '接続',
+  'board.invalidConnection': '無効な接続です。',
+  'board.connectionExists': 'これらのノードは既に接続されています。',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];
@@ -266,14 +284,15 @@ export function t(key) {
 // child or id — the HTML is written so translatable text and functional
 // sub-elements are always siblings, never parent/child of a translated node.
 //
-// [data-i18n-placeholder] and [data-i18n-aria-label] additionally translate
-// the `placeholder` and `aria-label` attributes (added in Phase 3 for the
-// Board's node title/type controls) — attribute-only, so these never touch
-// an element's children either.
+// [data-i18n-placeholder], [data-i18n-aria-label], and [data-i18n-title]
+// additionally translate the `placeholder`, `aria-label`, and `title`
+// attributes (Phase 3/4, for the Board's controls, including the SVG edge
+// hit-lines and the node connection handle) — attribute-only, so these
+// never touch an element's children either.
 //
 // Called on every language switch, so it re-sweeps the whole document,
-// including Board nodes rendered after the page loaded (they carry the
-// same data-i18n* attributes at render time — see src/board/board.js).
+// including Board nodes/edges rendered after the page loaded (they carry
+// the same data-i18n* attributes at render time — see src/board/board.js).
 export function applyTranslations(root = document) {
   root.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.getAttribute('data-i18n'));
@@ -283,6 +302,9 @@ export function applyTranslations(root = document) {
   });
   root.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
     el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria-label')));
+  });
+  root.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.setAttribute('title', t(el.getAttribute('data-i18n-title')));
   });
   document.documentElement.lang = getLanguage();
 }

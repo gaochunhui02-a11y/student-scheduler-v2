@@ -68,6 +68,12 @@ export function edgesTouchingNode(edges, nodeId) {
   return edges.filter((e) => e.source_node_id === nodeId || e.target_node_id === nodeId);
 }
 
+// Removing a single edge by id (used when the user explicitly deletes a
+// connection, as opposed to removeEdgesForNode's cascade-on-node-delete).
+export function removeEdgeById(edges, edgeId) {
+  return edges.filter((e) => e.id !== edgeId);
+}
+
 // ---------------------------------------------------------------------------
 // Node creation defaults (Phase 3: canvas + draggable nodes)
 // ---------------------------------------------------------------------------
@@ -102,6 +108,13 @@ export function createNodeDefaults(existingNodeCount, nodeType = 'note') {
 // Drag-end position calculation (Phase 3)
 // ---------------------------------------------------------------------------
 
+// Shared by computeDragPosition and screenToCanvasPoint: a zoom factor of 0
+// (or anything non-finite) is treated as 1x rather than causing a
+// divide-by-zero.
+function safeZoom(zoom) {
+  return typeof zoom === 'number' && Number.isFinite(zoom) && zoom !== 0 ? zoom : 1;
+}
+
 // Pure math behind dragging a node: given where the node started, where the
 // pointer started, and where the pointer is now, returns the node's new
 // position. Dividing the pointer delta by `zoom` is what keeps dragging
@@ -109,8 +122,51 @@ export function createNodeDefaults(existingNodeCount, nodeType = 'note') {
 // 10px is only a 5px move in canvas space at 2x zoom). The result is run
 // through normalizeNodePosition so a drag can never persist NaN/Infinity.
 export function computeDragPosition({ nodeStartX, nodeStartY, pointerStartX, pointerStartY, pointerCurrentX, pointerCurrentY, zoom = 1 }) {
-  const safeZoom = typeof zoom === 'number' && Number.isFinite(zoom) && zoom !== 0 ? zoom : 1;
-  const dx = (pointerCurrentX - pointerStartX) / safeZoom;
-  const dy = (pointerCurrentY - pointerStartY) / safeZoom;
+  const z = safeZoom(zoom);
+  const dx = (pointerCurrentX - pointerStartX) / z;
+  const dy = (pointerCurrentY - pointerStartY) / z;
   return normalizeNodePosition(nodeStartX + dx, nodeStartY + dy);
+}
+
+// ---------------------------------------------------------------------------
+// Edge geometry (Phase 4: node connections)
+// ---------------------------------------------------------------------------
+
+// The center point of a node card in canvas-local coordinates, given its
+// stored top-left position and its on-screen card size. Used for both the
+// permanent edge lines and the temporary "drag to connect" preview line, so
+// every line in the system anchors the same way.
+export function nodeCenter(node, nodeWidth, nodeHeight) {
+  return {
+    x: normalizePosition(node?.x_position) + nodeWidth / 2,
+    y: normalizePosition(node?.y_position) + nodeHeight / 2,
+  };
+}
+
+// A straight center-to-center line between two nodes. Deliberately simple —
+// no box/edge intersection math — because the node cards are rendered on
+// top of the SVG edge layer (see main.css), so the visible line is already
+// clipped at each card's opaque boundary without any extra geometry.
+export function computeEdgeGeometry(sourceNode, targetNode, nodeWidth, nodeHeight) {
+  const from = nodeCenter(sourceNode, nodeWidth, nodeHeight);
+  const to = nodeCenter(targetNode, nodeWidth, nodeHeight);
+  return { x1: from.x, y1: from.y, x2: to.x, y2: to.y };
+}
+
+export function edgeMidpoint(x1, y1, x2, y2) {
+  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+}
+
+// Converts a pointer's viewport (clientX/clientY) position into canvas-local
+// coordinates — the same space node.x_position/y_position live in — given
+// the canvas element's own on-screen origin (its getBoundingClientRect's
+// top-left, which tracks scroll position) and the current zoom. Used while
+// dragging from a node's connection handle to draw the temporary preview
+// line under the pointer.
+export function screenToCanvasPoint({ canvasLeft, canvasTop, clientX, clientY, zoom = 1 }) {
+  const z = safeZoom(zoom);
+  return {
+    x: (clientX - canvasLeft) / z,
+    y: (clientY - canvasTop) / z,
+  };
 }

@@ -227,10 +227,20 @@
           </div>
         </div>
 
+        <p class="hint" id="boardEdgeStatus" hidden></p>
+
         <div class="board-workspace" id="boardWorkspace" hidden>
           <div class="board-canvas-wrap" id="boardCanvasWrap">
             <div class="board-canvas" id="boardCanvas">
+              <svg class="board-edges-layer" id="boardEdgesLayer" width="2400" height="1600" viewBox="0 0 2400 1600">
+                <defs>
+                  <marker id="boardEdgeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" class="board-edge-arrow-head"></path>
+                  </marker>
+                </defs>
+              </svg>
               <div class="placeholder board-empty" id="boardEmptyState" data-i18n="board.emptyState" hidden>No nodes yet.</div>
+              <button type="button" class="board-edge-delete-btn" id="boardEdgeDeleteBtn" data-i18n="board.deleteConnection" hidden>Delete connection</button>
             </div>
           </div>
         </div>

@@ -23,6 +23,11 @@ import {
   nextNodePosition,
   createNodeDefaults,
   computeDragPosition,
+  removeEdgeById,
+  nodeCenter,
+  computeEdgeGeometry,
+  edgeMidpoint,
+  screenToCanvasPoint,
 } from '../src/board/boardModel.js';
 
 let totalFailures = 0;
@@ -311,6 +316,82 @@ scenario('I. FakeStore: create nodes + edges, then delete a node', () => {
   });
   check('both edges touching the deleted node are gone, none dangling', () => {
     assert.equal(store.edges.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('J. Deleting a single connection (removeEdgeById)', () => {
+  const edges = [
+    { id: 'e1', source_node_id: 'n1', target_node_id: 'n2' },
+    { id: 'e2', source_node_id: 'n2', target_node_id: 'n3' },
+  ];
+
+  check('the targeted edge is removed, the other is untouched', () => {
+    const remaining = removeEdgeById(edges, 'e1');
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].id, 'e2');
+  });
+  check('deleting a connection never removes either of its nodes (nodes are a separate array)', () => {
+    const nodes = [{ id: 'n1' }, { id: 'n2' }, { id: 'n3' }];
+    removeEdgeById(edges, 'e1');
+    assert.equal(nodes.length, 3);
+  });
+  check('deleting an id that is not present leaves every edge intact', () => {
+    const remaining = removeEdgeById(edges, 'e999');
+    assert.equal(remaining.length, 2);
+  });
+  check('the original array is not mutated (a fresh array is returned)', () => {
+    const before = edges.length;
+    removeEdgeById(edges, 'e1');
+    assert.equal(edges.length, before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('K. Edge geometry (nodeCenter / computeEdgeGeometry / edgeMidpoint / screenToCanvasPoint)', () => {
+  const width = 200;
+  const height = 100;
+  const source = { id: 'n1', x_position: 0, y_position: 0 };
+  const target = { id: 'n2', x_position: 400, y_position: 200 };
+
+  check('nodeCenter is the node\'s top-left position offset by half its size', () => {
+    assert.deepEqual(nodeCenter(source, width, height), { x: 100, y: 50 });
+    assert.deepEqual(nodeCenter(target, width, height), { x: 500, y: 250 });
+  });
+  check('nodeCenter normalizes a missing/invalid position rather than producing NaN', () => {
+    const center = nodeCenter({ x_position: undefined, y_position: NaN }, width, height);
+    assert.deepEqual(center, { x: 100, y: 50 });
+  });
+
+  check('computeEdgeGeometry connects the two nodes\' centers', () => {
+    const geo = computeEdgeGeometry(source, target, width, height);
+    assert.deepEqual(geo, { x1: 100, y1: 50, x2: 500, y2: 250 });
+  });
+  check('computeEdgeGeometry is direction-sensitive (source/target order matters for x1,y1 vs x2,y2)', () => {
+    const forward = computeEdgeGeometry(source, target, width, height);
+    const reverse = computeEdgeGeometry(target, source, width, height);
+    assert.equal(forward.x1, reverse.x2);
+    assert.equal(forward.x2, reverse.x1);
+  });
+
+  check('edgeMidpoint is the arithmetic midpoint of the two endpoints', () => {
+    assert.deepEqual(edgeMidpoint(100, 50, 500, 250), { x: 300, y: 150 });
+  });
+  check('edgeMidpoint of a zero-length line is that same point', () => {
+    assert.deepEqual(edgeMidpoint(20, 20, 20, 20), { x: 20, y: 20 });
+  });
+
+  check('screenToCanvasPoint subtracts the canvas origin and divides by zoom', () => {
+    const point = screenToCanvasPoint({ canvasLeft: 50, canvasTop: 30, clientX: 150, clientY: 130, zoom: 1 });
+    assert.deepEqual(point, { x: 100, y: 100 });
+  });
+  check('screenToCanvasPoint at 2x zoom halves the on-screen offset', () => {
+    const point = screenToCanvasPoint({ canvasLeft: 0, canvasTop: 0, clientX: 200, clientY: 100, zoom: 2 });
+    assert.deepEqual(point, { x: 100, y: 50 });
+  });
+  check('screenToCanvasPoint treats a zoom of 0 as 1x rather than dividing by zero', () => {
+    const point = screenToCanvasPoint({ canvasLeft: 0, canvasTop: 0, clientX: 40, clientY: 40, zoom: 0 });
+    assert.deepEqual(point, { x: 40, y: 40 });
   });
 });
 
