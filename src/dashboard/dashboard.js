@@ -14,7 +14,8 @@ import {
   listScheduleItems,
   replaceScheduleItems,
 } from './data.js';
-import { generateSchedule, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
+import { generateSchedule, resolveDayBounds, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
+import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 
 const session = await requireAuth();
 if (session) {
@@ -354,6 +355,59 @@ async function init(session) {
     notesEl.innerHTML = '';
   }
 
+  // ---------------- daily summary + insufficient-time warning ----------------
+  const shortfallWarningEl = document.getElementById('shortfallWarning');
+  const shortfallWarningBody = document.getElementById('shortfallWarningBody');
+  const dailySummaryCard = document.getElementById('dailySummaryCard');
+  const dailySummaryBody = document.getElementById('dailySummaryBody');
+
+  function renderShortfallWarning(progress) {
+    if (!progress || progress.unscheduledTotal <= 0) {
+      shortfallWarningEl.hidden = true;
+      shortfallWarningBody.innerHTML = '';
+      return;
+    }
+    const affected = progress.subjects.filter((s) => s.unscheduled > 0);
+    const list = affected
+      .map((s) => `<div class="item">${escapeAttr(s.name)}: ${s.scheduled} / ${s.requested} min scheduled</div>`)
+      .join('');
+    shortfallWarningBody.innerHTML = `
+      <div class="warning-totals">
+        <div class="row"><span>Requested study time</span><span class="value">${progress.requestedTotal} min</span></div>
+        <div class="row"><span>Scheduled study time</span><span class="value">${progress.scheduledTotal} min</span></div>
+        <div class="row"><span>Unscheduled</span><span class="value">${progress.unscheduledTotal} min</span></div>
+      </div>
+      <div class="warning-list">${list}</div>
+    `;
+    shortfallWarningEl.hidden = false;
+  }
+
+  function renderDailySummary(summary, progress) {
+    if (!summary) {
+      dailySummaryCard.hidden = true;
+      return;
+    }
+    const rows = [
+      ['Classes', summary.classMinutes],
+      ['Study', summary.studyMinutes],
+      ['Meals', summary.mealMinutes],
+      ['Breaks', summary.breakMinutes],
+      ['Free time', summary.freeMinutes],
+      ['Awake time', summary.awakeMinutes],
+    ];
+    let html = rows
+      .map(([label, mins]) => `<div class="summary-row"><span class="label">${label}</span><span class="value">${formatDuration(mins)}</span></div>`)
+      .join('');
+    if (summary.sleepMinutes !== null) {
+      html += `<div class="summary-row"><span class="label">Sleep</span><span class="value">${formatDuration(summary.sleepMinutes)}</span></div>`;
+    }
+    if (progress) {
+      html += `<div class="summary-progress">Study tasks scheduled: <strong>${progress.scheduledCount} / ${progress.subjects.length}</strong></div>`;
+    }
+    dailySummaryBody.innerHTML = html;
+    dailySummaryCard.hidden = false;
+  }
+
   document.getElementById('generateBtn').addEventListener('click', async () => {
     const classesInput = Array.from(classList.children).map((row) => ({
       name: row.querySelector('.class-name').value.trim(),
@@ -393,11 +447,17 @@ async function init(session) {
 
     if (result.error) {
       showScheduleError(result.error);
+      renderDailySummary(null);
+      renderShortfallWarning(null);
       return;
     }
 
     renderScheduleEvents(result.events);
     renderNotes(result.notes);
+
+    const progress = computeSubjectProgress(result.events, subjectsInput);
+    renderDailySummary(computeDailySummary(result.events, result.dayStart, result.dayEnd), progress);
+    renderShortfallWarning(progress);
 
     try {
       await replaceScheduleItems(schedule.id, userId, result.events);
@@ -412,9 +472,16 @@ async function init(session) {
   try {
     const savedItems = await listScheduleItems(schedule.id);
     if (savedItems.length > 0) {
-      renderScheduleEvents(
-        savedItems.map((i) => ({ type: i.item_type, name: i.name, start: i.start_minutes, end: i.end_minutes }))
-      );
+      const loadedEvents = savedItems.map((i) => ({ type: i.item_type, name: i.name, start: i.start_minutes, end: i.end_minutes }));
+      renderScheduleEvents(loadedEvents);
+
+      const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
+      if (!bounds.error) {
+        const loadedSubjects = existingSubjects.map((s) => ({ name: s.name, minutes: s.minutes_requested }));
+        const progress = computeSubjectProgress(loadedEvents, loadedSubjects);
+        renderDailySummary(computeDailySummary(loadedEvents, bounds.dayStart, bounds.dayEnd), progress);
+        renderShortfallWarning(progress);
+      }
     }
   } catch (e) {
     console.error('Could not load saved schedule:', e);

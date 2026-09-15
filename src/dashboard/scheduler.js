@@ -87,6 +87,24 @@ function splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd) {
   return segments;
 }
 
+// Resolves wake/sleep clock times into absolute wake-to-bedtime minute bounds,
+// applying the "bedtime at/before wake time means next day" rule. Exported so
+// callers that need the day's span without generating a full schedule (e.g.
+// summary reporting for an already-generated/loaded schedule) don't have to
+// duplicate this logic.
+export function resolveDayBounds(wakeTime, sleepTime) {
+  const dayStart = timeToMinutes(wakeTime);
+  let dayEnd = timeToMinutes(sleepTime);
+  if (dayStart === null || dayEnd === null) {
+    return { error: 'Please set both a wake-up time and a sleep time.' };
+  }
+  if (dayEnd <= dayStart) dayEnd += 1440; // bedtime at/before wake time means "next day"
+  if (dayEnd - dayStart < 60) {
+    return { error: 'Your sleep time must be later than your wake-up time, with at least an hour in between.' };
+  }
+  return { dayStart, dayEnd };
+}
+
 // Places a fixed-length event as close to `desiredStart` as possible without
 // overlapping anything already in `existingEvents`, or returns null if it
 // can't fit before `dayEnd` at all.
@@ -149,20 +167,11 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     return total;
   }
 
-  const dayStart = timeToMinutes(wakeTime);
-  let dayEnd = timeToMinutes(sleepTime);
-
-  if (dayStart === null || dayEnd === null) {
-    return { events: [], notes: [], error: 'Please set both a wake-up time and a sleep time.' };
+  const bounds = resolveDayBounds(wakeTime, sleepTime);
+  if (bounds.error) {
+    return { events: [], notes: [], error: bounds.error };
   }
-  if (dayEnd <= dayStart) dayEnd += 1440; // bedtime at/before wake time means "next day"
-  if (dayEnd - dayStart < 60) {
-    return {
-      events: [],
-      notes: [],
-      error: 'Your sleep time must be later than your wake-up time, with at least an hour in between.',
-    };
-  }
+  const { dayStart, dayEnd } = bounds;
 
   // ----- earliest/latest study-time window (bounds STUDY placement only — classes,
   // meals, and free time still use the full wake-to-bedtime day) -----
@@ -342,5 +351,5 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   }
 
   const events = [...fixedEvents, ...studyEvents].sort((a, b) => a.start - b.start);
-  return { events, notes };
+  return { events, notes, dayStart, dayEnd };
 }

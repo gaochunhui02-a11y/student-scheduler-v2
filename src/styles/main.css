@@ -358,3 +358,46 @@ select {
   border-radius: 6px;
   font-size: 13.5px;
 }
+
+/* ---------------- shortfall warning + daily summary ---------------- */
+.warning-card {
+  border-color: #f5b7b1;
+  background: var(--danger-soft);
+}
+.warning-card h2 { color: var(--danger); margin: 0 0 10px; }
+
+.warning-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--text);
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f5b7b1;
+  margin-bottom: 10px;
+}
+.warning-totals .row { display: flex; justify-content: space-between; }
+.warning-totals .row .value { font-weight: 600; }
+
+.warning-list { display: flex; flex-direction: column; gap: 5px; }
+.warning-list .item { font-size: 13.5px; color: var(--text); }
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.summary-row:last-child { border-bottom: none; }
+.summary-row .label { color: var(--muted); }
+.summary-row .value { font-weight: 600; }
+
+.summary-progress {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text);
+}
+.summary-progress strong { color: var(--accent-strong); }
