@@ -23,12 +23,11 @@
       <div id="daySettingsForm">
       <div class="card">
         <h2>Your Day</h2>
-        <div class="row-2">
-          <div>
-            <label for="forDate">Planning for</label>
-            <input type="date" id="forDate">
-          </div>
-          <div></div>
+        <label for="forDate">Planning for</label>
+        <div class="date-nav-row">
+          <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
+          <input type="date" id="forDate">
+          <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day">→</button>
         </div>
         <div class="row-2">
           <div>
@@ -42,6 +41,11 @@
         </div>
         <p class="hint">Staying up past midnight? Enter the early time as-is (e.g. <strong>1:00 AM</strong>) — it's read as after midnight, not before your wake-up time.</p>
         <p class="hint" id="dayLengthHint"></p>
+      </div>
+
+      <div class="card" id="historyCard">
+        <h2>History</h2>
+        <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
       </div>
 
       <div class="card">

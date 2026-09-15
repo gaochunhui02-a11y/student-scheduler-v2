@@ -1,7 +1,11 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { requireAuth } from '../shared/session.js';
 import {
-  getOrCreateCurrentSchedule,
+  getMostRecentScheduleDate,
+  getOrCreateScheduleForDate,
+  listScheduleHistory,
+  tomorrowDateStr,
+  addDaysToDateStr,
   updateSchedule,
   listClasses,
   insertClass,
@@ -43,14 +47,19 @@ async function init(session) {
   const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
   nameEl.textContent = `Hi, ${profile?.name || session.user.email}`;
 
-  let schedule;
-  try {
-    schedule = await getOrCreateCurrentSchedule(userId);
-  } catch (e) {
-    console.error(e);
-    loadError.textContent = 'Could not load your saved data. Please refresh the page to try again.';
-    return;
-  }
+  // The currently active date's schedule row. Reassigned by loadScheduleForDate()
+  // whenever the user navigates to a different date. Every async operation that
+  // writes to a specific schedule/row captures the id it needs SYNCHRONOUSLY,
+  // before any `await`, rather than reading `schedule.id` after the fact — so a
+  // date switch that happens while a save is in flight can never misattribute
+  // that save to the wrong date.
+  let schedule = null;
+
+  // Bumped every time a new date starts loading; async loads/saves compare
+  // their captured token against this after each await and bail out if it no
+  // longer matches, so a stale in-flight response from a date the user has
+  // since navigated away from can never overwrite what's currently on screen.
+  let activeToken = 0;
 
   function flashSaved() {
     saveStatus.textContent = 'Saved';
@@ -86,6 +95,8 @@ async function init(session) {
   const forDateEl = document.getElementById('forDate');
   const wakeTimeEl = document.getElementById('wakeTime');
   const sleepTimeEl = document.getElementById('sleepTime');
+  const prevDayBtn = document.getElementById('prevDayBtn');
+  const nextDayBtn = document.getElementById('nextDayBtn');
   const meal = {
     breakfast: { on: document.getElementById('mealBreakfastOn'), time: document.getElementById('mealBreakfastTime') },
     lunch: { on: document.getElementById('mealLunchOn'), time: document.getElementById('mealLunchTime') },
@@ -97,22 +108,6 @@ async function init(session) {
   const minBlockEl = document.getElementById('minBlockMinutes');
   const earliestStudyEl = document.getElementById('earliestStudyTime');
   const latestStudyEl = document.getElementById('latestStudyTime');
-
-  forDateEl.value = schedule.for_date;
-  wakeTimeEl.value = toHHMM(schedule.wake_time);
-  sleepTimeEl.value = toHHMM(schedule.sleep_time);
-  meal.breakfast.on.checked = schedule.breakfast_on;
-  meal.breakfast.time.value = toHHMM(schedule.breakfast_time);
-  meal.lunch.on.checked = schedule.lunch_on;
-  meal.lunch.time.value = toHHMM(schedule.lunch_time);
-  meal.dinner.on.checked = schedule.dinner_on;
-  meal.dinner.time.value = toHHMM(schedule.dinner_time);
-  preferredPeriodEl.value = schedule.preferred_study_period || 'none';
-  sessionCapEl.value = schedule.session_cap_minutes;
-  breakMinutesEl.value = schedule.switch_break_minutes;
-  minBlockEl.value = schedule.min_block_minutes;
-  earliestStudyEl.value = toHHMM(schedule.earliest_study_time);
-  latestStudyEl.value = toHHMM(schedule.latest_study_time);
 
   function updateDayLengthHint() {
     const hintEl = document.getElementById('dayLengthHint');
@@ -133,7 +128,6 @@ async function init(session) {
     hintEl.textContent = `Your day: ${minutesToClock(wake)} → ${untilText} (${durText} total)${total < 60 ? ' — too short, add more time' : ''}`;
     hintEl.className = 'hint day-length';
   }
-  updateDayLengthHint();
 
   const daySettingsForm = document.getElementById('daySettingsForm');
   const studyPrefsForm = document.getElementById('studyPrefsForm');
@@ -160,8 +154,9 @@ async function init(session) {
 
   function saveScheduleSettings() {
     updateDayLengthHint();
+    const scheduleId = schedule.id; // capture now — see note on `schedule` above
     chainSave(scheduleSaveTarget, async () => {
-      schedule = await updateSchedule(schedule.id, {
+      const updated = await updateSchedule(scheduleId, {
         for_date: forDateEl.value,
         wake_time: wakeTimeEl.value,
         sleep_time: sleepTimeEl.value,
@@ -173,11 +168,32 @@ async function init(session) {
         dinner_time: meal.dinner.time.value,
         ...(collectStudyPrefsFields() || {}),
       });
+      // only adopt the result if we're still looking at that same date —
+      // otherwise this would clobber whatever loadScheduleForDate put there
+      if (schedule && schedule.id === scheduleId) schedule = updated;
       flashSaved();
     });
   }
   daySettingsForm.addEventListener('change', saveScheduleSettings);
   studyPrefsForm.addEventListener('change', saveScheduleSettings);
+
+  // forDate is a navigation control, not a "rename this schedule" field — it
+  // gets its own listener (stopping propagation so daySettingsForm's delegated
+  // change handler above doesn't ALSO treat it as a settings edit) that loads
+  // (or creates) the schedule for whatever date was picked.
+  forDateEl.addEventListener('change', (e) => {
+    e.stopPropagation();
+    if (!forDateEl.value) return;
+    loadScheduleForDate(forDateEl.value);
+  });
+  prevDayBtn.addEventListener('click', () => {
+    if (!schedule) return;
+    loadScheduleForDate(addDaysToDateStr(schedule.for_date, -1));
+  });
+  nextDayBtn.addEventListener('click', () => {
+    if (!schedule) return;
+    loadScheduleForDate(addDaysToDateStr(schedule.for_date, 1));
+  });
 
   // ---------------- classes ----------------
   const classList = document.getElementById('classList');
@@ -204,7 +220,10 @@ async function init(session) {
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
       chainSave(el, async () => {
-        if (el.dataset.id) await deleteClass(el.dataset.id);
+        if (el.dataset.id) {
+          await deleteClass(el.dataset.id);
+          refreshHistoryList();
+        }
       });
     });
     classList.appendChild(el);
@@ -214,6 +233,7 @@ async function init(session) {
   classList.addEventListener('change', (e) => {
     const row = e.target.closest('.entry-row');
     if (!row) return;
+    const scheduleId = schedule.id;
     chainSave(row, async () => {
       const fields = {
         name: row.querySelector('.class-name').value.trim(),
@@ -226,20 +246,15 @@ async function init(session) {
         await updateClass(row.dataset.id, fields);
       } else {
         const sortOrder = Array.from(classList.children).indexOf(row);
-        const created = await insertClass(schedule.id, userId, fields, sortOrder);
+        const created = await insertClass(scheduleId, userId, fields, sortOrder);
         row.dataset.id = created.id;
+        refreshHistoryList();
       }
       flashSaved();
     });
   });
 
   document.getElementById('addClassBtn').addEventListener('click', () => addClassRow());
-
-  const existingClasses = await listClasses(schedule.id).catch((e) => {
-    console.error(e);
-    return [];
-  });
-  existingClasses.forEach((c) => addClassRow(c));
 
   // ---------------- study subjects ----------------
   const studyList = document.getElementById('studyList');
@@ -279,7 +294,10 @@ async function init(session) {
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
       chainSave(el, async () => {
-        if (el.dataset.id) await deleteStudySubject(el.dataset.id);
+        if (el.dataset.id) {
+          await deleteStudySubject(el.dataset.id);
+          refreshHistoryList();
+        }
       });
     });
     studyList.appendChild(el);
@@ -289,6 +307,7 @@ async function init(session) {
   studyList.addEventListener('change', (e) => {
     const row = e.target.closest('.entry-row');
     if (!row) return;
+    const scheduleId = schedule.id;
     chainSave(row, async () => {
       const name = row.querySelector('.study-name').value.trim();
       const minutes = parseInt(row.querySelector('.study-minutes').value, 10);
@@ -309,20 +328,15 @@ async function init(session) {
         await updateStudySubject(row.dataset.id, fields);
       } else {
         const sortOrder = Array.from(studyList.children).indexOf(row);
-        const created = await insertStudySubject(schedule.id, userId, fields, sortOrder);
+        const created = await insertStudySubject(scheduleId, userId, fields, sortOrder);
         row.dataset.id = created.id;
+        refreshHistoryList();
       }
       flashSaved();
     });
   });
 
   document.getElementById('addStudyBtn').addEventListener('click', () => addStudyRow());
-
-  const existingSubjects = await listStudySubjects(schedule.id).catch((e) => {
-    console.error(e);
-    return [];
-  });
-  existingSubjects.forEach((s) => addStudyRow(s));
 
   // ---------------- generate + render the schedule ----------------
   const output = document.getElementById('output');
@@ -403,9 +417,11 @@ async function init(session) {
     if (lockBtn) {
       const id = lockBtn.dataset.id;
       const newLocked = lockBtn.dataset.locked !== '1';
+      const token = activeToken;
       lockBtn.disabled = true;
       try {
         await setScheduleItemLocked(id, newLocked);
+        if (token !== activeToken) return; // navigated away before this resolved
         const item = currentScheduleItems.find((i) => i.id === id);
         if (item) item.locked = newLocked;
         renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
@@ -423,13 +439,16 @@ async function init(session) {
     if (doneBtn) {
       const id = doneBtn.dataset.id;
       const newCompleted = doneBtn.dataset.completed !== '1';
+      const token = activeToken;
       doneBtn.disabled = true;
       try {
         await setScheduleItemCompleted(id, newCompleted);
+        if (token !== activeToken) return;
         const item = currentScheduleItems.find((i) => i.id === id);
         if (item) item.completed = newCompleted;
         renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
         renderDailySummaryFromCurrent();
+        refreshHistoryList();
         flashSaved();
       } catch (err) {
         console.error(err);
@@ -534,6 +553,9 @@ async function init(session) {
   }
 
   async function runGeneration(lockedBlocks) {
+    const scheduleId = schedule.id;
+    const token = activeToken;
+
     const classesInput = Array.from(classList.children).map((row) => ({
       name: row.querySelector('.class-name').value.trim(),
       start: row.querySelector('.class-start').value,
@@ -590,7 +612,9 @@ async function init(session) {
     renderShortfallWarning(progress);
 
     try {
-      const savedRows = await saveGeneratedSchedule(schedule.id, userId, result.events);
+      const savedRows = await saveGeneratedSchedule(scheduleId, userId, result.events);
+      if (token !== activeToken) return; // navigated to a different date while this was saving
+
       // locked rows were left untouched in the database (same ids) — merge them
       // back in alongside the freshly (re)inserted unlocked rows
       const lockedRows = currentScheduleItems.filter((i) => i.type === 'study' && i.locked);
@@ -610,6 +634,7 @@ async function init(session) {
       renderScheduleEvents(currentScheduleItems, subjectsInput);
       updateRegenerateVisibility();
       flashSaved();
+      refreshHistoryList();
     } catch (e) {
       console.error(e);
       flashError('Schedule generated, but could not be saved — check your connection.');
@@ -629,29 +654,143 @@ async function init(session) {
   document.getElementById('generateBtn').addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
   regenerateBtn.addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
 
-  // show the most recently generated schedule, if one exists, instead of the empty placeholder
-  try {
-    const savedItems = await listScheduleItems(schedule.id);
-    if (savedItems.length > 0) {
-      currentScheduleItems = savedItems
-        .map((i) => ({
-          id: i.id,
-          type: i.item_type,
-          name: i.name,
-          start: i.start_minutes,
-          end: i.end_minutes,
-          locked: i.locked,
-          completed: i.completed,
-          sourceSubjectId: i.source_subject_id,
-        }))
-        .sort((a, b) => a.start - b.start);
-      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+  // ---------------- history ----------------
+  const historyListEl = document.getElementById('historyList');
+
+  function renderHistoryList(history, activeDate) {
+    if (!history || history.length === 0) {
+      historyListEl.innerHTML = '<div class="placeholder">No saved dates yet.</div>';
+      return;
+    }
+    historyListEl.innerHTML = history
+      .map((h) => {
+        const dateLabel = new Date(`${h.forDate}T00:00:00`).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        const bits = [`${h.classCount} class${h.classCount === 1 ? '' : 'es'}`, `${h.subjectCount} subject${h.subjectCount === 1 ? '' : 's'}`];
+        if (h.studyBlockCount > 0) bits.push(`${h.completionPercent}% complete`);
+        return `
+          <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}">
+            <span class="history-date">${escapeAttr(dateLabel)}</span>
+            <span class="history-stats">${escapeAttr(bits.join(' · '))}</span>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
+  async function refreshHistoryList() {
+    try {
+      const history = await listScheduleHistory(userId);
+      // only dates the user actually put something into — an empty row from
+      // just browsing through with Prev/Next isn't a "saved schedule" worth listing
+      const visible = history.filter((h) => h.classCount > 0 || h.subjectCount > 0 || h.studyBlockCount > 0);
+      renderHistoryList(visible, schedule ? schedule.for_date : null);
+    } catch (e) {
+      console.error('Could not load history:', e);
+    }
+  }
+
+  historyListEl.addEventListener('click', (e) => {
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    loadScheduleForDate(item.dataset.date);
+  });
+
+  // ---------------- loading a date (initial load, Prev/Next, date picker, history) ----------------
+  async function loadScheduleForDate(dateStr) {
+    const token = ++activeToken;
+
+    // clear everything immediately so nothing from the previous date lingers
+    // on screen (or could be mistaken for the new date's data) while loading
+    classList.innerHTML = '';
+    studyList.innerHTML = '';
+    currentScheduleItems = [];
+    output.innerHTML = '<div class="placeholder">Loading…</div>';
+    renderNotes([]);
+    renderLockConflicts(null);
+    renderDailySummary(null);
+    renderShortfallWarning(null);
+    regenerateBtn.hidden = true;
+    loadError.textContent = '';
+
+    let loaded;
+    try {
+      loaded = await getOrCreateScheduleForDate(userId, dateStr);
+    } catch (e) {
+      console.error(e);
+      if (token === activeToken) loadError.textContent = 'Could not load that date. Please try again.';
+      return;
+    }
+    if (token !== activeToken) return; // a newer navigation started before this finished
+
+    schedule = loaded;
+    forDateEl.value = schedule.for_date;
+    wakeTimeEl.value = toHHMM(schedule.wake_time);
+    sleepTimeEl.value = toHHMM(schedule.sleep_time);
+    meal.breakfast.on.checked = schedule.breakfast_on;
+    meal.breakfast.time.value = toHHMM(schedule.breakfast_time);
+    meal.lunch.on.checked = schedule.lunch_on;
+    meal.lunch.time.value = toHHMM(schedule.lunch_time);
+    meal.dinner.on.checked = schedule.dinner_on;
+    meal.dinner.time.value = toHHMM(schedule.dinner_time);
+    preferredPeriodEl.value = schedule.preferred_study_period || 'none';
+    sessionCapEl.value = schedule.session_cap_minutes;
+    breakMinutesEl.value = schedule.switch_break_minutes;
+    minBlockEl.value = schedule.min_block_minutes;
+    earliestStudyEl.value = toHHMM(schedule.earliest_study_time);
+    latestStudyEl.value = toHHMM(schedule.latest_study_time);
+    updateDayLengthHint();
+
+    try {
+      const [loadedClasses, loadedSubjects] = await Promise.all([listClasses(schedule.id), listStudySubjects(schedule.id)]);
+      if (token !== activeToken) return;
+      loadedClasses.forEach((c) => addClassRow(c));
+      loadedSubjects.forEach((s) => addStudyRow(s));
+    } catch (e) {
+      console.error(e);
+    }
+
+    try {
+      const savedItems = await listScheduleItems(schedule.id);
+      if (token !== activeToken) return;
+      if (savedItems.length > 0) {
+        currentScheduleItems = savedItems
+          .map((i) => ({
+            id: i.id,
+            type: i.item_type,
+            name: i.name,
+            start: i.start_minutes,
+            end: i.end_minutes,
+            locked: i.locked,
+            completed: i.completed,
+            sourceSubjectId: i.source_subject_id,
+          }))
+          .sort((a, b) => a.start - b.start);
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      } else {
+        renderScheduleEvents([]);
+      }
       updateRegenerateVisibility();
       renderDailySummaryFromCurrent();
+    } catch (e) {
+      console.error('Could not load saved schedule:', e);
     }
-  } catch (e) {
-    console.error('Could not load saved schedule:', e);
+
+    refreshHistoryList();
   }
+
+  let initialDate;
+  try {
+    initialDate = await getMostRecentScheduleDate(userId);
+  } catch (e) {
+    console.error(e);
+  }
+  if (!initialDate) initialDate = tomorrowDateStr();
+
+  await loadScheduleForDate(initialDate);
 
   plannerForm.style.display = '';
 }

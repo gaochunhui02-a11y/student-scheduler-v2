@@ -198,6 +198,43 @@ select {
   margin-bottom: 12px;
 }
 
+.date-nav-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.date-nav-row input[type="date"] { flex: 1 1 auto; }
+.date-nav-btn {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 7px;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.date-nav-btn:hover { background: #eef1f5; border-color: #c7cedb; }
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.history-item:hover { background: var(--accent-soft); border-color: var(--accent); }
+.history-item.active { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.history-item .history-date { color: var(--text); }
+.history-item .history-stats { color: var(--muted); font-size: 12px; text-align: right; }
+
 .entry-row {
   display: grid;
   grid-template-columns: 1fr 100px 100px 30px;

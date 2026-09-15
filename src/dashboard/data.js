@@ -1,32 +1,65 @@
 import { supabase } from '../lib/supabaseClient.js';
+import { tomorrowDateStr, addDaysToDateStr } from './dateUtils.js';
+import { aggregateScheduleHistory } from './history.js';
 
-function tomorrowDateStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+export { tomorrowDateStr, addDaysToDateStr };
+
+// The date the user was last working on (by schedules.updated_at), so
+// reopening the app resumes where they left off. Returns null for a
+// brand-new user with no schedules at all yet.
+export async function getMostRecentScheduleDate(userId) {
+  const { data, error } = await supabase
+    .from('schedules')
+    .select('for_date')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? data.for_date : null;
 }
 
-// Each user works with one "current" plan at a time (kept simple, matching the
-// original single-day planner). We reuse their most recently touched schedule
-// row, or create a fresh one for tomorrow if they've never made one.
-export async function getOrCreateCurrentSchedule(userId) {
+// Every date is its own independent schedule row (schedules.for_date is
+// unique per user — see supabase/schema.sql), fetched or created on demand.
+// A freshly created row gets only the table's own defaults — never copies
+// classes/subjects/settings from any other date.
+export async function getOrCreateScheduleForDate(userId, forDate) {
   const { data: existing, error: fetchError } = await supabase
     .from('schedules')
     .select('*')
     .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
-    .limit(1)
+    .eq('for_date', forDate)
     .maybeSingle();
   if (fetchError) throw fetchError;
   if (existing) return existing;
 
   const { data: created, error: insertError } = await supabase
     .from('schedules')
-    .insert({ user_id: userId, for_date: tomorrowDateStr() })
+    .insert({ user_id: userId, for_date: forDate })
     .select()
     .single();
   if (insertError) throw insertError;
   return created;
+}
+
+// One row per date the user has touched, with lightweight counts for the
+// History list. Three bulk queries (classes/study_subjects/schedule_items
+// across the whole user) instead of one per schedule, to avoid N+1 round
+// trips as the history grows. The actual per-date aggregation is the pure
+// function in history.js, so it can be unit tested without a live database.
+export async function listScheduleHistory(userId) {
+  const [schedulesRes, classesRes, subjectsRes, itemsRes] = await Promise.all([
+    supabase.from('schedules').select('id, for_date').eq('user_id', userId).order('for_date', { ascending: false }),
+    supabase.from('classes').select('schedule_id').eq('user_id', userId),
+    supabase.from('study_subjects').select('schedule_id').eq('user_id', userId),
+    supabase.from('schedule_items').select('schedule_id, item_type, completed').eq('user_id', userId),
+  ]);
+  if (schedulesRes.error) throw schedulesRes.error;
+  if (classesRes.error) throw classesRes.error;
+  if (subjectsRes.error) throw subjectsRes.error;
+  if (itemsRes.error) throw itemsRes.error;
+
+  return aggregateScheduleHistory(schedulesRes.data, classesRes.data, subjectsRes.data, itemsRes.data);
 }
 
 export async function updateSchedule(scheduleId, fields) {
