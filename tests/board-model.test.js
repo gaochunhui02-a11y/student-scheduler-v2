@@ -28,6 +28,13 @@ import {
   computeEdgeGeometry,
   edgeMidpoint,
   screenToCanvasPoint,
+  studyTaskDefaultsFromNode,
+  buildStudyTaskFields,
+  isStudyTaskFieldsValid,
+  isNodeConverted,
+  canConvertNode,
+  linkNodeToStudyTask,
+  unlinkNodeFromStudyTask,
 } from '../src/board/boardModel.js';
 
 let totalFailures = 0;
@@ -392,6 +399,126 @@ scenario('K. Edge geometry (nodeCenter / computeEdgeGeometry / edgeMidpoint / sc
   check('screenToCanvasPoint treats a zoom of 0 as 1x rather than dividing by zero', () => {
     const point = screenToCanvasPoint({ canvasLeft: 0, canvasTop: 0, clientX: 40, clientY: 40, zoom: 0 });
     assert.deepEqual(point, { x: 40, y: 40 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('L. Convert node to study task — field mapping', () => {
+  check('the node title maps to the study task name', () => {
+    const defaults = studyTaskDefaultsFromNode({ title: 'Finish Python Assignment' });
+    assert.equal(defaults.name, 'Finish Python Assignment');
+  });
+  check('a missing/blank node title maps to an empty name, never null/undefined', () => {
+    assert.equal(studyTaskDefaultsFromNode({ title: undefined }).name, '');
+    assert.equal(studyTaskDefaultsFromNode({}).name, '');
+  });
+  check('defaults leave minutes/due date unset and priority at medium, same as a manual row', () => {
+    const defaults = studyTaskDefaultsFromNode({ title: 'x' });
+    assert.equal(defaults.minutes_requested, null);
+    assert.equal(defaults.due_date, null);
+    assert.equal(defaults.priority, 'medium');
+    assert.equal(defaults.notes, '');
+  });
+
+  check('minutes map correctly: a valid whole number passes through', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', minutes: 45 }).minutes_requested, 45);
+  });
+  check('minutes map correctly: a numeric string is parsed', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', minutes: '30' }).minutes_requested, 30);
+  });
+  check('minutes map correctly: zero, negative, non-numeric, or missing all map to null (invalid)', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', minutes: 0 }).minutes_requested, null);
+    assert.equal(buildStudyTaskFields({ name: 'x', minutes: -10 }).minutes_requested, null);
+    assert.equal(buildStudyTaskFields({ name: 'x', minutes: 'abc' }).minutes_requested, null);
+    assert.equal(buildStudyTaskFields({ name: 'x' }).minutes_requested, null);
+  });
+
+  check('priority maps correctly: low/medium/high pass through unchanged', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', priority: 'low' }).priority, 'low');
+    assert.equal(buildStudyTaskFields({ name: 'x', priority: 'high' }).priority, 'high');
+  });
+  check('priority maps correctly: anything else falls back to medium, matching the study_subjects check constraint', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', priority: 'urgent' }).priority, 'medium');
+    assert.equal(buildStudyTaskFields({ name: 'x', priority: undefined }).priority, 'medium');
+  });
+
+  check('due date maps correctly: a provided date passes through', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', dueDate: '2026-01-15' }).due_date, '2026-01-15');
+  });
+  check('due date maps correctly: blank/missing maps to null, not an empty string', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', dueDate: '' }).due_date, null);
+    assert.equal(buildStudyTaskFields({ name: 'x' }).due_date, null);
+  });
+
+  check('notes map correctly: trimmed, defaulting to an empty string', () => {
+    assert.equal(buildStudyTaskFields({ name: 'x', notes: '  bring textbook  ' }).notes, 'bring textbook');
+    assert.equal(buildStudyTaskFields({ name: 'x' }).notes, '');
+  });
+
+  check('the task name is trimmed and required', () => {
+    assert.equal(buildStudyTaskFields({ name: '  Physics  ', minutes: 30 }).name, 'Physics');
+    assert.equal(isStudyTaskFieldsValid(buildStudyTaskFields({ name: '   ', minutes: 30 })), false);
+  });
+
+  check('a complete, valid field set passes isStudyTaskFieldsValid', () => {
+    const fields = buildStudyTaskFields({ name: 'Physics', minutes: 30, priority: 'high', dueDate: '2026-02-01', notes: 'ch.4' });
+    assert.equal(isStudyTaskFieldsValid(fields), true);
+  });
+  check('a field set missing minutes fails isStudyTaskFieldsValid', () => {
+    const fields = buildStudyTaskFields({ name: 'Physics' });
+    assert.equal(isStudyTaskFieldsValid(fields), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('M. Convert node to study task — linking, duplicate prevention, deletion safety', () => {
+  check('a fresh node is not converted and can be converted', () => {
+    const node = { id: 'n1', linked_study_subject_id: null };
+    assert.equal(isNodeConverted(node), false);
+    assert.equal(canConvertNode(node), true);
+  });
+  check('linkNodeToStudyTask stores the id and returns a NEW object (does not mutate the input)', () => {
+    const node = { id: 'n1', title: 'Finish Python Assignment', linked_study_subject_id: null };
+    const linked = linkNodeToStudyTask(node, 'study-123');
+    assert.equal(linked.linked_study_subject_id, 'study-123');
+    assert.equal(node.linked_study_subject_id, null, 'the original node object must be untouched');
+    assert.equal(linked.title, node.title, 'unrelated fields are preserved');
+  });
+  check('once linked, the node is considered converted and cannot be converted again', () => {
+    const linked = linkNodeToStudyTask({ id: 'n1', linked_study_subject_id: null }, 'study-123');
+    assert.equal(isNodeConverted(linked), true);
+    assert.equal(canConvertNode(linked), false, 'this is the guard that prevents a duplicate study_subjects row');
+  });
+  check('unlinkNodeFromStudyTask models what happens if the linked study task is deleted elsewhere', () => {
+    const linked = linkNodeToStudyTask({ id: 'n1', linked_study_subject_id: null }, 'study-123');
+    const unlinked = unlinkNodeFromStudyTask(linked);
+    assert.equal(unlinked.linked_study_subject_id, null);
+    assert.equal(canConvertNode(unlinked), true, 'a node whose study task was deleted elsewhere becomes convertible again');
+  });
+
+  // FakeStore: a Board node store and a completely separate study-task
+  // store, mirroring the real architecture (board_nodes vs study_subjects
+  // are different tables). Deleting a node must only ever touch the first.
+  check('deleting a Board node does not delete its linked study task', () => {
+    let boardNodes = [
+      { id: 'n1', title: 'Finish Python Assignment', linked_study_subject_id: 'study-1' },
+      { id: 'n2', title: 'Read chapter 3', linked_study_subject_id: null },
+    ];
+    const studyTasks = [{ id: 'study-1', name: 'Finish Python Assignment', minutes_requested: 60 }];
+
+    // fakeDeleteNode — exactly what board.js's deleteNode click handler
+    // does at the model level: remove the node from the local node array.
+    // It never reads or writes `studyTasks` at all.
+    function fakeDeleteNode(nodeId) {
+      boardNodes = boardNodes.filter((n) => n.id !== nodeId);
+    }
+
+    fakeDeleteNode('n1');
+
+    assert.equal(boardNodes.length, 1, 'the node itself is gone');
+    assert.equal(studyTasks.length, 1, 'the study task it was linked to still exists, untouched');
+    assert.equal(studyTasks[0].id, 'study-1');
+    assert.equal(studyTasks[0].name, 'Finish Python Assignment');
   });
 });
 

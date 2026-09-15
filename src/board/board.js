@@ -1,8 +1,17 @@
 // Visual Board client controller — owns all #boardView DOM, all board_nodes
 // dragging, and all Board Supabase calls (via boardData.js). Completely
 // isolated from src/dashboard/dashboard.js: no scheduling state is read or
-// written here, and dashboard.js only ever calls initBoardSection(userId)
-// and the returned onShow(); it never reaches into this module's internals.
+// written here, and dashboard.js only ever calls initBoardSection(userId,
+// hostApi) and the returned onShow(); it never reaches into this module's
+// internals.
+//
+// The one intentional bridge to the scheduler's data is "Add to Planner"
+// (Phase 5): this file never imports src/dashboard/data.js and never talks
+// to the study_subjects table directly — it calls the small `hostApi`
+// object dashboard.js passes in (getActiveScheduleId/
+// createStudyTaskFromBoard/viewInPlanner), which itself routes through the
+// EXISTING insertStudySubject + addStudyRow code path. No second study-task
+// system is created here.
 //
 // Native Pointer Events only (pointerdown/pointermove/pointerup) — no drag
 // or canvas library. That's enough for free-form dragging on a large,
@@ -21,6 +30,12 @@ import {
   isDuplicateEdge,
   removeEdgesForNode,
   removeEdgeById,
+  studyTaskDefaultsFromNode,
+  buildStudyTaskFields,
+  isStudyTaskFieldsValid,
+  isNodeConverted,
+  canConvertNode,
+  linkNodeToStudyTask,
 } from './boardModel.js';
 import {
   listBoards,
@@ -51,7 +66,7 @@ function svgEl(tag) {
   return document.createElementNS(SVG_NS, tag);
 }
 
-export function initBoardSection(userId) {
+export function initBoardSection(userId, hostApi = {}) {
   const boardView = document.getElementById('boardView');
   if (!boardView) return null;
 
@@ -88,7 +103,11 @@ export function initBoardSection(userId) {
   previewLine.hidden = true;
   if (edgesLayer) edgesLayer.appendChild(previewLine);
 
-  function showEdgeStatus(message) {
+  // Reused for both edge-connection feedback (Phase 4) and conversion
+  // feedback (Phase 5) — it's a generic transient status line for the Board,
+  // not specific to edges; kept on the same #boardEdgeStatus element rather
+  // than adding a second one.
+  function showBoardStatus(message) {
     if (!edgeStatus) return;
     edgeStatus.textContent = message;
     edgeStatus.hidden = false;
@@ -96,6 +115,228 @@ export function initBoardSection(userId) {
     edgeStatusTimeout = setTimeout(() => {
       edgeStatus.hidden = true;
     }, 3000);
+  }
+
+  // ---------------- convert node to study task (Phase 5) ----------------
+
+  let conversionModal = null; // built lazily on first use
+  let conversionTargetNode = null;
+
+  function buildConversionModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'board-modal-overlay';
+    overlay.hidden = true;
+
+    const modal = document.createElement('div');
+    modal.className = 'board-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+
+    const heading = document.createElement('h3');
+    heading.className = 'board-modal-title';
+    heading.dataset.i18n = 'board.convertToStudyTask';
+    heading.textContent = t('board.convertToStudyTask');
+
+    function field(labelKey, inputEl) {
+      const wrap = document.createElement('label');
+      wrap.className = 'board-modal-field';
+      const span = document.createElement('span');
+      span.dataset.i18n = labelKey;
+      span.textContent = t(labelKey);
+      wrap.appendChild(span);
+      wrap.appendChild(inputEl);
+      return wrap;
+    }
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+
+    const minutesInput = document.createElement('input');
+    minutesInput.type = 'number';
+    minutesInput.min = '5';
+    minutesInput.step = '5';
+
+    const prioritySelect = document.createElement('select');
+    [
+      ['low', 'board.priorityLow'],
+      ['medium', 'board.priorityMedium'],
+      ['high', 'board.priorityHigh'],
+    ].forEach(([value, key]) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.dataset.i18n = key;
+      opt.textContent = t(key);
+      prioritySelect.appendChild(opt);
+    });
+
+    const dueInput = document.createElement('input');
+    dueInput.type = 'date';
+
+    const notesInput = document.createElement('input');
+    notesInput.type = 'text';
+
+    const errorMsg = document.createElement('p');
+    errorMsg.className = 'hint board-modal-error';
+    errorMsg.hidden = true;
+
+    const actions = document.createElement('div');
+    actions.className = 'board-modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.dataset.i18n = 'board.cancel';
+    cancelBtn.textContent = t('board.cancel');
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.className = 'btn-primary';
+    submitBtn.dataset.i18n = 'board.addToPlanner';
+    submitBtn.textContent = t('board.addToPlanner');
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+
+    modal.appendChild(heading);
+    modal.appendChild(field('board.taskName', nameInput));
+    modal.appendChild(field('board.estimatedMinutes', minutesInput));
+    modal.appendChild(field('board.priority', prioritySelect));
+    modal.appendChild(field('board.dueDate', dueInput));
+    modal.appendChild(field('board.notes', notesInput));
+    modal.appendChild(errorMsg);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+
+    // Appended to <body>, not #boardCanvas: the canvas has a CSS transform
+    // (for zoom), and a transformed ancestor becomes the containing block
+    // for any position:fixed descendant — appending inside it would break
+    // the overlay's full-viewport positioning at any zoom level other than
+    // exactly 100%.
+    document.body.appendChild(overlay);
+
+    cancelBtn.addEventListener('click', closeConversionModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeConversionModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlay.hidden) closeConversionModal();
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      const node = conversionTargetNode;
+      if (!node) return;
+      // Belt-and-suspenders: the "Add to Planner" action is only ever
+      // shown on an unconverted node (see buildLinkRow below), but this is
+      // the actual gate that prevents a duplicate study_subjects row.
+      if (!canConvertNode(node)) {
+        closeConversionModal();
+        return;
+      }
+
+      const fields = buildStudyTaskFields({
+        name: nameInput.value,
+        minutes: minutesInput.value,
+        priority: prioritySelect.value,
+        dueDate: dueInput.value,
+        notes: notesInput.value,
+      });
+      if (!isStudyTaskFieldsValid(fields)) {
+        errorMsg.textContent = t('board.conversionFailed');
+        errorMsg.hidden = false;
+        return;
+      }
+      if (typeof hostApi.getActiveScheduleId !== 'function' || typeof hostApi.createStudyTaskFromBoard !== 'function') {
+        errorMsg.textContent = t('board.conversionFailed');
+        errorMsg.hidden = false;
+        return;
+      }
+      const scheduleId = hostApi.getActiveScheduleId();
+      if (!scheduleId) {
+        errorMsg.textContent = t('board.conversionFailed');
+        errorMsg.hidden = false;
+        return;
+      }
+
+      submitBtn.disabled = true;
+      try {
+        const created = await hostApi.createStudyTaskFromBoard(fields);
+        await updateNode(userId, node.id, { linkedStudySubjectId: created.id });
+        const index = nodes.findIndex((n) => n.id === node.id);
+        if (index !== -1) nodes[index] = linkNodeToStudyTask(nodes[index], created.id);
+        closeConversionModal();
+        renderNodes();
+        showBoardStatus(t('board.taskCreated'));
+      } catch (err) {
+        console.error('Could not convert node to study task:', err);
+        errorMsg.textContent = t('board.conversionFailed');
+        errorMsg.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    return { overlay, nameInput, minutesInput, prioritySelect, dueInput, notesInput, errorMsg };
+  }
+
+  function closeConversionModal() {
+    if (conversionModal) conversionModal.overlay.hidden = true;
+    conversionTargetNode = null;
+  }
+
+  function openConversionModal(node) {
+    if (!canConvertNode(node)) return; // already linked — nothing to do
+    if (!conversionModal) conversionModal = buildConversionModal();
+    conversionTargetNode = node;
+    const defaults = studyTaskDefaultsFromNode(node);
+    conversionModal.nameInput.value = defaults.name;
+    conversionModal.minutesInput.value = '';
+    conversionModal.prioritySelect.value = defaults.priority;
+    conversionModal.dueInput.value = '';
+    conversionModal.notesInput.value = '';
+    conversionModal.errorMsg.hidden = true;
+    conversionModal.overlay.hidden = false;
+    conversionModal.nameInput.focus();
+  }
+
+  // The small footer row on every node card: either "Add to Planner", or —
+  // once node.linked_study_subject_id is set — a static "Already added to
+  // Planner" badge plus "View in Planner". This is also what prevents a
+  // duplicate conversion in the UI: once linked, the create action is gone.
+  function buildLinkRow(node) {
+    const row = document.createElement('div');
+    row.className = 'board-node-link-row';
+
+    if (isNodeConverted(node)) {
+      const badge = document.createElement('span');
+      badge.className = 'board-node-link-badge';
+      badge.dataset.i18n = 'board.alreadyAdded';
+      badge.textContent = t('board.alreadyAdded');
+
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'board-node-link-btn';
+      viewBtn.dataset.i18n = 'board.viewInPlanner';
+      viewBtn.textContent = t('board.viewInPlanner');
+      viewBtn.addEventListener('click', () => {
+        if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
+      });
+      stopDragStart(viewBtn);
+
+      row.appendChild(badge);
+      row.appendChild(viewBtn);
+    } else {
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'board-node-link-btn board-node-link-btn-primary';
+      addBtn.dataset.i18n = 'board.addToPlanner';
+      addBtn.textContent = t('board.addToPlanner');
+      addBtn.addEventListener('click', () => openConversionModal(node));
+      stopDragStart(addBtn);
+
+      row.appendChild(addBtn);
+    }
+
+    return row;
   }
 
   function applyZoom() {
@@ -269,11 +510,11 @@ export function initBoardSection(userId) {
       if (!targetNodeId) return; // dropped on empty canvas — cancel cleanly, nothing written
 
       if (isSelfEdge(sourceId, targetNodeId)) {
-        showEdgeStatus(t('board.invalidConnection'));
+        showBoardStatus(t('board.invalidConnection'));
         return;
       }
       if (isDuplicateEdge(edges, sourceId, targetNodeId)) {
-        showEdgeStatus(t('board.connectionExists'));
+        showBoardStatus(t('board.connectionExists'));
         return;
       }
       if (!currentBoard) return;
@@ -283,7 +524,7 @@ export function initBoardSection(userId) {
         renderEdges();
       } catch (err) {
         console.error('Could not create connection:', err);
-        showEdgeStatus(t('board.invalidConnection'));
+        showBoardStatus(t('board.invalidConnection'));
       }
     }
 
@@ -443,6 +684,7 @@ export function initBoardSection(userId) {
 
     el.appendChild(head);
     el.appendChild(textarea);
+    el.appendChild(buildLinkRow(node));
 
     const handle = document.createElement('div');
     handle.className = 'board-node-handle';

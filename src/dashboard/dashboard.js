@@ -153,7 +153,37 @@ async function init(session) {
     plannerForm.style.display = 'none';
     if (boardView) boardView.hidden = false;
   }
-  const boardSection = initBoardSection(userId);
+
+  // ---------------- Board -> existing study-task system (Phase 5) ----------------
+  // board.js never imports data.js or touches the study_subjects table
+  // itself — it only calls these three host functions, which route through
+  // the EXACT same insertStudySubject + addStudyRow code path a manually
+  // typed study-task row already uses below. This is the only bridge
+  // between the Board and the scheduler's data; nothing else about
+  // study-task creation, the scheduler, or Generate/Regenerate changes.
+  // addStudyRow/insertStudySubject/refreshHistoryList/schedule are declared
+  // further down this function, but that's fine here: these closures are
+  // only ever invoked later, after a user opens the Board's conversion
+  // modal — well after every one of them has been assigned.
+  const boardHostApi = {
+    getActiveScheduleId: () => (schedule ? schedule.id : null),
+    createStudyTaskFromBoard: async (fields) => {
+      if (!schedule) throw new Error('No active schedule to attach the study task to.');
+      const sortOrder = studyList.children.length;
+      const created = await insertStudySubject(schedule.id, userId, fields, sortOrder);
+      addStudyRow(created);
+      refreshHistoryList();
+      return created;
+    },
+    viewInPlanner: () => {
+      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+      const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
+      if (plannerNavBtn) plannerNavBtn.classList.add('active');
+      showPlannerView();
+      if (studyList) studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+  };
+  const boardSection = initBoardSection(userId, boardHostApi);
 
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {

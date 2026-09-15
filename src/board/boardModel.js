@@ -170,3 +170,90 @@ export function screenToCanvasPoint({ canvasLeft, canvasTop, clientX, clientY, z
     y: (clientY - canvasTop) / z,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Convert node to study task (Phase 5)
+//
+// This module never talks to Supabase and never imports src/dashboard/data.js
+// — the actual write goes through the EXISTING study_subjects data layer
+// (src/dashboard/data.js: insertStudySubject), called from src/board/board.js
+// via a small host-provided callback. These functions only do the pure
+// field mapping/validation the conversion form needs, so that mapping is
+// testable without a live project, same as the rest of this file.
+// ---------------------------------------------------------------------------
+
+const STUDY_PRIORITIES = ['low', 'medium', 'high'];
+
+// Pre-fills the conversion form from a Board node. Only `name` has a
+// meaningful source (the node's title) — study_subjects has no board-node
+// equivalent for minutes/priority/due date/notes, so those start at the
+// same defaults a manually-created study task row would have.
+export function studyTaskDefaultsFromNode(node) {
+  return {
+    name: normalizeNodeTitle(node?.title),
+    minutes_requested: null,
+    priority: 'medium',
+    due_date: null,
+    notes: '',
+  };
+}
+
+function normalizeStudyMinutes(value) {
+  const n = typeof value === 'string' ? parseInt(value, 10) : value;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function normalizeStudyPriority(value) {
+  return STUDY_PRIORITIES.includes(value) ? value : 'medium';
+}
+
+// Maps the conversion form's raw field values onto exactly the shape
+// src/dashboard/data.js's insertStudySubject expects (the same fields
+// object a manually-typed study-task row already builds in dashboard.js) —
+// this is the mapping the form submits, never a second data model.
+export function buildStudyTaskFields({ name, minutes, priority, dueDate, notes } = {}) {
+  return {
+    name: typeof name === 'string' ? name.trim() : '',
+    minutes_requested: normalizeStudyMinutes(minutes),
+    priority: normalizeStudyPriority(priority),
+    due_date: dueDate || null,
+    notes: typeof notes === 'string' ? notes.trim() : '',
+  };
+}
+
+// Mirrors the same completeness check dashboard.js's manual study-row save
+// already applies (a name and a positive whole-number minute count) before
+// insertStudySubject is ever called — the conversion form must not create
+// an incomplete/invalid study_subjects row either.
+export function isStudyTaskFieldsValid(fields) {
+  return Boolean(fields && fields.name) && Number.isFinite(fields.minutes_requested) && fields.minutes_requested > 0;
+}
+
+export function isNodeConverted(node) {
+  return Boolean(node && node.linked_study_subject_id);
+}
+
+// A node that's already linked must not be converted again — this is the
+// single source of truth the UI checks before ever opening the conversion
+// form, so a duplicate study_subjects row can't be created for the same
+// node.
+export function canConvertNode(node) {
+  return !isNodeConverted(node);
+}
+
+// Returns a NEW node object with the link set — used right after a
+// successful insertStudySubject call to update local Board state (never
+// mutates the node passed in).
+export function linkNodeToStudyTask(node, studyTaskId) {
+  return { ...node, linked_study_subject_id: studyTaskId };
+}
+
+// The inverse — documents/models what a node looks like once its linked
+// study task has been deleted elsewhere (the 0002 migration's
+// ON DELETE SET NULL already enforces this at the database level; the next
+// Board load reflects it automatically). Not required by any board.js code
+// path today, but kept and tested because it's the exact contract that
+// deleting a study task must never delete or corrupt the Board node itself.
+export function unlinkNodeFromStudyTask(node) {
+  return { ...node, linked_study_subject_id: null };
+}

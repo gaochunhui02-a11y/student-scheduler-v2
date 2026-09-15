@@ -1173,6 +1173,41 @@ button { font-family: inherit; }
 .board-node:focus-within .board-node-handle { opacity: 1; }
 .board-node-handle:hover { transform: scale(1.15); }
 
+/* Phase 5: "Add to Planner" / "Already added" footer row on each card */
+.board-node-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.board-node-link-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board-node-link-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.board-node-link-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
+.board-node-link-btn-primary { color: var(--accent-strong); width: 100%; text-align: center; }
+.board-node-link-btn-primary:hover { background: var(--accent-soft); }
+
 .board-no-board { text-align: center; padding: 40px 20px; }
 .board-no-board .hint { margin: 0 0 14px; }
 .board-no-board .btn-primary { width: auto; padding: 0 20px; }
@@ -1231,6 +1266,49 @@ button { font-family: inherit; }
 .board-edge-delete-btn:hover { background: var(--danger-soft); }
 
 #boardEdgeStatus { margin-bottom: 10px; }
+
+/* ---------------- Board conversion modal (Phase 5) ---------------- */
+/* Appended to <body> by board.js (not #boardCanvas — see the comment in
+   buildConversionModal), so it sits outside any zoom transform and is
+   safe to position with plain position:fixed. */
+.board-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(20, 19, 17, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+:root[data-theme="dark"] .board-modal-overlay { background: rgba(0, 0, 0, 0.6); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .board-modal-overlay { background: rgba(0, 0, 0, 0.6); }
+}
+
+.board-modal {
+  width: 100%;
+  max-width: 380px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 22px;
+}
+.board-modal-title { margin: 0 0 14px; font-size: 16px; font-weight: 650; color: var(--text); }
+
+.board-modal-field { display: block; margin-bottom: 12px; }
+.board-modal-field > span { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.board-modal-field input,
+.board-modal-field select { margin-bottom: 0; }
+
+.board-modal-error { color: var(--danger); margin: 0 0 10px; }
+
+.board-modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+.board-modal-actions .btn-secondary,
+.board-modal-actions .btn-primary { width: auto; flex: 1; }
 
 /* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
