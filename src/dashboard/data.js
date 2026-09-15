@@ -105,7 +105,6 @@ export async function deleteStudySubject(id) {
 }
 
 // ---------------- generated schedule (schedule_items) ----------------
-// Used once the generation algorithm is built; replaces the whole set each time.
 
 export async function listScheduleItems(scheduleId) {
   const { data, error } = await supabase
@@ -117,16 +116,25 @@ export async function listScheduleItems(scheduleId) {
   return data;
 }
 
-export async function replaceScheduleItems(scheduleId, userId, items) {
+// Saves a freshly generated/regenerated schedule. Only replaces UNLOCKED rows —
+// locked rows are left completely untouched in the database (same id, same
+// completed state, same everything), because a locked study block is never
+// something generation produced this time around; it's already sitting there
+// from before. `events` is the full timeline generateSchedule() returned,
+// including the locked blocks it echoed back — those are skipped here since
+// they don't need to be (re)written.
+export async function saveGeneratedSchedule(scheduleId, userId, events) {
   const { error: deleteError } = await supabase
     .from('schedule_items')
     .delete()
-    .eq('schedule_id', scheduleId);
+    .eq('schedule_id', scheduleId)
+    .eq('locked', false);
   if (deleteError) throw deleteError;
 
-  if (items.length === 0) return [];
+  const toInsert = (events || []).filter((e) => !e.locked);
+  if (toInsert.length === 0) return [];
 
-  const rows = items.map((item, i) => ({
+  const rows = toInsert.map((item, i) => ({
     schedule_id: scheduleId,
     user_id: userId,
     item_type: item.type,
@@ -134,9 +142,15 @@ export async function replaceScheduleItems(scheduleId, userId, items) {
     start_minutes: item.start,
     end_minutes: item.end,
     sort_order: i,
+    locked: false,
   }));
 
   const { data, error: insertError } = await supabase.from('schedule_items').insert(rows).select();
   if (insertError) throw insertError;
   return data;
+}
+
+export async function setScheduleItemLocked(id, locked) {
+  const { error } = await supabase.from('schedule_items').update({ locked }).eq('id', id);
+  if (error) throw error;
 }

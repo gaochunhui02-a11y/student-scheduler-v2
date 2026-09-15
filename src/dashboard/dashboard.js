@@ -12,7 +12,8 @@ import {
   updateStudySubject,
   deleteStudySubject,
   listScheduleItems,
-  replaceScheduleItems,
+  saveGeneratedSchedule,
+  setScheduleItemLocked,
 } from './data.js';
 import { generateSchedule, resolveDayBounds, formatClock, timeToMinutes, minutesToClock } from './scheduler.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
@@ -325,26 +326,89 @@ async function init(session) {
   // ---------------- generate + render the schedule ----------------
   const output = document.getElementById('output');
   const notesEl = document.getElementById('notes');
+  const regenerateBtn = document.getElementById('regenerateBtn');
 
-  function renderScheduleEvents(events) {
+  // in-memory mirror of the schedule_items rows currently in the database, so
+  // lock/unlock has an id to act on and Regenerate knows which study blocks
+  // are locked. Populated on load and after every successful save.
+  let currentScheduleItems = [];
+
+  function buildSubjectsInput() {
+    return Array.from(studyList.children).map((row) => ({
+      name: row.querySelector('.study-name').value.trim(),
+      minutes: parseInt(row.querySelector('.study-minutes').value, 10),
+      priority: row.querySelector('.study-priority').value,
+      dueDate: row.querySelector('.study-due').value || null,
+    }));
+  }
+
+  function formatDueDate(dueDateStr) {
+    if (!dueDateStr) return null;
+    const due = new Date(`${dueDateStr}T00:00:00`);
+    const base = new Date(`${forDateEl.value || dueDateStr}T00:00:00`);
+    const diffDays = Math.round((due - base) / 86400000);
+    if (diffDays === 0) return 'Due today';
+    if (diffDays === 1) return 'Due tomorrow';
+    if (diffDays === -1) return 'Due yesterday (overdue)';
+    if (diffDays < -1) return `Due ${due.toLocaleDateString()} (overdue)`;
+    return `Due ${due.toLocaleDateString()}`;
+  }
+
+  function renderScheduleEvents(events, subjectsForLookup) {
     if (!events || events.length === 0) {
       output.innerHTML = '<div class="placeholder">Nothing to show yet.</div>';
       return;
     }
+    const subjectByName = new Map((subjectsForLookup || []).map((s) => [s.name, s]));
     const html = events
       .map((e) => {
         const dur = e.end - e.start;
         const durText = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60 ? (dur % 60) + 'm' : ''}`.trim() : `${dur} min`;
+
+        let subtitle = '';
+        let lockControl = '';
+        if (e.type === 'study') {
+          const subj = subjectByName.get(e.name);
+          const parts = [];
+          if (subj?.priority) parts.push(`${subj.priority[0].toUpperCase()}${subj.priority.slice(1)} priority`);
+          const dueText = formatDueDate(subj?.dueDate);
+          if (dueText) parts.push(dueText);
+          if (parts.length > 0) subtitle = `<div class="block-subtitle">${escapeAttr(parts.join(' · '))}</div>`;
+
+          if (e.id) {
+            lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${e.locked ? '🔒 Locked' : '🔓 Lock'}</button>`;
+          }
+        }
+
         return `
-          <div class="block ${e.type}">
+          <div class="block ${e.type}${e.locked ? ' locked' : ''}">
             <div class="time">${formatClock(e.start)} – ${formatClock(e.end)}</div>
-            <div class="info">${escapeAttr(e.name)} <span class="dur">(${durText})</span></div>
+            <div class="info">${escapeAttr(e.name)} <span class="dur">(${durText})</span>${subtitle}${lockControl}</div>
           </div>
         `;
       })
       .join('');
     output.innerHTML = `<div class="timeline">${html}</div>`;
   }
+
+  output.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.lock-btn');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const newLocked = btn.dataset.locked !== '1';
+    btn.disabled = true;
+    try {
+      await setScheduleItemLocked(id, newLocked);
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (item) item.locked = newLocked;
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      flashSaved();
+    } catch (err) {
+      console.error(err);
+      flashError('Could not update lock state — check your connection.');
+      btn.disabled = false;
+    }
+  });
 
   function renderNotes(notes) {
     notesEl.innerHTML = (notes || []).map((n) => `<div class="note">${escapeAttr(n)}</div>`).join('');
@@ -353,6 +417,19 @@ async function init(session) {
   function showScheduleError(msg) {
     output.innerHTML = `<div class="error">${escapeAttr(msg)}</div>`;
     notesEl.innerHTML = '';
+  }
+
+  const lockConflictEl = document.getElementById('lockConflictWarning');
+  const lockConflictBody = document.getElementById('lockConflictBody');
+
+  function renderLockConflicts(conflicts) {
+    if (!conflicts || conflicts.length === 0) {
+      lockConflictEl.hidden = true;
+      lockConflictBody.innerHTML = '';
+      return;
+    }
+    lockConflictBody.innerHTML = conflicts.map((c) => `<div class="item">${escapeAttr(c)}</div>`).join('');
+    lockConflictEl.hidden = false;
   }
 
   // ---------------- daily summary + insufficient-time warning ----------------
@@ -408,19 +485,18 @@ async function init(session) {
     dailySummaryCard.hidden = false;
   }
 
-  document.getElementById('generateBtn').addEventListener('click', async () => {
+  function updateRegenerateVisibility() {
+    regenerateBtn.hidden = currentScheduleItems.length === 0;
+  }
+
+  async function runGeneration(lockedBlocks) {
     const classesInput = Array.from(classList.children).map((row) => ({
       name: row.querySelector('.class-name').value.trim(),
       start: row.querySelector('.class-start').value,
       end: row.querySelector('.class-end').value,
     }));
 
-    const subjectsInput = Array.from(studyList.children).map((row) => ({
-      name: row.querySelector('.study-name').value.trim(),
-      minutes: parseInt(row.querySelector('.study-minutes').value, 10),
-      priority: row.querySelector('.study-priority').value,
-      dueDate: row.querySelector('.study-due').value || null,
-    }));
+    const subjectsInput = buildSubjectsInput();
 
     const mealsInput = [
       { name: 'Breakfast', duration: 30, on: meal.breakfast.on.checked, time: meal.breakfast.time.value },
@@ -443,16 +519,26 @@ async function init(session) {
         earliestStudyTime: toHHMM(schedule.earliest_study_time) || null,
         latestStudyTime: toHHMM(schedule.latest_study_time) || null,
       },
+      lockedBlocks,
     });
 
     if (result.error) {
       showScheduleError(result.error);
       renderDailySummary(null);
       renderShortfallWarning(null);
+      renderLockConflicts(null);
       return;
     }
 
-    renderScheduleEvents(result.events);
+    if (result.lockConflicts && result.lockConflicts.length > 0) {
+      // don't touch the saved schedule or currentScheduleItems — leave things exactly
+      // as they were and tell the user what needs to be unlocked/adjusted first
+      renderLockConflicts(result.lockConflicts);
+      return;
+    }
+    renderLockConflicts(null);
+
+    renderScheduleEvents(result.events, subjectsInput);
     renderNotes(result.notes);
 
     const progress = computeSubjectProgress(result.events, subjectsInput);
@@ -460,26 +546,51 @@ async function init(session) {
     renderShortfallWarning(progress);
 
     try {
-      await replaceScheduleItems(schedule.id, userId, result.events);
+      const savedRows = await saveGeneratedSchedule(schedule.id, userId, result.events);
+      // locked rows were left untouched in the database (same ids) — merge them
+      // back in alongside the freshly (re)inserted unlocked rows
+      const lockedRows = currentScheduleItems.filter((i) => i.type === 'study' && i.locked);
+      currentScheduleItems = [
+        ...lockedRows,
+        ...savedRows.map((r) => ({ id: r.id, type: r.item_type, name: r.name, start: r.start_minutes, end: r.end_minutes, locked: r.locked })),
+      ].sort((a, b) => a.start - b.start);
+      renderScheduleEvents(currentScheduleItems, subjectsInput);
+      updateRegenerateVisibility();
       flashSaved();
     } catch (e) {
       console.error(e);
       flashError('Schedule generated, but could not be saved — check your connection.');
     }
-  });
+  }
+
+  // Both buttons feed the currently-locked blocks in (never something to
+  // ignore) — on a first run currentScheduleItems is empty so this is just a
+  // plain generate; Generate clicked again later behaves the same as
+  // Regenerate rather than risking a stale locked row nothing accounts for.
+  function lockedBlocksFromCurrent() {
+    return currentScheduleItems
+      .filter((i) => i.type === 'study' && i.locked)
+      .map((i) => ({ name: i.name, start: i.start, end: i.end }));
+  }
+
+  document.getElementById('generateBtn').addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
+  regenerateBtn.addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
 
   // show the most recently generated schedule, if one exists, instead of the empty placeholder
   try {
     const savedItems = await listScheduleItems(schedule.id);
     if (savedItems.length > 0) {
-      const loadedEvents = savedItems.map((i) => ({ type: i.item_type, name: i.name, start: i.start_minutes, end: i.end_minutes }));
-      renderScheduleEvents(loadedEvents);
+      currentScheduleItems = savedItems
+        .map((i) => ({ id: i.id, type: i.item_type, name: i.name, start: i.start_minutes, end: i.end_minutes, locked: i.locked }))
+        .sort((a, b) => a.start - b.start);
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      updateRegenerateVisibility();
 
       const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
       if (!bounds.error) {
         const loadedSubjects = existingSubjects.map((s) => ({ name: s.name, minutes: s.minutes_requested }));
-        const progress = computeSubjectProgress(loadedEvents, loadedSubjects);
-        renderDailySummary(computeDailySummary(loadedEvents, bounds.dayStart, bounds.dayEnd), progress);
+        const progress = computeSubjectProgress(currentScheduleItems, loadedSubjects);
+        renderDailySummary(computeDailySummary(currentScheduleItems, bounds.dayStart, bounds.dayEnd), progress);
         renderShortfallWarning(progress);
       }
     }

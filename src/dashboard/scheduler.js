@@ -126,6 +126,60 @@ function placeEvent(desiredStart, duration, existingEvents, dayStart, dayEnd) {
   return { start, end };
 }
 
+// Formats a locked/fixed-event time range for a human-readable conflict message.
+function clockRange(start, end) {
+  return `${formatClock(start)} – ${formatClock(end)}`;
+}
+
+/**
+ * Checks locked study blocks against the day bounds, the study-time window,
+ * fixed events (classes/meals), and each other — WITHOUT moving or dropping
+ * anything. Any conflict here means regeneration must stop and ask the user
+ * to unlock or adjust the block, rather than silently relocating it.
+ * @returns {string[]} human-readable conflict messages, empty when all locked blocks are valid
+ */
+function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd) {
+  const conflicts = [];
+
+  for (const b of lockedEvents) {
+    if (b.start < dayStart || b.end > dayEnd) {
+      conflicts.push(
+        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your wake-up/bedtime window. Unlock or adjust the block before regenerating.`
+      );
+      continue; // outside the day entirely — skip the narrower window/overlap checks for this one
+    }
+    if (b.start < studyWindowStart || b.end > studyWindowEnd) {
+      conflicts.push(
+        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your earliest/latest study time window. Unlock or adjust the block before regenerating.`
+      );
+    }
+  }
+
+  for (const b of lockedEvents) {
+    for (const f of fixedEvents) {
+      if (b.start < f.end && b.end > f.start) {
+        conflicts.push(
+          `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that time now conflicts with ${f.type} "${f.name}". Unlock or adjust the block before regenerating.`
+        );
+      }
+    }
+  }
+
+  for (let i = 0; i < lockedEvents.length; i++) {
+    for (let j = i + 1; j < lockedEvents.length; j++) {
+      const a = lockedEvents[i];
+      const b = lockedEvents[j];
+      if (a.start < b.end && a.end > b.start) {
+        conflicts.push(
+          `"${a.name}" (${clockRange(a.start, a.end)}) and "${b.name}" (${clockRange(b.start, b.end)}) are both locked and overlap each other. Unlock one of them before regenerating.`
+        );
+      }
+    }
+  }
+
+  return conflicts;
+}
+
 /**
  * @param {object} input
  * @param {string} input.wakeTime  "HH:MM"
@@ -134,9 +188,10 @@ function placeEvent(desiredStart, duration, existingEvents, dayStart, dayEnd) {
  * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
  * @param {{name:string, minutes:number, priority?:'low'|'medium'|'high', dueDate?:string|null}[]} input.subjects
  * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number, preferredPeriod?:'none'|'morning'|'afternoon'|'evening', earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
- * @returns {{ events: {type:string,name:string,start:number,end:number}[], notes: string[], error?: string }}
+ * @param {{name:string, start:number, end:number}[]} [input.lockedBlocks] previously-locked study blocks (absolute minutes, same space as event start/end) to keep fixed during regeneration
+ * @returns {{ events: {type:string,name:string,start:number,end:number,locked?:boolean}[], notes: string[], error?: string, lockConflicts?: string[] }}
  */
-export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects, prefs }) {
+export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects, prefs, lockedBlocks }) {
   const notes = [];
   const {
     sessionCap,
@@ -169,7 +224,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   const bounds = resolveDayBounds(wakeTime, sleepTime);
   if (bounds.error) {
-    return { events: [], notes: [], error: bounds.error };
+    return { events: [], notes: [], error: bounds.error, lockConflicts: [] };
   }
   const { dayStart, dayEnd } = bounds;
 
@@ -219,21 +274,41 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   fixedEvents.sort((a, b) => a.start - b.start);
 
-  // ----- free gaps between wake and sleep -----
+  // ----- locked study blocks (kept exactly where they are; never moved) -----
+  const lockedEvents = (lockedBlocks || [])
+    .filter((b) => b.name && Number.isFinite(b.start) && Number.isFinite(b.end) && b.end > b.start)
+    .map((b) => ({ type: 'study', name: b.name, start: b.start, end: b.end, locked: true }))
+    .sort((a, b) => a.start - b.start);
+
+  const lockConflicts = validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd);
+  if (lockConflicts.length > 0) {
+    // a locked block is no longer valid (settings changed underneath it) — stop rather
+    // than silently move it or let something else overlap it; caller must ask the user
+    // to unlock or adjust it first
+    return { events: [], notes: [], lockConflicts };
+  }
+
+  // ----- free gaps between wake and sleep (locked blocks are occupied too) -----
+  const occupiedForGaps = [...fixedEvents, ...lockedEvents].sort((a, b) => a.start - b.start);
   const gaps = [];
   let cursor = dayStart;
-  fixedEvents.forEach((e) => {
+  occupiedForGaps.forEach((e) => {
     if (e.start > cursor) gaps.push({ start: cursor, end: e.start });
     cursor = Math.max(cursor, e.end);
   });
   if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
 
   // ----- study subjects -----
+  const lockedMinutesByName = new Map();
+  lockedEvents.forEach((b) => lockedMinutesByName.set(b.name, (lockedMinutesByName.get(b.name) || 0) + (b.end - b.start)));
+
   const subjectQueue = (subjects || [])
     .filter((s) => s.name && s.minutes > 0)
     .map((s) => ({
       name: s.name,
-      remaining: s.minutes,
+      // minutes already covered by a locked block count toward the request —
+      // only the remainder still needs to be found room for
+      remaining: Math.max(0, s.minutes - (lockedMinutesByName.get(s.name) || 0)),
       priority: PRIORITY_RANK[s.priority] ? s.priority : 'medium',
       dueDate: s.dueDate || null,
     }));
@@ -350,6 +425,6 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     notes.push(`Not enough free time to fit everything. Couldn't schedule: ${list}.`);
   }
 
-  const events = [...fixedEvents, ...studyEvents].sort((a, b) => a.start - b.start);
-  return { events, notes, dayStart, dayEnd };
+  const events = [...fixedEvents, ...lockedEvents, ...studyEvents].sort((a, b) => a.start - b.start);
+  return { events, notes, dayStart, dayEnd, lockConflicts: [] };
 }

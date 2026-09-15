@@ -121,10 +121,16 @@
       </div>
 
       <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
+      <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden>Regenerate Schedule</button>
       <p class="hint" id="saveStatus" style="text-align:center;"></p>
     </div>
 
     <div>
+      <div class="card warning-card" id="lockConflictWarning" hidden>
+        <h2>Locked block conflict</h2>
+        <div id="lockConflictBody"></div>
+      </div>
+
       <div class="card">
         <h2>Your Schedule</h2>
         <div class="legend">
