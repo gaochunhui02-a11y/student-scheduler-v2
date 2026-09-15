@@ -4,12 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Student Scheduler</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="theme-color" content="#4f56d3">
 <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
 <p class="loading-text">Loading…</p>
 <script type="module">
   import { supabase } from '/src/lib/supabaseClient.js';
+  import { registerServiceWorker } from '/src/shared/pwa.js';
+  registerServiceWorker();
   const { data } = await supabase.auth.getSession();
   window.location.replace(data.session ? '/dashboard.html' : '/login.html');
 </script>

@@ -1,4 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
+import { registerServiceWorker } from '../shared/pwa.js';
+
+registerServiceWorker();
 
 const form = document.getElementById('forgotForm');
 const errorEl = document.getElementById('errorMsg');

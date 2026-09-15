@@ -1633,6 +1633,27 @@ button { font-family: inherit; }
 .analytics-productivity-result { font-size: 15px; font-weight: 650; color: var(--text); margin: 0; }
 
 /* ==========================================================================
+   Notifications + PWA (Phase 11). The Notification-settings card itself
+   reuses .card/.meal-row/.hint/.btn-secondary as-is — no new rules needed
+   for it. Just the offline banner and the install-button state here.
+   ========================================================================== */
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.offline-banner::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.offline-banner.offline-banner-online { background: var(--accent-soft); color: var(--success); border-color: var(--accent-soft-strong); }
+
+/* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
    ========================================================================== */
 @media (max-width: 860px) {

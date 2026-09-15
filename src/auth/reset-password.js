@@ -1,4 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
+import { registerServiceWorker } from '../shared/pwa.js';
+
+registerServiceWorker();
 
 const subtitleEl = document.getElementById('subtitleText');
 const errorEl = document.getElementById('errorMsg');

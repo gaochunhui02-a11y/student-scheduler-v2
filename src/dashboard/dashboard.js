@@ -45,6 +45,14 @@ import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
 import { initAdvisorSection } from '../advisor/advisor.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
+import { initNotificationsSection } from '../notifications/notifications.js';
+import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
+
+// ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
+// Registering the service worker and watching online/offline doesn't need
+// a session — same "before auth" timing as theme/language above. Nothing
+// here touches Supabase or AI requests; see public/sw.js's fetch handler.
+registerServiceWorker();
 
 // ---------------- theme (applied immediately, before auth, to avoid a flash) ----------------
 // Purely presentational — adds/removes a data-theme attribute on <html> and
@@ -76,6 +84,69 @@ try {
 // Purely presentational — sets textContent on [data-i18n] static labels only.
 // Never touches user-created content, dynamic JS-rendered strings, ids, or classes.
 applyTranslations();
+
+// ---------------- offline indicator + install prompt (Phase 11) ----------------
+// Also purely presentational, also doesn't need a session — an offline
+// banner and an "Install App" button are useful even before login finishes.
+const offlineBannerEl = document.getElementById('offlineBanner');
+const offlineBannerTextEl = offlineBannerEl ? offlineBannerEl.querySelector('span') : null;
+let backOnlineTimeout = null;
+initOfflineIndicator({
+  onOffline: () => {
+    clearTimeout(backOnlineTimeout);
+    if (offlineBannerEl) {
+      offlineBannerEl.classList.remove('offline-banner-online');
+      offlineBannerEl.hidden = false;
+    }
+    if (offlineBannerTextEl) {
+      offlineBannerTextEl.dataset.i18n = 'notifications.offline';
+      offlineBannerTextEl.textContent = t('notifications.offline');
+    }
+  },
+  onOnline: () => {
+    // Only flash "Back Online" if the banner was actually showing "Offline"
+    // — this callback also fires once on page load, when there was never
+    // anything to announce.
+    if (!offlineBannerEl || offlineBannerEl.hidden) return;
+    offlineBannerEl.classList.add('offline-banner-online');
+    if (offlineBannerTextEl) {
+      offlineBannerTextEl.dataset.i18n = 'notifications.backOnline';
+      offlineBannerTextEl.textContent = t('notifications.backOnline');
+    }
+    backOnlineTimeout = setTimeout(() => {
+      offlineBannerEl.hidden = true;
+    }, 3000);
+  },
+});
+
+const installAppBtn = document.getElementById('installAppBtn');
+const installPrompt = initInstallPrompt({
+  onAvailable: () => {
+    if (installAppBtn) installAppBtn.hidden = false;
+  },
+  onInstalled: () => {
+    if (installAppBtn) installAppBtn.hidden = true;
+    // Briefly reuse the same banner for a one-off confirmation — it's a
+    // generic small status line, not exclusively about connectivity.
+    if (offlineBannerEl) {
+      clearTimeout(backOnlineTimeout);
+      offlineBannerEl.classList.add('offline-banner-online');
+      offlineBannerEl.hidden = false;
+      if (offlineBannerTextEl) {
+        offlineBannerTextEl.dataset.i18n = 'notifications.appInstalled';
+        offlineBannerTextEl.textContent = t('notifications.appInstalled');
+      }
+      backOnlineTimeout = setTimeout(() => {
+        offlineBannerEl.hidden = true;
+      }, 3000);
+    }
+  },
+});
+if (installAppBtn) {
+  installAppBtn.addEventListener('click', async () => {
+    await installPrompt.prompt();
+  });
+}
 
 const session = await requireAuth();
 if (session) {
@@ -270,6 +341,21 @@ async function init(session) {
     },
   };
   const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
+
+  // ---------------- Notifications -> existing schedule + due dates (Phase 11) ----------------
+  // notifications.js never imports data.js directly — it only calls these
+  // host functions. Study reminders read currentScheduleItems (already in
+  // memory below, no extra fetch); deadline reminders reuse the exact same
+  // listUpcomingStudySubjects the Phase 10 Dashboard already uses. Nothing
+  // here changes the schedule or the scheduling algorithm — reminders are
+  // read-only.
+  const notificationsHostApi = {
+    getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
+    getCurrentScheduleDate: () => (schedule ? schedule.for_date : null),
+    getScheduleItemsForReminders: () => currentScheduleItems,
+    getUpcomingSubjectsForReminders: () => listUpcomingStudySubjects(userId, addDaysToDateStr(tomorrowDateStr(), -1)),
+  };
+  initNotificationsSection(userId, notificationsHostApi);
 
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => {

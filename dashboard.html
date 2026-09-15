@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — Student Scheduler</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="theme-color" content="#4f56d3">
 <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
@@ -33,6 +37,9 @@
           <option value="ja">日本語</option>
         </select>
       </div>
+      <button type="button" class="theme-toggle" id="installAppBtn" hidden>
+        <span data-i18n="notifications.installApp">Install App</span>
+      </button>
       <button type="button" class="theme-toggle" id="themeToggle">
         <span id="themeToggleLabel">Dark mode</span>
       </button>
@@ -54,6 +61,10 @@
           <button class="btn-secondary" id="logoutBtn" data-i18n="header.logout">Log out</button>
         </div>
       </header>
+
+      <div class="offline-banner" id="offlineBanner" hidden>
+        <span data-i18n="notifications.offline">Offline</span>
+      </div>
 
       <div id="loadError" class="msg error"></div>
 
@@ -161,6 +172,33 @@
           </div>
         </div>
         <p class="hint" data-i18n="prefs.hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
+      </div>
+
+      <div class="card" id="notificationSettingsCard">
+        <h2 data-i18n="notifications.title">Notifications</h2>
+        <p class="hint" data-i18n="notifications.explain">Get a reminder shortly before a study session starts, or when a task is due today or tomorrow.</p>
+        <p class="hint" id="notificationPermissionHint" data-i18n="notifications.permissionDefault">Notifications are not enabled yet.</p>
+        <button type="button" class="btn-secondary" id="enableNotificationsBtn" style="width:100%;" data-i18n="notifications.enable">Enable Notifications</button>
+
+        <div class="row-2" style="margin-top:14px;">
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="studyReminderToggle">
+            <label for="studyReminderToggle" data-i18n="notifications.studyReminders">Study Reminders</label>
+          </div>
+          <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <input type="checkbox" id="deadlineReminderToggle">
+            <label for="deadlineReminderToggle" data-i18n="notifications.deadlineReminders">Deadline Reminders</label>
+          </div>
+        </div>
+
+        <label for="reminderLeadSelect" data-i18n="notifications.remindMeBefore">Remind me before</label>
+        <select id="reminderLeadSelect">
+          <option value="5" data-i18n="notifications.lead5">5 minutes before</option>
+          <option value="10" data-i18n="notifications.lead10">10 minutes before</option>
+          <option value="15" data-i18n="notifications.lead15">15 minutes before</option>
+          <option value="30" data-i18n="notifications.lead30">30 minutes before</option>
+        </select>
+        <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
       </div>
 
       <div class="card" id="copyToAnotherDayCard">

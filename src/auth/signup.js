@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { redirectIfLoggedIn } from '../shared/session.js';
+import { registerServiceWorker } from '../shared/pwa.js';
 
+registerServiceWorker();
 redirectIfLoggedIn();
 
 const form = document.getElementById('signupForm');
