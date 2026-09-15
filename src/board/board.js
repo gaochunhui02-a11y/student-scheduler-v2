@@ -14,9 +14,15 @@
 // system is created here.
 //
 // Native Pointer Events only (pointerdown/pointermove/pointerup) — no drag
-// or canvas library. That's enough for free-form dragging on a large,
-// scrollable canvas, and keeps this feature from pulling in a dependency
-// just for itself.
+// or canvas library. That's enough for free-form dragging, click-drag
+// panning, and wheel/pinch zooming on a large, scrollable canvas, and keeps
+// this feature from pulling in a dependency just for itself (Phase 6).
+//
+// Collapse/expand state (collapsedNodeIds) is intentionally view-only and
+// never persisted or sent to Supabase — it resets on reload, per the Phase
+// 6 brief. Search is read-only. Auto Arrange only ever writes
+// x_position/y_position via the existing updateNode — it never touches an
+// edge or a relationship.
 
 import { t } from '../shared/i18n.js';
 import {
@@ -36,6 +42,15 @@ import {
   isNodeConverted,
   canConvertNode,
   linkNodeToStudyTask,
+  clampZoom,
+  computeNodesBoundingBox,
+  computeFitView,
+  computeCenterOnNodeScroll,
+  filterNodesByQuery,
+  duplicateNodeFields,
+  hasChildren,
+  computeHiddenNodeIds,
+  computeAutoLayout,
 } from './boardModel.js';
 import {
   listBoards,
@@ -49,9 +64,9 @@ import {
   deleteEdge,
 } from './boardData.js';
 
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
+const SEARCH_RESULTS_LIMIT = 8;
+const HIGHLIGHT_DURATION_MS = 1600;
 
 // Nominal card size used only for edge-anchor math (see computeEdgeGeometry
 // in boardModel.js) — matches .board-node's CSS width; height is an
@@ -77,6 +92,7 @@ export function initBoardSection(userId, hostApi = {}) {
   const zoomResetBtn = document.getElementById('boardZoomResetBtn');
   const zoomLabel = document.getElementById('boardZoomLabel');
   const workspace = document.getElementById('boardWorkspace');
+  const canvasWrap = document.getElementById('boardCanvasWrap');
   const canvas = document.getElementById('boardCanvas');
   const emptyState = document.getElementById('boardEmptyState');
   const noBoardState = document.getElementById('boardNoBoardState');
@@ -84,6 +100,10 @@ export function initBoardSection(userId, hostApi = {}) {
   const edgesLayer = document.getElementById('boardEdgesLayer');
   const edgeStatus = document.getElementById('boardEdgeStatus');
   const edgeDeleteBtn = document.getElementById('boardEdgeDeleteBtn');
+  const fitBtn = document.getElementById('boardFitBtn');
+  const autoArrangeBtn = document.getElementById('boardAutoArrangeBtn');
+  const searchInput = document.getElementById('boardSearchInput');
+  const searchResults = document.getElementById('boardSearchResults');
 
   let currentBoard = null;
   let nodes = [];
@@ -94,6 +114,9 @@ export function initBoardSection(userId, hostApi = {}) {
   let selectedEdgeId = null;
   let connectingFromNodeId = null;
   let edgeStatusTimeout = null;
+  let panning = false;
+  let collapsedNodeIds = new Set(); // view-only state, never persisted — see collapse/expand below
+  let highlightTimeout = null;
 
   // A single reusable dashed preview line shown while dragging from a
   // node's connection handle — created once, toggled hidden/visible rather
@@ -344,14 +367,217 @@ export function initBoardSection(userId, hostApi = {}) {
     if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
   }
 
+  // Zooms while keeping the canvas-local point under (clientX, clientY)
+  // fixed on screen — the standard "zoom toward the cursor" feel. Falls
+  // back to a plain zoom (no re-centering) when no pointer position is
+  // given, e.g. the toolbar +/- buttons.
+  function setZoomAtPoint(next, clientX, clientY) {
+    const nextZoom = clampZoom(next);
+    if (nextZoom === zoom) return;
+    if (typeof clientX === 'number' && typeof clientY === 'number' && canvasWrap) {
+      const wrapRect = canvasWrap.getBoundingClientRect();
+      const viewportX = clientX - wrapRect.left;
+      const viewportY = clientY - wrapRect.top;
+      const canvasX = (canvasWrap.scrollLeft + viewportX) / zoom;
+      const canvasY = (canvasWrap.scrollTop + viewportY) / zoom;
+      zoom = nextZoom;
+      applyZoom();
+      canvasWrap.scrollLeft = canvasX * zoom - viewportX;
+      canvasWrap.scrollTop = canvasY * zoom - viewportY;
+    } else {
+      zoom = nextZoom;
+      applyZoom();
+    }
+  }
+
   function setZoom(next) {
-    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 100) / 100));
-    applyZoom();
+    setZoomAtPoint(next, null, null);
   }
 
   if (zoomInBtn) zoomInBtn.addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
   if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
   if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => setZoom(1));
+
+  // Mouse-wheel / trackpad zoom: only when the browser reports a "zoom"
+  // gesture (Ctrl/Cmd held, which is also what a trackpad pinch dispatches
+  // as on every major browser) — a plain two-finger scroll or mouse wheel
+  // is left alone so it keeps doing the canvas-wrap's native scroll (pan),
+  // which already works via the existing overflow:auto (see main.css).
+  if (canvasWrap) {
+    canvasWrap.addEventListener(
+      'wheel',
+      (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        setZoomAtPoint(zoom + delta, e.clientX, e.clientY);
+      },
+      { passive: false }
+    );
+  }
+
+  // Click-and-drag panning on empty canvas space. Guarded to e.target ===
+  // canvas exactly (not a node, not an edge, not the connect handle — each
+  // already stops its own pointerdown from bubbling here), the same
+  // precise-target technique already used below to deselect an edge on an
+  // empty-canvas click.
+  if (canvas && canvasWrap) {
+    let panPointerId = null;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panScrollLeft = 0;
+    let panScrollTop = 0;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.target !== canvas) return;
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      panning = true;
+      panPointerId = e.pointerId;
+      canvas.classList.add('panning');
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      panScrollLeft = canvasWrap.scrollLeft;
+      panScrollTop = canvasWrap.scrollTop;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!panning || e.pointerId !== panPointerId) return;
+      canvasWrap.scrollLeft = panScrollLeft - (e.clientX - panStartX);
+      canvasWrap.scrollTop = panScrollTop - (e.clientY - panStartY);
+    });
+    function endPan(e) {
+      if (!panning || e.pointerId !== panPointerId) return;
+      panning = false;
+      panPointerId = null;
+      canvas.classList.remove('panning');
+    }
+    canvas.addEventListener('pointerup', endPan);
+    canvas.addEventListener('pointercancel', endPan);
+  }
+
+  // ---------------- fit to board / center on node ----------------
+
+  function fitToBoard() {
+    if (!canvasWrap) return;
+    const bbox = computeNodesBoundingBox(nodes, NODE_WIDTH, NODE_HEIGHT);
+    if (!bbox) return; // nothing to fit
+    const { zoom: fitZoom, scrollLeft, scrollTop } = computeFitView({
+      bbox,
+      viewportWidth: canvasWrap.clientWidth,
+      viewportHeight: canvasWrap.clientHeight,
+    });
+    zoom = fitZoom;
+    applyZoom();
+    canvasWrap.scrollLeft = scrollLeft;
+    canvasWrap.scrollTop = scrollTop;
+  }
+
+  if (fitBtn) fitBtn.addEventListener('click', fitToBoard);
+
+  function centerOnNode(node) {
+    if (!canvasWrap || !node) return;
+    const { scrollLeft, scrollTop } = computeCenterOnNodeScroll({
+      node,
+      nodeWidth: NODE_WIDTH,
+      nodeHeight: NODE_HEIGHT,
+      viewportWidth: canvasWrap.clientWidth,
+      viewportHeight: canvasWrap.clientHeight,
+      zoom,
+    });
+    canvasWrap.scrollLeft = scrollLeft;
+    canvasWrap.scrollTop = scrollTop;
+  }
+
+  function highlightNode(nodeId) {
+    clearTimeout(highlightTimeout);
+    canvas.querySelectorAll('.board-node.search-highlight').forEach((el) => el.classList.remove('search-highlight'));
+    const el = canvas.querySelector(`.board-node[data-node-id="${nodeId}"]`);
+    if (!el) return;
+    el.classList.add('search-highlight');
+    highlightTimeout = setTimeout(() => el.classList.remove('search-highlight'), HIGHLIGHT_DURATION_MS);
+  }
+
+  // ---------------- search (read-only — never modifies a node) ----------------
+
+  function closeSearchResults() {
+    if (searchResults) {
+      searchResults.hidden = true;
+      searchResults.innerHTML = '';
+    }
+  }
+
+  function renderSearchResults(query) {
+    if (!searchResults) return;
+    const matches = filterNodesByQuery(nodes, query).slice(0, SEARCH_RESULTS_LIMIT);
+    searchResults.innerHTML = '';
+    if (!query.trim()) {
+      closeSearchResults();
+      return;
+    }
+    if (matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'board-search-empty';
+      empty.dataset.i18n = 'board.noMatchingNodes';
+      empty.textContent = t('board.noMatchingNodes');
+      searchResults.appendChild(empty);
+      searchResults.hidden = false;
+      return;
+    }
+    matches.forEach((node) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'board-search-result';
+      item.textContent = node.title || t('board.nodeTitlePlaceholder');
+      item.addEventListener('click', () => {
+        centerOnNode(node);
+        highlightNode(node.id);
+        closeSearchResults();
+        if (searchInput) searchInput.value = '';
+      });
+      searchResults.appendChild(item);
+    });
+    searchResults.hidden = false;
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => renderSearchResults(searchInput.value));
+    searchInput.addEventListener('focus', () => {
+      if (searchInput.value.trim()) renderSearchResults(searchInput.value);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        closeSearchResults();
+        searchInput.blur();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) closeSearchResults();
+    });
+  }
+
+  // ---------------- auto arrange ----------------
+
+  async function autoArrange() {
+    if (nodes.length === 0) return;
+    const positions = computeAutoLayout(nodes, edges);
+    const updates = [];
+    nodes = nodes.map((node) => {
+      const pos = positions[node.id];
+      if (!pos) return node;
+      updates.push(updateNode(userId, node.id, { x: pos.x_position, y: pos.y_position }));
+      return { ...node, x_position: pos.x_position, y_position: pos.y_position };
+    });
+    renderNodes();
+    renderEdges();
+    try {
+      await Promise.all(updates);
+    } catch (err) {
+      console.error('Could not save arranged positions:', err);
+    }
+  }
+
+  if (autoArrangeBtn) autoArrangeBtn.addEventListener('click', autoArrange);
 
   // ---------------- edges (Phase 4) ----------------
 
@@ -396,10 +622,15 @@ export function initBoardSection(userId, hostApi = {}) {
     if (!edgesLayer) return;
     edgesLayer.querySelectorAll('.board-edge').forEach((g) => g.remove());
 
+    const hiddenNodeIds = computeHiddenNodeIds(edges, Array.from(collapsedNodeIds));
+
     edges.forEach((edge) => {
       const source = nodes.find((n) => n.id === edge.source_node_id);
       const target = nodes.find((n) => n.id === edge.target_node_id);
       if (!source || !target) return; // stale local edge referencing an already-removed node
+      // A collapsed branch hides its descendant nodes AND every edge
+      // touching one — view-only, nothing is deleted (see collapsedNodeIds).
+      if (hiddenNodeIds.has(source.id) || hiddenNodeIds.has(target.id)) return;
 
       const { x1, y1, x2, y2 } = computeEdgeGeometry(source, target, NODE_WIDTH, NODE_HEIGHT);
 
@@ -604,6 +835,63 @@ export function initBoardSection(userId, hostApi = {}) {
     cardEl.addEventListener('pointercancel', endDrag);
   }
 
+  // Small footer row: Duplicate (always), plus Collapse/Expand when the
+  // node has at least one outgoing edge (i.e. is a parent of something).
+  function buildToolsRow(node) {
+    const row = document.createElement('div');
+    row.className = 'board-node-tools-row';
+
+    const duplicateBtn = document.createElement('button');
+    duplicateBtn.type = 'button';
+    duplicateBtn.className = 'board-node-link-btn';
+    duplicateBtn.dataset.i18n = 'board.duplicate';
+    duplicateBtn.textContent = t('board.duplicate');
+    duplicateBtn.addEventListener('click', async () => {
+      if (!currentBoard) return;
+      // duplicateNodeFields deliberately drops linked_study_subject_id (a
+      // duplicate is a fresh, unconverted node) and copies no edges —
+      // nothing here reads or writes `edges`.
+      const fields = duplicateNodeFields(node);
+      try {
+        const created = await createNode(userId, currentBoard.id, {
+          nodeType: fields.node_type,
+          title: fields.title,
+          x: fields.x_position,
+          y: fields.y_position,
+          color: fields.color,
+        });
+        nodes.push(created);
+        renderNodes();
+      } catch (err) {
+        console.error('Could not duplicate node:', err);
+      }
+    });
+    stopDragStart(duplicateBtn);
+    row.appendChild(duplicateBtn);
+
+    if (hasChildren(edges, node.id)) {
+      const collapsed = collapsedNodeIds.has(node.id);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'board-node-link-btn';
+      const key = collapsed ? 'board.expand' : 'board.collapse';
+      toggleBtn.dataset.i18n = key;
+      toggleBtn.textContent = t(key);
+      toggleBtn.addEventListener('click', () => {
+        // View-only state — never persisted, never deletes anything; just
+        // changes what renderNodes()/renderEdges() choose to show.
+        if (collapsedNodeIds.has(node.id)) collapsedNodeIds.delete(node.id);
+        else collapsedNodeIds.add(node.id);
+        renderNodes();
+        renderEdges();
+      });
+      stopDragStart(toggleBtn);
+      row.appendChild(toggleBtn);
+    }
+
+    return row;
+  }
+
   function buildNodeEl(node) {
     const el = document.createElement('div');
     el.className = 'board-node';
@@ -654,6 +942,7 @@ export function initBoardSection(userId, hostApi = {}) {
         // this mirrors it in local state so the lines disappear from the
         // canvas immediately, not just after the next reload.
         edges = removeEdgesForNode(edges, node.id);
+        collapsedNodeIds.delete(node.id); // housekeeping — a deleted node can't stay "collapsed"
         hideEdgeDeleteButton();
         renderNodes();
         renderEdges();
@@ -685,6 +974,7 @@ export function initBoardSection(userId, hostApi = {}) {
     el.appendChild(head);
     el.appendChild(textarea);
     el.appendChild(buildLinkRow(node));
+    el.appendChild(buildToolsRow(node));
 
     const handle = document.createElement('div');
     handle.className = 'board-node-handle';
@@ -702,7 +992,10 @@ export function initBoardSection(userId, hostApi = {}) {
 
   function renderNodes() {
     canvas.querySelectorAll('.board-node').forEach((el) => el.remove());
-    nodes.forEach((node) => canvas.appendChild(buildNodeEl(node)));
+    // Collapsing a branch hides its descendants (view-only — see
+    // collapsedNodeIds); the collapsed node itself stays visible.
+    const hiddenNodeIds = computeHiddenNodeIds(edges, Array.from(collapsedNodeIds));
+    nodes.filter((node) => !hiddenNodeIds.has(node.id)).forEach((node) => canvas.appendChild(buildNodeEl(node)));
     if (emptyState) emptyState.hidden = nodes.length > 0;
   }
 
@@ -742,6 +1035,7 @@ export function initBoardSection(userId, hostApi = {}) {
         currentBoard = await createBoard(userId, 'Untitled board');
         nodes = [];
         edges = [];
+        collapsedNodeIds = new Set();
         hideEdgeDeleteButton();
         if (titleInput) titleInput.value = currentBoard.title;
         showWorkspaceState();

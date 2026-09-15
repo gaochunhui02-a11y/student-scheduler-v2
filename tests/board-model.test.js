@@ -35,6 +35,18 @@ import {
   canConvertNode,
   linkNodeToStudyTask,
   unlinkNodeFromStudyTask,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  clampZoom,
+  computeNodesBoundingBox,
+  computeFitView,
+  computeCenterOnNodeScroll,
+  filterNodesByQuery,
+  duplicateNodeFields,
+  hasChildren,
+  getDescendantNodeIds,
+  computeHiddenNodeIds,
+  computeAutoLayout,
 } from '../src/board/boardModel.js';
 
 let totalFailures = 0;
@@ -519,6 +531,294 @@ scenario('M. Convert node to study task — linking, duplicate prevention, delet
     assert.equal(studyTasks.length, 1, 'the study task it was linked to still exists, untouched');
     assert.equal(studyTasks[0].id, 'study-1');
     assert.equal(studyTasks[0].name, 'Finish Python Assignment');
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('N. Zoom clamping (clampZoom)', () => {
+  check('a value inside the range passes through (rounded to the nearest 1%)', () => {
+    assert.equal(clampZoom(1.234), 1.23);
+  });
+  check('a value above the max is clamped to ZOOM_MAX', () => {
+    assert.equal(clampZoom(5), ZOOM_MAX);
+  });
+  check('a value below the min is clamped to ZOOM_MIN', () => {
+    assert.equal(clampZoom(0.01), ZOOM_MIN);
+  });
+  check('a non-numeric value falls back to 1x rather than NaN', () => {
+    assert.equal(clampZoom('abc'), 1);
+    assert.equal(clampZoom(undefined), 1);
+    assert.equal(clampZoom(NaN), 1);
+  });
+  check('custom min/max are respected', () => {
+    assert.equal(clampZoom(10, 0.25, 4), 4);
+    assert.equal(clampZoom(-1, 0.25, 4), 0.25);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('O. Pan/zoom coordinate conversion — bounding box, fit-to-board, center-on-node', () => {
+  const width = 200;
+  const height = 100;
+
+  check('computeNodesBoundingBox returns null for an empty board', () => {
+    assert.equal(computeNodesBoundingBox([], width, height), null);
+  });
+  check('computeNodesBoundingBox wraps every node card exactly', () => {
+    const nodes = [
+      { id: 'a', x_position: 0, y_position: 0 },
+      { id: 'b', x_position: 400, y_position: 300 },
+    ];
+    const bbox = computeNodesBoundingBox(nodes, width, height);
+    assert.deepEqual(bbox, { minX: 0, minY: 0, maxX: 600, maxY: 400 });
+  });
+  check('computeNodesBoundingBox handles a single node', () => {
+    const bbox = computeNodesBoundingBox([{ id: 'a', x_position: 50, y_position: 20 }], width, height);
+    assert.deepEqual(bbox, { minX: 50, minY: 20, maxX: 250, maxY: 120 });
+  });
+
+  check('computeFitView degrades to a safe default with no bbox/viewport', () => {
+    assert.deepEqual(computeFitView({ bbox: null, viewportWidth: 800, viewportHeight: 600 }), { zoom: 1, scrollLeft: 0, scrollTop: 0 });
+    assert.deepEqual(computeFitView({ bbox: { minX: 0, minY: 0, maxX: 100, maxY: 100 }, viewportWidth: 0, viewportHeight: 0 }), {
+      zoom: 1,
+      scrollLeft: 0,
+      scrollTop: 0,
+    });
+  });
+  check('computeFitView picks the more constraining axis and clamps to the zoom limits', () => {
+    // A very wide, short bbox in a roughly square viewport is width-constrained.
+    const wide = computeFitView({ bbox: { minX: 0, minY: 0, maxX: 2000, maxY: 100 }, viewportWidth: 1000, viewportHeight: 1000 });
+    assert.ok(wide.zoom < 1, 'must shrink to fit the very wide box');
+    assert.ok(wide.zoom >= ZOOM_MIN && wide.zoom <= ZOOM_MAX);
+
+    // A tiny bbox in a huge viewport would compute a huge zoom — must clamp.
+    const tiny = computeFitView({ bbox: { minX: 0, minY: 0, maxX: 10, maxY: 10 }, viewportWidth: 2000, viewportHeight: 2000 });
+    assert.equal(tiny.zoom, ZOOM_MAX);
+  });
+  check('computeFitView centers the bbox in the viewport (never a negative scroll)', () => {
+    const view = computeFitView({ bbox: { minX: 100, minY: 100, maxX: 300, maxY: 300 }, viewportWidth: 1000, viewportHeight: 1000 });
+    assert.ok(view.scrollLeft >= 0 && view.scrollTop >= 0);
+  });
+
+  check('computeCenterOnNodeScroll centers the node without changing zoom', () => {
+    const node = { x_position: 500, y_position: 500 };
+    const result = computeCenterOnNodeScroll({ node, nodeWidth: width, nodeHeight: height, viewportWidth: 800, viewportHeight: 600, zoom: 1 });
+    // node center = (600, 550); centered scroll = center*zoom - viewport/2
+    assert.deepEqual(result, { scrollLeft: 600 - 400, scrollTop: 550 - 300 });
+  });
+  check('computeCenterOnNodeScroll accounts for the current zoom level', () => {
+    const node = { x_position: 100, y_position: 100 };
+    const result = computeCenterOnNodeScroll({ node, nodeWidth: width, nodeHeight: height, viewportWidth: 400, viewportHeight: 400, zoom: 2 });
+    // node center = (200, 150); at 2x, rendered position = (400, 300); scroll = rendered - viewport/2
+    assert.deepEqual(result, { scrollLeft: 400 - 200, scrollTop: 300 - 200 });
+  });
+  check('computeCenterOnNodeScroll never returns a negative scroll (near the origin)', () => {
+    const node = { x_position: 0, y_position: 0 };
+    const result = computeCenterOnNodeScroll({ node, nodeWidth: width, nodeHeight: height, viewportWidth: 800, viewportHeight: 600, zoom: 1 });
+    assert.ok(result.scrollLeft >= 0 && result.scrollTop >= 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('P. Search nodes (filterNodesByQuery) — read-only', () => {
+  const nodes = [
+    { id: 'a', title: 'Finish Python Assignment' },
+    { id: 'b', title: 'Read chapter 3' },
+    { id: 'c', title: 'Practice problems' },
+    { id: 'd', title: '' },
+  ];
+
+  check('matches are case-insensitive substring matches on the title', () => {
+    const matches = filterNodesByQuery(nodes, 'python');
+    assert.deepEqual(matches.map((n) => n.id), ['a']);
+  });
+  check('a broader query can match multiple nodes', () => {
+    const matches = filterNodesByQuery(nodes, 'r'); // "Read chapteR" and "PRactice pRoblems", not "Finish Python Assignment"
+    assert.deepEqual(matches.map((n) => n.id).sort(), ['b', 'c']);
+  });
+  check('an empty/blank query returns no results (not every node)', () => {
+    assert.deepEqual(filterNodesByQuery(nodes, ''), []);
+    assert.deepEqual(filterNodesByQuery(nodes, '   '), []);
+  });
+  check('a query matching nothing returns an empty array', () => {
+    assert.deepEqual(filterNodesByQuery(nodes, 'zzz-no-match'), []);
+  });
+  check('search never mutates any node in the list', () => {
+    const before = JSON.stringify(nodes);
+    filterNodesByQuery(nodes, 'python');
+    assert.equal(JSON.stringify(nodes), before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('Q. Duplicate node defaults', () => {
+  const original = {
+    id: 'n1',
+    node_type: 'subject',
+    title: 'Physics',
+    x_position: 100,
+    y_position: 60,
+    color: '#ffcc00',
+    linked_study_subject_id: 'study-1',
+  };
+
+  check('the copy preserves title, type, and color', () => {
+    const copy = duplicateNodeFields(original);
+    assert.equal(copy.title, 'Physics');
+    assert.equal(copy.node_type, 'subject');
+    assert.equal(copy.color, '#ffcc00');
+  });
+  check('the copy is offset from the original, never placed exactly on top of it', () => {
+    const copy = duplicateNodeFields(original, 24);
+    assert.equal(copy.x_position, 124);
+    assert.equal(copy.y_position, 84);
+  });
+  check('the copy never carries the linked study-task relationship', () => {
+    const copy = duplicateNodeFields(original);
+    assert.equal('linked_study_subject_id' in copy, false);
+  });
+  check('an invalid node_type falls back to "note" rather than saving garbage', () => {
+    const copy = duplicateNodeFields({ ...original, node_type: 'bogus' });
+    assert.equal(copy.node_type, 'note');
+  });
+  check('a missing/invalid position defaults to 0 before the offset is applied', () => {
+    const copy = duplicateNodeFields({ id: 'n2', node_type: 'note', title: '' }, 10);
+    assert.equal(copy.x_position, 10);
+    assert.equal(copy.y_position, 10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('R. Descendant discovery for collapse/expand', () => {
+  // Midterm Prep -> Calculus -> Chapter 4
+  //              -> CS       -> Lab
+  const edges = [
+    { source_node_id: 'midterm', target_node_id: 'calc' },
+    { source_node_id: 'calc', target_node_id: 'ch4' },
+    { source_node_id: 'midterm', target_node_id: 'cs' },
+    { source_node_id: 'cs', target_node_id: 'lab' },
+  ];
+
+  check('hasChildren is true for any node with at least one outgoing edge', () => {
+    assert.equal(hasChildren(edges, 'midterm'), true);
+    assert.equal(hasChildren(edges, 'calc'), true);
+  });
+  check('hasChildren is false for a leaf node', () => {
+    assert.equal(hasChildren(edges, 'ch4'), false);
+    assert.equal(hasChildren(edges, 'lab'), false);
+  });
+
+  check('getDescendantNodeIds finds every transitively reachable child, not just direct children', () => {
+    const descendants = getDescendantNodeIds(edges, 'midterm').sort();
+    assert.deepEqual(descendants, ['calc', 'ch4', 'cs', 'lab']);
+  });
+  check('getDescendantNodeIds of a leaf is empty', () => {
+    assert.deepEqual(getDescendantNodeIds(edges, 'ch4'), []);
+  });
+  check('collapsing a middle node only hides its own subtree, not siblings', () => {
+    assert.deepEqual(getDescendantNodeIds(edges, 'calc'), ['ch4']);
+  });
+
+  check('a 2-node cycle (A connects to B and B connects to A) does not infinite-loop', () => {
+    const cyclicEdges = [
+      { source_node_id: 'a', target_node_id: 'b' },
+      { source_node_id: 'b', target_node_id: 'a' },
+    ];
+    const descendants = getDescendantNodeIds(cyclicEdges, 'a');
+    assert.deepEqual(descendants, ['b']); // 'a' itself is excluded, per rootId exclusion
+  });
+
+  check('computeHiddenNodeIds unions the descendants of every collapsed node', () => {
+    const hidden = computeHiddenNodeIds(edges, ['calc']);
+    assert.deepEqual(Array.from(hidden).sort(), ['ch4']);
+  });
+  check('computeHiddenNodeIds with nothing collapsed hides nothing', () => {
+    assert.equal(computeHiddenNodeIds(edges, []).size, 0);
+  });
+  check('collapsing the root hides the entire subtree', () => {
+    const hidden = computeHiddenNodeIds(edges, ['midterm']);
+    assert.deepEqual(Array.from(hidden).sort(), ['calc', 'ch4', 'cs', 'lab']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('S. Auto layout (computeAutoLayout)', () => {
+  check('an empty board produces no positions and does not crash', () => {
+    assert.deepEqual(computeAutoLayout([], []), {});
+  });
+
+  check('a simple parent/children tree is laid out in rows by depth, columns left to right', () => {
+    // A -> B, A -> C, C -> D  (matches the Midterm Prep -> Calculus -> Chapter 4 example)
+    const nodes = [
+      { id: 'A', x_position: 0, y_position: 0 },
+      { id: 'B', x_position: 0, y_position: 0 },
+      { id: 'C', x_position: 0, y_position: 0 },
+      { id: 'D', x_position: 0, y_position: 0 },
+    ];
+    const edges = [
+      { source_node_id: 'A', target_node_id: 'B' },
+      { source_node_id: 'A', target_node_id: 'C' },
+      { source_node_id: 'C', target_node_id: 'D' },
+    ];
+    const layout = computeAutoLayout(nodes, edges, { columnWidth: 220, rowHeight: 150, marginX: 40, marginY: 40 });
+
+    // B and D are leaves at different depths but different columns; C sits
+    // above D (same column); A is centered over the average of its
+    // children's columns.
+    assert.equal(layout.B.y_position, 40 + 150, 'B is one row below the root');
+    assert.equal(layout.D.y_position, 40 + 300, 'D is two rows below the root');
+    assert.equal(layout.C.x_position, layout.D.x_position, 'C sits directly above its only child, D');
+    assert.notEqual(layout.B.x_position, layout.C.x_position, 'siblings B and C get different columns');
+    assert.equal(layout.A.y_position, 40, 'the root is at depth 0');
+  });
+
+  check('relationships are unchanged by auto-layout — it only returns positions', () => {
+    const nodes = [{ id: 'A' }, { id: 'B' }];
+    const edges = [{ id: 'e1', source_node_id: 'A', target_node_id: 'B' }];
+    const before = JSON.stringify(edges);
+    computeAutoLayout(nodes, edges);
+    assert.equal(JSON.stringify(edges), before, 'computeAutoLayout must never modify the edges array');
+  });
+
+  check('a disconnected (edge-less) node still gets a valid, finite position', () => {
+    const nodes = [
+      { id: 'A', x_position: 0, y_position: 0 },
+      { id: 'ISO', x_position: 999, y_position: 999 },
+    ];
+    const edges = [];
+    const layout = computeAutoLayout(nodes, edges);
+    assert.ok(Number.isFinite(layout.A.x_position) && Number.isFinite(layout.A.y_position));
+    assert.ok(Number.isFinite(layout.ISO.x_position) && Number.isFinite(layout.ISO.y_position));
+    assert.notEqual(layout.A.x_position, layout.ISO.x_position, 'two independent roots get different columns');
+  });
+
+  check('a 2-node cycle does not crash and both nodes get finite positions', () => {
+    const nodes = [{ id: 'A' }, { id: 'B' }];
+    const edges = [
+      { source_node_id: 'A', target_node_id: 'B' },
+      { source_node_id: 'B', target_node_id: 'A' },
+    ];
+    const layout = computeAutoLayout(nodes, edges);
+    assert.ok(Number.isFinite(layout.A.x_position) && Number.isFinite(layout.A.y_position));
+    assert.ok(Number.isFinite(layout.B.x_position) && Number.isFinite(layout.B.y_position));
+  });
+
+  check('the algorithm is deterministic — running it twice on the same input gives the same result', () => {
+    const nodes = [{ id: 'A', x_position: 0 }, { id: 'B', x_position: 0 }, { id: 'C', x_position: 0 }];
+    const edges = [
+      { source_node_id: 'A', target_node_id: 'B' },
+      { source_node_id: 'A', target_node_id: 'C' },
+    ];
+    assert.deepEqual(computeAutoLayout(nodes, edges), computeAutoLayout(nodes, edges));
+  });
+
+  check('root order is stable, based on each root\'s current x position', () => {
+    const nodes = [
+      { id: 'RIGHT', x_position: 500 },
+      { id: 'LEFT', x_position: 0 },
+    ];
+    const layout = computeAutoLayout(nodes, []);
+    assert.ok(layout.LEFT.x_position < layout.RIGHT.x_position, 'the root that was already further left stays further left');
   });
 });
 

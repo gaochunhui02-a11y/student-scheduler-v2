@@ -106,6 +106,14 @@ const en = {
   'board.viewInPlanner': 'View in Planner',
   'board.taskCreated': 'Task created successfully',
   'board.conversionFailed': 'Conversion failed',
+  'board.searchNodes': 'Search nodes',
+  'board.resetView': 'Reset view',
+  'board.fitToBoard': 'Fit to Board',
+  'board.autoArrange': 'Auto Arrange',
+  'board.duplicate': 'Duplicate',
+  'board.collapse': 'Collapse',
+  'board.expand': 'Expand',
+  'board.noMatchingNodes': 'No matching nodes',
 };
 
 const zh = {
@@ -200,6 +208,14 @@ const zh = {
   'board.viewInPlanner': '在计划中查看',
   'board.taskCreated': '任务创建成功',
   'board.conversionFailed': '转换失败',
+  'board.searchNodes': '搜索节点',
+  'board.resetView': '重置视图',
+  'board.fitToBoard': '适应看板',
+  'board.autoArrange': '自动排列',
+  'board.duplicate': '复制',
+  'board.collapse': '折叠',
+  'board.expand': '展开',
+  'board.noMatchingNodes': '没有匹配的节点',
 };
 
 const ja = {
@@ -294,6 +310,14 @@ const ja = {
   'board.viewInPlanner': 'プランナーで見る',
   'board.taskCreated': 'タスクを作成しました',
   'board.conversionFailed': '変換に失敗しました',
+  'board.searchNodes': 'ノードを検索',
+  'board.resetView': '表示をリセット',
+  'board.fitToBoard': 'ボードに合わせる',
+  'board.autoArrange': '自動整列',
+  'board.duplicate': '複製',
+  'board.collapse': '折りたたむ',
+  'board.expand': '展開',
+  'board.noMatchingNodes': '一致するノードがありません',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];

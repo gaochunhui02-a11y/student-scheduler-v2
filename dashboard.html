@@ -218,12 +218,18 @@
           <input type="text" id="boardTitleInput" class="board-title-input" data-i18n-aria-label="board.titleLabel" aria-label="Board title" data-i18n-placeholder="board.titleLabel" placeholder="Board title">
           <div class="board-toolbar">
             <button type="button" class="board-add-btn" id="boardAddNodeBtn">+ <span data-i18n="board.addNode">Add node</span></button>
+            <div class="board-search">
+              <input type="search" id="boardSearchInput" class="board-search-input" data-i18n-placeholder="board.searchNodes" placeholder="Search nodes" data-i18n-aria-label="board.searchNodes" aria-label="Search nodes" autocomplete="off">
+              <div class="board-search-results" id="boardSearchResults" hidden></div>
+            </div>
             <div class="board-zoom">
               <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out">−</button>
               <span class="board-zoom-label" id="boardZoomLabel">100%</span>
               <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in">+</button>
-              <button type="button" class="board-zoom-btn board-zoom-reset" id="boardZoomResetBtn" data-i18n="board.zoomReset">Reset</button>
+              <button type="button" class="board-zoom-btn board-zoom-reset" id="boardZoomResetBtn" data-i18n="board.zoomReset" data-i18n-aria-label="board.resetView" aria-label="Reset view">Reset</button>
             </div>
+            <button type="button" class="board-toolbar-btn" id="boardFitBtn" data-i18n="board.fitToBoard">Fit to Board</button>
+            <button type="button" class="board-toolbar-btn" id="boardAutoArrangeBtn" data-i18n="board.autoArrange">Auto Arrange</button>
           </div>
         </div>
 

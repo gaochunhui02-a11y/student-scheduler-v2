@@ -257,3 +257,205 @@ export function linkNodeToStudyTask(node, studyTaskId) {
 export function unlinkNodeFromStudyTask(node) {
   return { ...node, linked_study_subject_id: null };
 }
+
+// ---------------------------------------------------------------------------
+// Pan/zoom, fit-to-board, search, duplicate, collapse, auto-layout
+// (Phase 6: Board usability and organization)
+// ---------------------------------------------------------------------------
+
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 2;
+
+// Rounds to the nearest 1% to avoid float drift accumulating across many
+// small wheel-zoom steps, then clamps to [min, max]. Used by every zoom
+// entry point (buttons, wheel/trackpad pinch) so the limit is enforced in
+// exactly one place.
+export function clampZoom(value, min = ZOOM_MIN, max = ZOOM_MAX) {
+  const n = typeof value === 'string' ? Number(value) : value;
+  const safe = typeof n === 'number' && Number.isFinite(n) ? n : 1;
+  const rounded = Math.round(safe * 100) / 100;
+  return Math.min(max, Math.max(min, rounded));
+}
+
+// The smallest canvas-local rectangle containing every node's card. Returns
+// null for an empty node list (nothing to fit). Used by both "Fit to Board"
+// and, indirectly, as a building block a future feature could reuse.
+export function computeNodesBoundingBox(nodes, nodeWidth, nodeHeight) {
+  if (!nodes || nodes.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  nodes.forEach((node) => {
+    const x = normalizePosition(node.x_position);
+    const y = normalizePosition(node.y_position);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + nodeWidth);
+    maxY = Math.max(maxY, y + nodeHeight);
+  });
+  return { minX, minY, maxX, maxY };
+}
+
+// Given the nodes' bounding box and the visible viewport (the scrollable
+// canvas-wrap's clientWidth/clientHeight), returns the zoom level and
+// scroll position that fits every node on screen with some padding. Zoom is
+// clamped to the same [min,max] every other zoom control respects.
+export function computeFitView({ bbox, viewportWidth, viewportHeight, zoomMin = ZOOM_MIN, zoomMax = ZOOM_MAX, padding = 60 }) {
+  if (!bbox || !(viewportWidth > 0) || !(viewportHeight > 0)) {
+    return { zoom: 1, scrollLeft: 0, scrollTop: 0 };
+  }
+  const bboxWidth = Math.max(1, bbox.maxX - bbox.minX);
+  const bboxHeight = Math.max(1, bbox.maxY - bbox.minY);
+  const zoomX = (viewportWidth - padding * 2) / bboxWidth;
+  const zoomY = (viewportHeight - padding * 2) / bboxHeight;
+  const fitted = Math.min(zoomX, zoomY);
+  const zoom = clampZoom(Number.isFinite(fitted) && fitted > 0 ? fitted : 1, zoomMin, zoomMax);
+
+  const centerX = (bbox.minX + bbox.maxX) / 2;
+  const centerY = (bbox.minY + bbox.maxY) / 2;
+  const scrollLeft = Math.max(0, centerX * zoom - viewportWidth / 2);
+  const scrollTop = Math.max(0, centerY * zoom - viewportHeight / 2);
+  return { zoom, scrollLeft, scrollTop };
+}
+
+// Scroll position (at the CURRENT zoom — unlike computeFitView, this never
+// changes zoom) that centers one node in the viewport. Used by search's
+// "center the Board on that node."
+export function computeCenterOnNodeScroll({ node, nodeWidth, nodeHeight, viewportWidth, viewportHeight, zoom = 1 }) {
+  const center = nodeCenter(node, nodeWidth, nodeHeight);
+  const z = safeZoom(zoom);
+  return {
+    scrollLeft: Math.max(0, center.x * z - viewportWidth / 2),
+    scrollTop: Math.max(0, center.y * z - viewportHeight / 2),
+  };
+}
+
+// Case-insensitive substring match on node title, never touching the node
+// itself — search is read-only.
+export function filterNodesByQuery(nodes, query) {
+  const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
+  if (!q) return [];
+  return nodes.filter((n) => normalizeNodeTitle(n.title).toLowerCase().includes(q));
+}
+
+// Field set for a duplicate of `node`, offset so the copy doesn't sit
+// exactly on top of the original. Deliberately excludes
+// linked_study_subject_id (a duplicate is a brand-new, unconverted node)
+// and never touches edges — the caller is responsible for not copying any.
+export function duplicateNodeFields(node, offset = 24) {
+  return {
+    node_type: isValidNodeType(node?.node_type) ? node.node_type : 'note',
+    title: normalizeNodeTitle(node?.title),
+    x_position: normalizePosition(node?.x_position) + offset,
+    y_position: normalizePosition(node?.y_position) + offset,
+    color: node && node.color !== undefined ? node.color : null,
+  };
+}
+
+// True if `nodeId` has at least one outgoing edge (i.e. is a parent of
+// something) — used to decide whether a node's card shows a collapse/expand
+// control at all.
+export function hasChildren(edges, nodeId) {
+  return edges.some((e) => e.source_node_id === nodeId);
+}
+
+// Every node transitively reachable by following source -> target edges
+// from `rootId` (parent -> child, per Phase 4's directed-edge convention).
+// Guards against a cycle (two nodes connected in both directions is legal —
+// duplicate-edge prevention only blocks the exact same direction twice) by
+// never revisiting a node already in the result.
+export function getDescendantNodeIds(edges, rootId) {
+  const result = new Set();
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    edges.forEach((e) => {
+      if (e.source_node_id === current && e.target_node_id !== rootId && !result.has(e.target_node_id)) {
+        result.add(e.target_node_id);
+        queue.push(e.target_node_id);
+      }
+    });
+  }
+  return Array.from(result);
+}
+
+// The full set of node ids hidden by the current collapse state — the union
+// of every collapsed node's descendants. A node collapsed while already
+// hidden (nested collapses) contributes nothing new, which is correct: it's
+// already invisible.
+export function computeHiddenNodeIds(edges, collapsedNodeIds) {
+  const hidden = new Set();
+  (collapsedNodeIds || []).forEach((rootId) => {
+    getDescendantNodeIds(edges, rootId).forEach((id) => hidden.add(id));
+  });
+  return hidden;
+}
+
+// Simple deterministic tree layout from the existing parent -> child edges.
+// No relationships change — only x_position/y_position. Disconnected nodes
+// (no edges at all) become their own single-node "root" rather than
+// crashing or being skipped. Cycle-safe via the same visited-set guard as
+// getDescendantNodeIds. Intentionally simple (no external graph-layout
+// library): leaves are placed left-to-right in a strictly increasing
+// column counter; a parent is centered over the average column of its
+// children. Rows are BFS depth from whichever root reaches a node first.
+export function computeAutoLayout(nodes, edges, { columnWidth = 220, rowHeight = 150, marginX = 40, marginY = 40 } = {}) {
+  const positions = {};
+  if (!nodes || nodes.length === 0) return positions;
+
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const childrenOf = new Map(nodes.map((n) => [n.id, []]));
+  const hasIncoming = new Set();
+  edges.forEach((e) => {
+    if (nodeIds.has(e.source_node_id) && nodeIds.has(e.target_node_id) && e.source_node_id !== e.target_node_id) {
+      childrenOf.get(e.source_node_id).push(e.target_node_id);
+      hasIncoming.add(e.target_node_id);
+    }
+  });
+
+  // Deterministic root order: nodes with no parent, left-to-right by their
+  // current x position (stable tie-break by id) — so re-running Auto
+  // Arrange on an already-tidy board doesn't shuffle top-level order.
+  const roots = nodes
+    .filter((n) => !hasIncoming.has(n.id))
+    .sort((a, b) => normalizePosition(a.x_position) - normalizePosition(b.x_position) || String(a.id).localeCompare(String(b.id)));
+
+  const visited = new Set();
+  const columns = new Map();
+  const depths = new Map();
+  let nextColumn = 0;
+
+  function layout(nodeId, depth) {
+    if (visited.has(nodeId)) return columns.get(nodeId);
+    visited.add(nodeId);
+    depths.set(nodeId, depth);
+    const children = (childrenOf.get(nodeId) || []).filter((id) => !visited.has(id));
+    let column;
+    if (children.length === 0) {
+      column = nextColumn;
+      nextColumn += 1;
+    } else {
+      const childColumns = children.map((childId) => layout(childId, depth + 1));
+      column = childColumns.reduce((sum, c) => sum + c, 0) / childColumns.length;
+    }
+    columns.set(nodeId, column);
+    return column;
+  }
+
+  roots.forEach((root) => layout(root.id, 0));
+  // Any node not reachable from a root (shouldn't happen — every node is
+  // either a root or has an incoming edge from something) is still given a
+  // position rather than silently omitted.
+  nodes.forEach((n) => {
+    if (!visited.has(n.id)) layout(n.id, 0);
+  });
+
+  nodes.forEach((n) => {
+    positions[n.id] = {
+      x_position: marginX + columns.get(n.id) * columnWidth,
+      y_position: marginY + depths.get(n.id) * rowHeight,
+    };
+  });
+  return positions;
+}
