@@ -179,7 +179,8 @@ input:focus-visible {
 
 input[type="time"],
 input[type="date"],
-input[type="number"] {
+input[type="number"],
+select {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--border);
@@ -204,8 +205,17 @@ input[type="number"] {
   align-items: end;
   margin-bottom: 8px;
 }
-.entry-row.study { grid-template-columns: 1fr 90px 30px; }
 .entry-row .field label { margin-bottom: 4px; }
+
+.entry-row.study {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+.entry-row.study .field { flex: 1 1 100px; min-width: 100px; }
+.entry-row.study .field.wide { flex: 1 1 100%; }
+.entry-row.study .remove-btn { flex: 0 0 30px; }
 
 .remove-btn {
   background: #fff;

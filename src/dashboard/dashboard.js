@@ -88,6 +88,12 @@ async function init(session) {
     lunch: { on: document.getElementById('mealLunchOn'), time: document.getElementById('mealLunchTime') },
     dinner: { on: document.getElementById('mealDinnerOn'), time: document.getElementById('mealDinnerTime') },
   };
+  const preferredPeriodEl = document.getElementById('preferredStudyPeriod');
+  const sessionCapEl = document.getElementById('sessionCapMinutes');
+  const breakMinutesEl = document.getElementById('breakMinutes');
+  const minBlockEl = document.getElementById('minBlockMinutes');
+  const earliestStudyEl = document.getElementById('earliestStudyTime');
+  const latestStudyEl = document.getElementById('latestStudyTime');
 
   forDateEl.value = schedule.for_date;
   wakeTimeEl.value = toHHMM(schedule.wake_time);
@@ -98,6 +104,12 @@ async function init(session) {
   meal.lunch.time.value = toHHMM(schedule.lunch_time);
   meal.dinner.on.checked = schedule.dinner_on;
   meal.dinner.time.value = toHHMM(schedule.dinner_time);
+  preferredPeriodEl.value = schedule.preferred_study_period || 'none';
+  sessionCapEl.value = schedule.session_cap_minutes;
+  breakMinutesEl.value = schedule.switch_break_minutes;
+  minBlockEl.value = schedule.min_block_minutes;
+  earliestStudyEl.value = toHHMM(schedule.earliest_study_time);
+  latestStudyEl.value = toHHMM(schedule.latest_study_time);
 
   function updateDayLengthHint() {
     const hintEl = document.getElementById('dayLengthHint');
@@ -121,9 +133,31 @@ async function init(session) {
   updateDayLengthHint();
 
   const daySettingsForm = document.getElementById('daySettingsForm');
-  daySettingsForm.addEventListener('change', () => {
+  const studyPrefsForm = document.getElementById('studyPrefsForm');
+  // shared save target so an edit in either section is serialized with the other,
+  // since both write to the same `schedules` row
+  const scheduleSaveTarget = {};
+
+  // study-preference number fields have no fallback value, so a save is skipped
+  // (not sent as 0/NaN) until all three are filled in
+  function collectStudyPrefsFields() {
+    const sessionCap = parseInt(sessionCapEl.value, 10);
+    const breakMinutes = parseInt(breakMinutesEl.value, 10);
+    const minBlock = parseInt(minBlockEl.value, 10);
+    if (!sessionCap || !minBlock || !Number.isFinite(breakMinutes) || breakMinutes < 0) return null;
+    return {
+      preferred_study_period: preferredPeriodEl.value,
+      session_cap_minutes: sessionCap,
+      switch_break_minutes: breakMinutes,
+      min_block_minutes: minBlock,
+      earliest_study_time: earliestStudyEl.value || null,
+      latest_study_time: latestStudyEl.value || null,
+    };
+  }
+
+  function saveScheduleSettings() {
     updateDayLengthHint();
-    chainSave(daySettingsForm, async () => {
+    chainSave(scheduleSaveTarget, async () => {
       schedule = await updateSchedule(schedule.id, {
         for_date: forDateEl.value,
         wake_time: wakeTimeEl.value,
@@ -134,10 +168,13 @@ async function init(session) {
         lunch_time: meal.lunch.time.value,
         dinner_on: meal.dinner.on.checked,
         dinner_time: meal.dinner.time.value,
+        ...(collectStudyPrefsFields() || {}),
       });
       flashSaved();
     });
-  });
+  }
+  daySettingsForm.addEventListener('change', saveScheduleSettings);
+  studyPrefsForm.addEventListener('change', saveScheduleSettings);
 
   // ---------------- classes ----------------
   const classList = document.getElementById('classList');
@@ -208,6 +245,7 @@ async function init(session) {
     const el = document.createElement('div');
     el.className = 'entry-row study';
     if (row.id) el.dataset.id = row.id;
+    const priority = row.priority || 'medium';
     el.innerHTML = `
       <div class="field">
         <label>Subject</label>
@@ -216,6 +254,22 @@ async function init(session) {
       <div class="field">
         <label>Minutes</label>
         <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <select class="study-priority">
+          <option value="low" ${priority === 'low' ? 'selected' : ''}>Low</option>
+          <option value="medium" ${priority === 'medium' ? 'selected' : ''}>Medium</option>
+          <option value="high" ${priority === 'high' ? 'selected' : ''}>High</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Due date</label>
+        <input type="date" class="study-due" value="${row.due_date || ''}">
+      </div>
+      <div class="field wide">
+        <label>Notes (optional)</label>
+        <input type="text" class="study-notes" placeholder="optional" value="${escapeAttr(row.notes || '')}">
       </div>
       <button class="remove-btn" type="button" title="Remove">✕</button>
     `;
@@ -237,7 +291,17 @@ async function init(session) {
       const minutes = parseInt(row.querySelector('.study-minutes').value, 10);
       if (!name || !minutes || minutes <= 0) return; // wait until the row is complete
 
-      const fields = { name, minutes_requested: minutes };
+      const priority = row.querySelector('.study-priority').value;
+      const dueDate = row.querySelector('.study-due').value;
+      const notes = row.querySelector('.study-notes').value.trim();
+
+      const fields = {
+        name,
+        minutes_requested: minutes,
+        priority,
+        due_date: dueDate || null,
+        notes,
+      };
       if (row.dataset.id) {
         await updateStudySubject(row.dataset.id, fields);
       } else {

@@ -76,6 +76,50 @@
         <button class="add-btn" id="addStudyBtn" type="button">+ Add subject</button>
       </div>
 
+      <div class="card" id="studyPrefsForm">
+        <h2>Study preferences</h2>
+        <div class="row-2">
+          <div>
+            <label for="preferredStudyPeriod">Preferred study time</label>
+            <select id="preferredStudyPeriod">
+              <option value="none">No preference</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <div class="row-2">
+          <div>
+            <label for="sessionCapMinutes">Max study session (min)</label>
+            <input type="number" id="sessionCapMinutes" min="5" step="5">
+          </div>
+          <div>
+            <label for="breakMinutes">Break length (min)</label>
+            <input type="number" id="breakMinutes" min="0" step="5">
+          </div>
+        </div>
+        <div class="row-2">
+          <div>
+            <label for="minBlockMinutes">Minimum study block (min)</label>
+            <input type="number" id="minBlockMinutes" min="5" step="5">
+          </div>
+          <div></div>
+        </div>
+        <div class="row-2">
+          <div>
+            <label for="earliestStudyTime">Earliest study time</label>
+            <input type="time" id="earliestStudyTime">
+          </div>
+          <div>
+            <label for="latestStudyTime">Latest study time</label>
+            <input type="time" id="latestStudyTime">
+          </div>
+        </div>
+        <p class="hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
+      </div>
+
       <button class="btn-primary" id="generateBtn" type="button">Generate Schedule</button>
       <p class="hint" id="saveStatus" style="text-align:center;"></p>
     </div>
