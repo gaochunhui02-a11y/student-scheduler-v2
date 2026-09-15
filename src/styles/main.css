@@ -149,6 +149,14 @@ body {
 
 ::selection { background: var(--accent-soft-strong); }
 
+/* Defensive: an element with the `hidden` attribute must always actually be
+   hidden, no matter what other rule also matches it (e.g. a class that sets
+   its own `display`). A prior redesign attempt broke exactly this — a
+   `.modal-overlay { display: flex }` rule outranked the browser's default
+   `[hidden] { display: none }`, since author CSS beats the UA stylesheet at
+   equal specificity. This rule can't be quietly out-prioritized the same way. */
+[hidden] { display: none !important; }
+
 /* ---------------- shared form primitives (dashboard + auth pages) ---------------- */
 label {
   display: block;
@@ -383,8 +391,30 @@ button { font-family: inherit; }
 .workspace { flex: 1; min-width: 0; padding: 28px 32px 64px; }
 .workspace-inner { max-width: 1180px; margin: 0 auto; }
 
-/* ---------------- dashboard body ---------------- */
-.dash-body { max-width: 1180px; margin: 0 auto; }
+/* ---------------- page header (inside .workspace-inner) ---------------- */
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.dash-header h1 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+.dash-header .user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.dash-header .user-info #userName { font-weight: 550; color: var(--text-soft); }
 
 #loadError { margin-bottom: 16px; }
 
@@ -444,28 +474,41 @@ button { font-family: inherit; }
 }
 .date-nav-btn:hover { background: var(--card); border-color: var(--border-strong); }
 
+/* separator rows, not individually boxed cards — a longer history list stays
+   calm instead of turning into a stack of bordered boxes */
 .history-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin-bottom: 6px;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   cursor: pointer;
   font-size: 13px;
-  background: var(--surface-2);
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  transition: background var(--dur) var(--ease), padding-left var(--dur) var(--ease);
 }
-.history-item:hover { background: var(--accent-soft); border-color: var(--accent-soft-strong); }
-.history-item.active { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
-.history-item .history-date { color: var(--text); }
-.history-item .history-stats { color: var(--muted); font-size: 12px; text-align: right; }
+.history-list > .history-item:last-child { border-bottom: none; }
+.history-item:hover { background: var(--accent-soft); padding-left: 10px; border-radius: var(--radius-sm); }
+.history-item.active { background: var(--accent-soft); border-radius: var(--radius-sm); padding-left: 10px; }
+.history-item.active .history-date { color: var(--accent-strong); }
+.history-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.history-item .history-date { color: var(--text); font-weight: 600; }
+.history-item .history-stats { color: var(--muted); font-size: 12px; }
+.history-arrow { color: var(--muted-2); font-size: 13px; flex: none; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.history-item:hover .history-arrow, .history-item.active .history-arrow, .history-item:focus-visible .history-arrow { opacity: 1; }
+.history-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft-strong); border-radius: var(--radius-sm); }
 
 /* Classes: one compact row — name grows, start–end sits together, ✕ at the end */
 .entry-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 7px 8px;
@@ -473,9 +516,12 @@ button { font-family: inherit; }
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.entry-row:focus-within { border-color: var(--border-strong); background: var(--card); }
+/* the row itself carries the focus ring, since its name/notes inputs are
+   borderless — keeps a real visible focus indicator without a redundant
+   ring floating inside a flex row */
+.entry-row:focus-within { border-color: var(--accent); background: var(--card); box-shadow: 0 0 0 3px var(--accent-soft-strong); }
 .entry-row > .class-name {
   flex: 1 1 auto;
   min-width: 70px;
@@ -502,9 +548,9 @@ button { font-family: inherit; }
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: 8px;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.entry-row.study:focus-within { border-color: var(--border-strong); background: var(--card); }
+.entry-row.study:focus-within { border-color: var(--accent); background: var(--card); box-shadow: 0 0 0 3px var(--accent-soft-strong); }
 .task-row-top { display: flex; align-items: center; gap: 8px; }
 .task-row-top > .study-name {
   flex: 1 1 auto;
@@ -620,9 +666,12 @@ button { font-family: inherit; }
 
 .placeholder {
   color: var(--muted);
-  font-size: 14px;
-  padding: 20px 0;
+  font-size: 13px;
+  padding: 26px 16px;
   text-align: center;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
 }
 
 /* ---------------- generated schedule display (colors only — markup is Step 2) ---------------- */
@@ -804,10 +853,6 @@ button { font-family: inherit; }
 
 .summary-percent { color: var(--muted); font-weight: 400; }
 
-@media (max-width: 600px) {
-  .tl-row { grid-template-columns: 48px 14px 1fr; }
-}
-
 .notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .note {
   background: var(--warning-soft);
@@ -831,7 +876,28 @@ button { font-family: inherit; }
   border-color: var(--danger-border);
   background: var(--danger-soft);
 }
-.warning-card h2 { color: var(--danger); margin: 0 0 10px; }
+.warning-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--danger);
+  margin: 0 0 12px;
+}
+.warning-card h2::before {
+  content: "!";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+}
 
 .warning-totals {
   display: flex;
@@ -846,28 +912,42 @@ button { font-family: inherit; }
 .warning-totals .row { display: flex; justify-content: space-between; }
 .warning-totals .row .value { font-weight: 600; }
 
-.warning-list { display: flex; flex-direction: column; gap: 5px; }
-.warning-list .item { font-size: 13.5px; color: var(--text); }
+.warning-list { display: flex; flex-direction: column; gap: 6px; }
+.warning-list .item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+}
+.warning-list .item .value { color: var(--muted); font-size: 12px; flex: none; }
+.warning-list .item.plain { display: block; }
 
 .summary-row {
   display: flex;
   justify-content: space-between;
-  font-size: 13.5px;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--border);
+  align-items: baseline;
+  font-size: 13px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
 }
 .summary-row:last-child { border-bottom: none; }
 .summary-row .label { color: var(--muted); }
-.summary-row .value { font-weight: 600; }
+.summary-row .value { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 
 .summary-progress {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
-  font-size: 13.5px;
-  color: var(--text);
+  font-size: 13px;
+  color: var(--text-soft);
 }
-.summary-progress strong { color: var(--accent-strong); }
+.summary-progress strong { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
    Responsive: sidebar collapses to a top bar on small screens
@@ -899,4 +979,8 @@ button { font-family: inherit; }
 
 @media (max-width: 600px) {
   .row-2 { grid-template-columns: 1fr; }
+  .tl-row { grid-template-columns: 48px 14px 1fr; }
+  .dash-header { flex-direction: column; align-items: flex-start; }
+  .cls-time-group { flex-wrap: wrap; row-gap: 4px; }
+  .warning-list .item { flex-direction: column; align-items: flex-start; gap: 2px; }
 }

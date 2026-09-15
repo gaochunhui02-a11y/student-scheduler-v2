@@ -670,7 +670,7 @@ async function init(session) {
       lockConflictBody.innerHTML = '';
       return;
     }
-    lockConflictBody.innerHTML = conflicts.map((c) => `<div class="item">${escapeAttr(c)}</div>`).join('');
+    lockConflictBody.innerHTML = conflicts.map((c) => `<div class="item plain">${escapeAttr(c)}</div>`).join('');
     lockConflictEl.hidden = false;
   }
 
@@ -688,7 +688,7 @@ async function init(session) {
     }
     const affected = progress.subjects.filter((s) => s.unscheduled > 0);
     const list = affected
-      .map((s) => `<div class="item">${escapeAttr(s.name)}: ${s.scheduled} / ${s.requested} min scheduled</div>`)
+      .map((s) => `<div class="item"><span>${escapeAttr(s.name)}</span><span class="value">${s.scheduled} / ${s.requested} min</span></div>`)
       .join('');
     shortfallWarningBody.innerHTML = `
       <div class="warning-totals">
@@ -863,9 +863,12 @@ async function init(session) {
         const bits = [`${h.classCount} class${h.classCount === 1 ? '' : 'es'}`, `${h.subjectCount} subject${h.subjectCount === 1 ? '' : 's'}`];
         if (h.studyBlockCount > 0) bits.push(`${h.completionPercent}% complete`);
         return `
-          <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}">
-            <span class="history-date">${escapeAttr(dateLabel)}</span>
-            <span class="history-stats">${escapeAttr(bits.join(' · '))}</span>
+          <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}" tabindex="0" role="button">
+            <div class="history-main">
+              <span class="history-date">${escapeAttr(dateLabel)}</span>
+              <span class="history-stats">${escapeAttr(bits.join(' · '))}</span>
+            </div>
+            <span class="history-arrow" aria-hidden="true">→</span>
           </div>
         `;
       })
@@ -887,6 +890,14 @@ async function init(session) {
   historyListEl.addEventListener('click', (e) => {
     const item = e.target.closest('.history-item');
     if (!item) return;
+    loadScheduleForDate(item.dataset.date);
+  });
+  // keyboard access for the same rows (they're focusable divs with role="button")
+  historyListEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    e.preventDefault();
     loadScheduleForDate(item.dataset.date);
   });
 
