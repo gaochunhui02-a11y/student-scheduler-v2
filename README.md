@@ -5,9 +5,12 @@ database (Supabase Postgres), rebuilt from the original single-file Tomorrow
 Scheduler. Plain HTML/CSS/JS, no frontend framework — one `.html` file per
 page, served locally by Vite.
 
-> Status: project scaffold + database schema are in place. Application pages
-> (login/signup/dashboard/etc.) are built next, after the Supabase project
-> below is set up and confirmed working.
+> Status: project scaffold, database schema, auth pages, and the dashboard
+> (day settings, classes, study subjects, and schedule generation) are all
+> built and wired to Supabase. The scheduling algorithm (`src/dashboard/scheduler.js`)
+> is pure JS with its own Node test — see [Testing](#testing) below. Not yet
+> done: manual verification against a live Supabase project, and any
+> in-browser end-to-end testing.
 
 ## 1. Create your Supabase project
 
@@ -57,6 +60,31 @@ npm run dev
 
 Then open the URL Vite prints (usually `http://localhost:5173`).
 
+## Testing
+
+`src/dashboard/scheduler.js` is the scheduling algorithm — pure JS, no DOM
+and no Supabase calls, so it runs and tests independently of the rest of the
+app. There's a plain Node test (no framework/dependency needed) that checks
+it against a realistic day (two classes, three meals, two study subjects,
+an after-midnight bedtime) and asserts: fixed-length study blocks stay
+continuous, nothing overlaps a class or meal, nothing is scheduled past
+bedtime, and the full generated schedule has zero overlaps anywhere.
+
+```
+npm test
+```
+
+Before shipping a change to `scheduler.js`, run `npm test` and confirm it
+still passes.
+
+## Building for production
+
+```
+npm run build
+```
+
+Outputs a static site to `dist/` (not committed — see `.gitignore`).
+
 ## Database structure
 
 **`profiles`** — one row per user, created automatically on sign-up via a
@@ -95,3 +123,5 @@ itself (not just by the app's UI).
   safe to ship to the browser because RLS policies still apply to it.
 - `.env` is git-ignored; only `.env.example` (with placeholder values) is
   committed.
+- This project is a git repository. `.gitignore` excludes `.env`, `node_modules/`,
+  `dist/`, `*.log`, and `.DS_Store` — no local or sensitive files are tracked.
