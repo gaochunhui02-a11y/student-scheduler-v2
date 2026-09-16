@@ -115,12 +115,14 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
   }
 
-  function appendOpenPlannerButton(container) {
+  // `primary` is used for the empty state's stronger call-to-action (it's
+  // the only thing to do); once a real current/next block is shown, Open
+  // Planner is a secondary, lower-emphasis action next to that block.
+  function appendOpenPlannerButton(container, primary) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn-secondary home-today-open-btn';
-    btn.dataset.i18n = 'home.openPlanner';
-    btn.textContent = t('home.openPlanner');
+    btn.className = primary ? 'btn-primary home-today-open-btn' : 'btn-secondary home-today-open-btn';
+    btn.textContent = primary ? `${t('home.openPlanner')} →` : t('home.openPlanner');
     btn.addEventListener('click', goToPlanner);
     container.appendChild(btn);
   }
@@ -132,7 +134,11 @@ export function initAnalyticsSection(userId, hostApi = {}) {
 
     if (!block) {
       const empty = document.createElement('div');
-      empty.className = 'home-today-empty';
+      empty.className = 'home-empty-state';
+      const glyph = document.createElement('span');
+      glyph.className = 'home-empty-glyph';
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.textContent = '◇';
       const title = document.createElement('p');
       title.className = 'home-empty-title';
       title.dataset.i18n = 'home.todayEmptyTitle';
@@ -141,10 +147,11 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       body.className = 'hint';
       body.dataset.i18n = 'home.todayEmptyBody';
       body.textContent = t('home.todayEmptyBody');
+      empty.appendChild(glyph);
       empty.appendChild(title);
       empty.appendChild(body);
       todayBodyEl.appendChild(empty);
-      appendOpenPlannerButton(todayBodyEl);
+      appendOpenPlannerButton(todayBodyEl, true);
       return;
     }
 
@@ -173,7 +180,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       todayBodyEl.appendChild(remaining);
     }
 
-    appendOpenPlannerButton(todayBodyEl);
+    appendOpenPlannerButton(todayBodyEl, false);
   }
 
   function shortDayLabel(dateStr) {
@@ -182,6 +189,16 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     } catch {
       return dateStr.slice(5);
     }
+  }
+
+  // A bar's real proportion, but any genuinely non-zero value is floored to
+  // a small minimum visible height — otherwise a day with a little real
+  // activity next to a day with a lot of it would round down to a sliver
+  // indistinguishable from an empty day, which reads as a rendering bug
+  // rather than "small but real." A true zero still renders as truly flat.
+  function barHeightPercent(minutes, maxMinutes) {
+    if (minutes <= 0) return 0;
+    return Math.max(6, Math.round((minutes / maxMinutes) * 100));
   }
 
   function renderChart(byDay) {
@@ -197,12 +214,12 @@ export function initAnalyticsSection(userId, hostApi = {}) {
 
       const plannedBar = document.createElement('div');
       plannedBar.className = 'analytics-chart-bar analytics-chart-bar-planned';
-      plannedBar.style.height = `${Math.round((d.planned / maxMinutes) * 100)}%`;
+      plannedBar.style.height = `${barHeightPercent(d.planned, maxMinutes)}%`;
       plannedBar.title = `${t('analytics.planned')}: ${formatDuration(d.planned)}`;
 
       const completedBar = document.createElement('div');
       completedBar.className = 'analytics-chart-bar analytics-chart-bar-completed';
-      completedBar.style.height = `${Math.round((d.completed / maxMinutes) * 100)}%`;
+      completedBar.style.height = `${barHeightPercent(d.completed, maxMinutes)}%`;
       completedBar.title = `${t('analytics.completed')}: ${formatDuration(d.completed)}`;
 
       bars.appendChild(plannedBar);

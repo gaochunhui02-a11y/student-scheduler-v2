@@ -61,25 +61,32 @@
     </nav>
 
     <div class="sidebar-bottom">
-      <div class="lang-switch">
-        <label for="langSelect" class="sr-only" data-i18n="lang.label">Language</label>
-        <select id="langSelect" class="lang-select">
-          <option value="en">EN</option>
-          <option value="zh">简体中文</option>
-          <option value="ja">日本語</option>
-        </select>
-      </div>
-      <button type="button" class="theme-toggle" id="installAppBtn" hidden>
-        <span data-i18n="notifications.installApp">Install App</span>
-      </button>
-      <button type="button" class="theme-toggle" id="themeToggle">
-        <span id="themeToggleLabel">Dark mode</span>
-      </button>
       <div class="sidebar-user">
         <span class="avatar" id="userAvatar">·</span>
         <div class="user-meta">
           <span class="user-name" id="userNameSidebar">Loading…</span>
+          <span class="user-role" data-i18n="account.studentLabel">Student</span>
         </div>
+      </div>
+      <div class="sidebar-controls">
+        <label for="langSelect" class="sr-only" data-i18n="lang.label">Language</label>
+        <select id="langSelect" class="lang-select-compact">
+          <option value="en">EN</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+        </select>
+        <button type="button" class="icon-btn" id="themeToggle" data-i18n-title="theme.dark" title="Dark mode">
+          <svg class="icon-btn-icon icon-theme-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+          <span id="themeToggleLabel" class="sr-only">Dark mode</span>
+        </button>
+        <button type="button" class="icon-btn" id="installAppBtn" hidden data-i18n-title="notifications.installApp" title="Install App">
+          <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+          <span data-i18n="notifications.installApp" class="sr-only">Install App</span>
+        </button>
+        <button type="button" class="icon-btn icon-btn-danger" id="logoutBtn" data-i18n-title="header.logout" title="Log out">
+          <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 17.5 20 12l-5-5.5M20 12H9"/><path d="M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>
+          <span data-i18n="header.logout" class="sr-only">Log out</span>
+        </button>
       </div>
     </div>
   </aside>
@@ -92,11 +99,10 @@
         <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" data-i18n-aria-label="nav.toggleMenu" aria-label="Toggle menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>
         </button>
-        <h1 data-i18n="header.title">Student Scheduler</h1>
-        <div class="user-info">
-          <span id="userName">Loading…</span>
-          <button class="btn-secondary" id="logoutBtn" data-i18n="header.logout">Log out</button>
-        </div>
+        <!-- Kept for the JS that still writes to it (nameEl.textContent), but the
+             greeting on Home + the sidebar's own name display already cover this
+             visually now — a third "Hi, Name" line would just be noise. -->
+        <span id="userName" class="sr-only">Loading…</span>
       </header>
 
       <div class="offline-banner" id="offlineBanner" hidden>
@@ -448,7 +454,11 @@
           </div>
           <div class="card home-recommend-card">
             <h2 data-i18n="home.recommendedTitle">Recommended next</h2>
-            <p class="placeholder" data-i18n="home.recommendedPlaceholder">Your smart recommendations will appear here as your tasks and deadlines are organized.</p>
+            <div class="home-empty-state">
+              <span class="home-empty-glyph" aria-hidden="true">◇</span>
+              <p class="home-empty-title" data-i18n="home.recommendedEmptyTitle">No recommendation yet</p>
+              <p class="hint" data-i18n="home.recommendedPlaceholder">Add deadlines or study tasks to get personalized planning suggestions.</p>
+            </div>
           </div>
         </div>
 
@@ -478,38 +488,40 @@
             </div>
           </div>
 
+          <div class="card home-quick-actions" id="homeQuickActions">
+            <h2 data-i18n="home.quickActionsTitle">Quick Actions</h2>
+            <div class="home-qa-row">
+              <button type="button" class="home-qa-btn" id="homeQaAddTask">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span data-i18n="home.quickAddTask">Add Study Task</span>
+              </button>
+              <button type="button" class="home-qa-btn" id="homeQaOpenPlanner">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7"/></svg>
+                <span data-i18n="home.openPlanner">Open Planner</span>
+              </button>
+              <button type="button" class="home-qa-btn" id="homeQaNewBoard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2"/><circle cx="18" cy="6.5" r="2"/><circle cx="12" cy="17.5" r="2"/><path d="M7.5 8 10.6 15.7M16.5 8 13.4 15.7"/></svg>
+                <span data-i18n="board.newBoard">New Board</span>
+              </button>
+              <button type="button" class="home-qa-btn" id="homeQaImportCalendar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14.5" rx="2"/><path d="M4.5 9.5h15M12 13v4M10 15h4"/></svg>
+                <span data-i18n="calendar.importTitle">Import Calendar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-grid-2">
           <div class="card">
             <h2 data-i18n="analytics.subjectBreakdown">Study Time by Subject</h2>
             <div id="analyticsSubjectList">
               <div class="placeholder" id="analyticsSubjectEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
             </div>
           </div>
-        </div>
 
-        <div class="card" id="analyticsBoardsCard" hidden>
-          <h2 data-i18n="analytics.boardsTitle">Boards</h2>
-          <p class="hint" id="analyticsBoardsSummary"></p>
-        </div>
-
-        <div class="card home-quick-actions" id="homeQuickActions">
-          <h2 data-i18n="home.quickActionsTitle">Quick Actions</h2>
-          <div class="home-qa-row">
-            <button type="button" class="home-qa-btn" id="homeQaAddTask">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              <span data-i18n="home.quickAddTask">Add Study Task</span>
-            </button>
-            <button type="button" class="home-qa-btn" id="homeQaOpenPlanner">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7"/></svg>
-              <span data-i18n="home.openPlanner">Open Planner</span>
-            </button>
-            <button type="button" class="home-qa-btn" id="homeQaNewBoard">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2"/><circle cx="18" cy="6.5" r="2"/><circle cx="12" cy="17.5" r="2"/><path d="M7.5 8 10.6 15.7M16.5 8 13.4 15.7"/></svg>
-              <span data-i18n="board.newBoard">New Board</span>
-            </button>
-            <button type="button" class="home-qa-btn" id="homeQaImportCalendar">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14.5" rx="2"/><path d="M4.5 9.5h15M12 13v4M10 15h4"/></svg>
-              <span data-i18n="calendar.importTitle">Import Calendar</span>
-            </button>
+          <div class="card" id="analyticsBoardsCard" hidden>
+            <h2 data-i18n="analytics.boardsTitle">Boards</h2>
+            <p class="hint" id="analyticsBoardsSummary"></p>
           </div>
         </div>
       </section>

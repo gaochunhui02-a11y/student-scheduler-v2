@@ -216,6 +216,43 @@ button { font-family: inherit; }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:disabled { opacity: 0.55; cursor: default; transform: none; }
 
+/* .btn-secondary previously had NO base rule anywhere in this file (only a
+   narrow .board-modal-actions override existed) — every "secondary" button
+   app-wide (Logout, Regenerate, Copy to another day, Export, etc.) was
+   rendering as a bare, unstyled native <button>. This is the fix. */
+.btn-secondary {
+  width: 100%;
+  height: 42px;
+  padding: 0 16px;
+  background: var(--surface-2);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.btn-secondary:hover { background: var(--card); border-color: var(--border-strong); color: var(--text); }
+.btn-secondary:active { transform: translateY(1px); }
+.btn-secondary:disabled { opacity: 0.55; cursor: default; transform: none; }
+
+/* Minimal, text-only — for a tertiary action that shouldn't compete
+   visually with a primary/secondary button next to it. */
+.btn-ghost {
+  height: 36px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+
 .auth-links {
   margin-top: 16px;
   font-size: 13px;
@@ -388,50 +425,18 @@ button { font-family: inherit; }
   border: 0;
 }
 
-.lang-switch { width: 100%; }
-.lang-select {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 550;
-  cursor: pointer;
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.lang-select:hover { color: var(--text); border-color: var(--border-strong); }
-.lang-select:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring, rgba(99,102,241,0.35)); }
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 550;
-  cursor: pointer;
-  width: 100%;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.theme-toggle:hover { color: var(--text); border-color: var(--border-strong); }
-
-.sidebar-user { display: flex; align-items: center; gap: 9px; padding: 4px 2px; }
+/* ---------------- compact sidebar account footer (Checkpoint B.1) ---------------- */
+.sidebar-user { display: flex; align-items: center; gap: 9px; padding: 4px 2px 10px; }
 .avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--accent);
   color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 650;
   flex: none;
 }
@@ -445,6 +450,7 @@ button { font-family: inherit; }
   text-overflow: ellipsis;
   max-width: 140px;
 }
+.user-role { font-size: 10.5px; color: var(--muted); }
 .logout-link {
   background: none;
   border: none;
@@ -457,33 +463,62 @@ button { font-family: inherit; }
 }
 .logout-link:hover { color: var(--danger); text-decoration: underline; }
 
+/* Compact icon-row replacing the old three stacked full-width controls
+   (language select / Install App / Dark mode) — each keeps its exact
+   original id, just restyled as a small square icon button with an
+   sr-only label for translation + accessibility. */
+.sidebar-controls { display: flex; align-items: center; gap: 6px; }
+.lang-select-compact {
+  width: auto;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.lang-select-compact:hover { color: var(--text); border-color: var(--border-strong); }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.icon-btn-icon { width: 15px; height: 15px; }
+.icon-btn-danger:hover { color: var(--danger); border-color: var(--danger-border); background: var(--danger-soft); }
+
 .workspace { flex: 1; min-width: 0; padding: 28px 32px 64px; }
 .workspace-inner { max-width: 1180px; margin: 0 auto; }
 
-/* ---------------- page header (inside .workspace-inner) ---------------- */
+/* ---------------- page header (inside .workspace-inner) ----------------
+   Reduced to a near-invisible utility strip on desktop (just the sr-only
+   #userName the JS still writes to) — the greeting on Home is the real
+   page header now; Planner/Board don't need a second title bar repeating
+   the sidebar's own brand + active section indicator. */
 .dash-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 22px;
+  min-height: 4px;
+  margin-bottom: 8px;
 }
-.dash-header h1 {
-  font-size: 21px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  margin: 0;
-  color: var(--text);
-}
-.dash-header .user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13.5px;
-  color: var(--muted);
-}
-.dash-header .user-info #userName { font-weight: 550; color: var(--text-soft); }
 
 #loadError { margin-bottom: 16px; }
 
@@ -1658,30 +1693,31 @@ button { font-family: inherit; }
 .analytics-card-label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
 .analytics-card-value { font-size: 22px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
 
-.analytics-chart-legend { display: flex; gap: 16px; margin-bottom: 10px; }
+.analytics-chart-legend { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: var(--text-soft); }
 .analytics-swatch-planned { background: var(--muted-2); }
 .analytics-swatch-completed { background: var(--study-color); }
 
 .analytics-chart {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  height: 160px;
+  gap: 14px;
+  height: 190px;
   padding-top: 10px;
+  border-bottom: 1px solid var(--border);
 }
-.analytics-chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
+.analytics-chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
 .analytics-chart-bars {
   flex: 1;
   width: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
 }
-.analytics-chart-bar { width: 40%; border-radius: 3px 3px 0 0; min-height: 2px; transition: height var(--dur) var(--ease); }
+.analytics-chart-bar { width: 46%; max-width: 22px; border-radius: 4px 4px 0 0; min-height: 3px; transition: height var(--dur) var(--ease); }
 .analytics-chart-bar-planned { background: var(--surface-2); border: 1px solid var(--border-strong); }
 .analytics-chart-bar-completed { background: var(--study-color); }
-.analytics-chart-label { font-size: 11px; color: var(--muted); }
+.analytics-chart-label { font-size: 11px; font-weight: 550; color: var(--muted); }
 
 .analytics-subject-row,
 .analytics-upcoming-row {
@@ -1728,8 +1764,8 @@ button { font-family: inherit; }
    ========================================================================== */
 .home-hero {
   position: relative;
-  padding: 4px 4px 20px;
-  margin-bottom: 4px;
+  padding: 2px 2px 14px;
+  margin-bottom: 2px;
 }
 .home-hero::before {
   content: '';
@@ -1739,104 +1775,120 @@ button { font-family: inherit; }
   width: 320px;
   height: 220px;
   background: radial-gradient(closest-side, var(--accent-soft), transparent);
-  opacity: 0.55;
+  opacity: 0.5;
   pointer-events: none;
   z-index: -1;
 }
-.home-greeting { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); margin: 0 0 4px; }
-.home-subtitle { font-size: 13.5px; color: var(--text-soft); margin: 0 0 2px; }
-.home-date { font-size: 12px; color: var(--muted); margin: 0; }
+.home-greeting { font-size: 23px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); margin: 0 0 3px; }
+.home-subtitle { font-size: 13px; color: var(--text-soft); margin: 0 0 2px; }
+.home-date { font-size: 11.5px; color: var(--muted); margin: 0; }
 
-.home-stat-cards { grid-template-columns: repeat(4, 1fr); }
-.home-stat-card { flex-direction: row; align-items: flex-start; gap: 12px; transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease); }
-.home-stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+/* ---- stat cards: compact, restrained accent, stronger numerals ---- */
+.home-stat-cards { grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.home-stat-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border-color: var(--border);
+  box-shadow: none;
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.home-stat-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border-strong); }
 .home-stat-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--surface-2);
+  color: var(--muted);
   flex: none;
 }
-.home-stat-icon svg { width: 17px; height: 17px; }
-.home-stat-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.home-stat-secondary { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-stat-icon svg { width: 14px; height: 14px; }
+.home-stat-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.home-stat-card .analytics-card-label { font-size: 10.5px; font-weight: 600; }
+.home-stat-card .analytics-card-value { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; }
+.home-stat-secondary { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .home-stat-secondary:empty { display: none; }
 
 .home-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
   align-items: start;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
-.home-grid-2 > .card { margin-bottom: 0; }
+.home-grid-2 > .card { margin-bottom: 0; padding: 16px 18px; }
 
-.home-today-card .hint, .home-recommend-card .placeholder { margin: 0; }
+/* ---- shared "nothing here yet" state (Today + Recommended Next) ---- */
+.home-empty-state { padding: 10px 2px 2px; display: flex; flex-direction: column; gap: 4px; }
+.home-empty-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+.home-empty-title { font-size: 13.5px; font-weight: 650; color: var(--text); margin: 0; }
+.home-empty-state .hint { margin: 0 0 12px; max-width: 32ch; }
+
 .home-today-badge {
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 9px;
+  height: 19px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
+  width: fit-content;
 }
 .home-today-badge-now { background: var(--accent-soft); color: var(--accent-strong); }
-.home-today-name { font-size: 16px; font-weight: 650; color: var(--text); margin-bottom: 2px; overflow-wrap: anywhere; }
-.home-today-meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.home-today-remaining { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
-.home-today-open-btn { margin-top: 14px; }
-.home-today-empty { padding: 6px 0 4px; }
-.home-empty-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
-
-.home-recommend-card .placeholder {
-  background: var(--surface-2);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  font-size: 12.5px;
-  color: var(--muted);
-  line-height: 1.5;
-}
+.home-today-name { font-size: 15.5px; font-weight: 650; color: var(--text); margin-bottom: 2px; overflow-wrap: anywhere; }
+.home-today-meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-today-remaining { font-size: 11.5px; color: var(--text-soft); margin-top: 7px; }
+.home-today-open-btn { margin-top: 12px; width: auto; min-width: 140px; }
 
 .home-quick-actions .home-qa-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 .home-qa-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 14px 8px;
+  gap: 6px;
+  padding: 11px 6px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 550;
   cursor: pointer;
   font-family: inherit;
   text-align: center;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.home-qa-btn svg { width: 19px; height: 19px; color: var(--accent-strong); }
+.home-qa-btn svg { width: 17px; height: 17px; color: var(--accent-strong); }
 .home-qa-btn:hover { background: var(--card); border-color: var(--border-strong); color: var(--text); }
 
 @media (max-width: 1080px) {
   .home-stat-cards { grid-template-columns: repeat(2, 1fr); }
   .home-grid-2 { grid-template-columns: 1fr; }
-  .home-qa-row { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 600px) {
   .home-stat-cards { grid-template-columns: 1fr; }
