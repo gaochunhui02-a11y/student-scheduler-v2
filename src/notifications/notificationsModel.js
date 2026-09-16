@@ -67,10 +67,12 @@ export function classifyPermissionState(permission, isSupported) {
 // ---------------------------------------------------------------------------
 
 // A schedule_item is reminder-eligible only if it's an actual study block
-// with a valid start time and isn't already marked completed (nothing
-// useful to remind about work that's already done).
+// with a valid start time, isn't already marked completed (nothing useful
+// to remind about work that's already done), and hasn't been explicitly
+// flagged Missed (Phase 14) — once a student has already said "this isn't
+// happening," a countdown reminder for it is stale noise, not help.
 export function isEligibleForStudyReminder(item) {
-  return Boolean(item) && item.type === 'study' && item.completed !== true && Number.isFinite(item.start);
+  return Boolean(item) && item.type === 'study' && item.completed !== true && item.missed !== true && Number.isFinite(item.start);
 }
 
 // The reminder fires this many minutes before the block starts — same

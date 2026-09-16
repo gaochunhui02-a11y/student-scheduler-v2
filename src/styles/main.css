@@ -809,7 +809,8 @@ button { font-family: inherit; }
 
 .lock-btn,
 .done-btn,
-.edit-btn {
+.edit-btn,
+.co-action-btn {
   display: inline-flex;
   align-items: center;
   height: 24px;
@@ -824,10 +825,12 @@ button { font-family: inherit; }
   font-family: inherit;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.lock-btn:hover, .done-btn:hover, .edit-btn:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
+.lock-btn:hover, .done-btn:hover, .edit-btn:hover, .co-action-btn:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
 .lock-btn:disabled, .done-btn:disabled { opacity: 0.6; cursor: default; }
 .lock-btn[data-locked="1"] { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-soft-strong); }
 .done-btn[data-completed="1"] { background: var(--success-soft); color: var(--success); border-color: var(--success-soft); }
+.co-action-btn.mark-missed-btn, .co-action-btn.unmark-missed-btn { color: var(--danger); border-color: var(--danger-border); }
+.tl-badge-missed { background: var(--danger-soft); color: var(--danger); }
 
 .edit-panel {
   margin-top: 8px;
@@ -865,9 +868,9 @@ button { font-family: inherit; }
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .edit-actions button:hover { background: var(--card); border-color: var(--border-strong); }
-.edit-actions .edit-save-btn { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.edit-actions .edit-save-btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
-.edit-actions .edit-save-btn:disabled { opacity: 0.6; cursor: default; }
+.edit-actions .edit-save-btn, .edit-actions .co-primary-btn { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.edit-actions .edit-save-btn:hover, .edit-actions .co-primary-btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.edit-actions .edit-save-btn:disabled, .edit-actions .co-primary-btn:disabled { opacity: 0.6; cursor: default; }
 .edit-error {
   margin-top: 8px;
   color: var(--danger);
@@ -880,8 +883,10 @@ button { font-family: inherit; }
 .edit-error:empty { display: none; }
 
 .multiday-chunk-hint { margin: 4px 0 0; font-size: 11px; }
-.multiday-panel .multiday-range-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-.multiday-panel .multiday-range-row label {
+.multiday-panel .multiday-range-row,
+.carryover-panel .multiday-range-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.multiday-panel .multiday-range-row label,
+.carryover-panel .multiday-range-row label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -890,7 +895,10 @@ button { font-family: inherit; }
   font-weight: 500;
 }
 .multiday-panel input[type="date"],
-.multiday-panel input[type="number"] {
+.multiday-panel input[type="number"],
+.carryover-panel input[type="date"],
+.carryover-panel input[type="number"],
+.partial-panel input[type="number"] {
   height: 30px;
   padding: 0 8px;
   font-size: 12.5px;
@@ -907,6 +915,15 @@ button { font-family: inherit; }
 }
 .multiday-seg-row .md-seg-date { font-size: 12.5px; color: var(--text-soft); }
 .multiday-seg-row .md-seg-minutes { width: 76px; }
+.co-extend-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  margin: 6px 0;
+}
+.co-extend-label input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
 
 .summary-percent { color: var(--muted); font-weight: 400; }
 

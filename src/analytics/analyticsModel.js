@@ -55,14 +55,42 @@ export function attachDatesToItems(items, schedules) {
     .filter((item) => item.date);
 }
 
+// A block's actually-completed minutes for reporting purposes (Phase 14):
+// the full duration once `completed` is true (unchanged from before this
+// existed — a block without a completed_minutes column at all, or one
+// whose completed_minutes never got backfilled, still reports correctly),
+// otherwise whatever partial completed_minutes was logged, clamped to the
+// block's own duration and defaulting to 0 for a block never touched by
+// Partial Completion — the exact same 0 the old "only if completed" gate
+// produced, so this is a strict accuracy improvement, never a regression.
+function effectiveCompletedMinutes(item, duration) {
+  if (item.completed) return duration;
+  const partial = Number.isFinite(item.completed_minutes) ? item.completed_minutes : 0;
+  return Math.min(Math.max(0, partial), duration);
+}
+
+// A block's still-missing minutes that the student explicitly flagged
+// Missed (Phase 14) — 0 for anything not flagged missed, and 0 once its
+// completed minutes already cover the full duration (a block can't be
+// simultaneously "fully done" and "missing time" for reporting purposes).
+function missedMinutes(item, duration, completedMinutes) {
+  if (!item.missed) return 0;
+  return Math.max(0, duration - completedMinutes);
+}
+
 // Planned = every study block's duration, regardless of completion.
-// Completed = only the study blocks marked completed. Both are summed per
-// day (over the given `dates`, oldest first) and as a weekly total. Uses
-// item_type/start_minutes/end_minutes/completed — the raw schedule_items
-// column names — since this reads directly from listScheduleItemsForScheduleIds,
-// not through dashboard.js's camelCase in-memory shape.
+// Completed = the study blocks' actually-completed minutes — full duration
+// when `completed` is true, or the logged partial amount otherwise (Phase
+// 14; see effectiveCompletedMinutes). Missed = minutes explicitly flagged
+// Missed that are still outstanding (Phase 14; additive — never subtracted
+// from planned/completed, purely an extra lens on the same blocks). All
+// three are summed per day (over the given `dates`, oldest first) and as a
+// weekly total. Uses item_type/start_minutes/end_minutes/completed/
+// completed_minutes/missed — the raw schedule_items column names — since
+// this reads directly from listScheduleItemsForScheduleIds, not through
+// dashboard.js's camelCase in-memory shape.
 export function computeWeeklyTotals(items, dates) {
-  const byDay = (dates || []).map((date) => ({ date, planned: 0, completed: 0 }));
+  const byDay = (dates || []).map((date) => ({ date, planned: 0, completed: 0, missed: 0 }));
   const indexByDate = new Map(byDay.map((d, i) => [d.date, i]));
 
   (items || []).forEach((item) => {
@@ -70,13 +98,16 @@ export function computeWeeklyTotals(items, dates) {
     const index = indexByDate.get(item.date);
     if (index === undefined) return;
     const duration = Math.max(0, item.end_minutes - item.start_minutes);
+    const completedMinutes = effectiveCompletedMinutes(item, duration);
     byDay[index].planned += duration;
-    if (item.completed) byDay[index].completed += duration;
+    byDay[index].completed += completedMinutes;
+    byDay[index].missed += missedMinutes(item, duration, completedMinutes);
   });
 
   const totalPlanned = byDay.reduce((sum, d) => sum + d.planned, 0);
   const totalCompleted = byDay.reduce((sum, d) => sum + d.completed, 0);
-  return { byDay, totalPlanned, totalCompleted };
+  const totalMissed = byDay.reduce((sum, d) => sum + d.missed, 0);
+  return { byDay, totalPlanned, totalCompleted, totalMissed };
 }
 
 // A percentage 0-100, rounded. null (not 0) when nothing was planned at
@@ -95,9 +126,12 @@ export function computeCompletionRate(totalPlanned, totalCompleted) {
 // Aggregates by subject NAME (study_subjects rows are per-day, so the same
 // subject typically has a different row/id each day) — planned is the sum
 // of minutes_requested across every matching row in the window, completed
-// is the sum of actually-completed study block durations attributed to any
-// of that subject's rows via source_subject_id. Sorted by planned,
-// largest first.
+// is the sum of actually-completed minutes (full duration when `completed`
+// is true, or the logged partial amount otherwise — Phase 14) attributed to
+// any of that subject's rows via source_subject_id, and missed is the sum
+// of minutes explicitly flagged Missed that are still outstanding (Phase
+// 14; additive — never subtracted from planned/completed). Sorted by
+// planned, largest first.
 export function computeSubjectTotals(studySubjects, items) {
   const nameById = new Map((studySubjects || []).map((s) => [s.id, s.name]));
   const totals = new Map();
@@ -105,7 +139,7 @@ export function computeSubjectTotals(studySubjects, items) {
   function entryFor(name) {
     let entry = totals.get(name);
     if (!entry) {
-      entry = { subject: name, planned: 0, completed: 0 };
+      entry = { subject: name, planned: 0, completed: 0, missed: 0 };
       totals.set(name, entry);
     }
     return entry;
@@ -117,10 +151,13 @@ export function computeSubjectTotals(studySubjects, items) {
   });
 
   (items || []).forEach((item) => {
-    if (item.item_type !== 'study' || !item.completed || !item.source_subject_id) return;
+    if (item.item_type !== 'study' || !item.source_subject_id) return;
     const name = nameById.get(item.source_subject_id);
     if (!name) return;
-    entryFor(name).completed += Math.max(0, item.end_minutes - item.start_minutes);
+    const duration = Math.max(0, item.end_minutes - item.start_minutes);
+    const completedMinutes = effectiveCompletedMinutes(item, duration);
+    entryFor(name).completed += completedMinutes;
+    entryFor(name).missed += missedMinutes(item, duration, completedMinutes);
   });
 
   return Array.from(totals.values()).sort((a, b) => b.planned - a.planned);

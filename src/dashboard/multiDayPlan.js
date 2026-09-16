@@ -26,6 +26,7 @@ import {
   getOrCreateScheduleForDate,
   insertStudySubject,
   updateStudySubject,
+  incrementScheduleItemCarriedOver,
 } from './data.js';
 import { computeDayCapacity } from './scheduler.js';
 import { classifyGroupRows, buildCandidateDates, allocateAcrossDays } from './multiDayPlanner.js';
@@ -202,4 +203,119 @@ export async function acceptMultiDayPlan(userId, preview, keepOnRootDateMinutes,
     created.push(row);
   }
   return created;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 14 — Missed Task + Auto Carry Over
+//
+// CRITICAL: this reuses the exact same Phase 13 machinery above
+// (computeCapacityByDate, buildCandidateDates, allocateAcrossDays) — it is
+// NOT a second scheduling algorithm. The only thing new here is WHERE
+// `remainingMinutes` comes from (a single already-generated block's
+// unfinished minutes — see carryOverModel.js's computeRemainingMinutes —
+// instead of a study task's still-open sibling chunks) and that it never
+// touches the original block's own row/date: completed/carried-over
+// minutes already recorded there are never duplicated or overwritten.
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic, read-only preview of carrying a specific study block's
+ * still-unfinished minutes forward. Writes nothing. Never proposes landing
+ * on a date the task's group already occupies (its own day, or any
+ * previously-created chunk's day, whether frozen or open), and — unlike
+ * buildMultiDayPreview — never past the task's due date UNLESS the caller
+ * explicitly passes `ignoreDueDate: true` (the student's explicit "extend
+ * past the due date" choice, surfaced as a checkbox in the preview panel).
+ *
+ * @param {string} userId
+ * @param {{id:string}} item the schedule_item being carried over (only its id is used, for the accept step's audit write)
+ * @param {object} subjectRow the study_subjects row item.sourceSubjectId points to (root or a chunk — both resolve to the same group)
+ * @param {number} remainingMinutes computed by the caller via carryOverModel.js's computeRemainingMinutes
+ * @param {string} startDate
+ * @param {string} endDate
+ * @param {{ignoreDueDate?:boolean}} [options]
+ */
+export async function buildCarryOverPreview(userId, item, subjectRow, remainingMinutes, startDate, endDate, { ignoreDueDate = false } = {}) {
+  const rootId = subjectRow.origin_subject_id || subjectRow.id;
+  const groupRows = await listGroupSubjectRows(userId, rootId);
+  const rootRow = groupRows.find((r) => r.id === rootId) || subjectRow;
+  const groupIds = groupRows.map((r) => r.id);
+  const usedDates = groupRows.map((r) => r.for_date).filter(Boolean);
+
+  const candidateDates = buildCandidateDates(startDate, endDate, ignoreDueDate ? null : rootRow.due_date, usedDates);
+  const capacityByDate = await computeCapacityByDate(userId, candidateDates, groupIds);
+  const allocation = allocateAcrossDays({
+    remainingMinutes,
+    candidateDates,
+    capacityByDate,
+    minBlockMinutes: 15,
+  });
+
+  return {
+    itemId: item.id,
+    rootId,
+    name: rootRow.name,
+    priority: rootRow.priority,
+    dueDate: rootRow.due_date,
+    notes: rootRow.notes,
+    remainingMinutes,
+    ignoreDueDate,
+    minBlockMinutes: 15,
+    candidateDates,
+    capacityByDate,
+    segments: allocation.segments,
+    unscheduledMinutes: allocation.unscheduledMinutes,
+  };
+}
+
+// Pure re-run of the same allocator over the already-fetched capacity
+// numbers — the UI calls this whenever it needs to re-derive segments
+// without a fresh fetch (buildCarryOverPreview itself is what the "date
+// range changed" Recompute action re-runs, since the candidate dates and
+// per-date capacity genuinely need refetching then).
+export function recomputeCarryOverSegments(preview) {
+  return allocateAcrossDays({
+    remainingMinutes: preview.remainingMinutes,
+    candidateDates: preview.candidateDates,
+    capacityByDate: preview.capacityByDate,
+    minBlockMinutes: preview.minBlockMinutes,
+  });
+}
+
+/**
+ * Applies a (optionally student-adjusted) carry-over preview: creates fresh
+ * chunk rows for the accepted segments — linked to the task's root via
+ * origin_subject_id, exactly like Phase 13's acceptMultiDayPlan — and
+ * records how many minutes were actually carried on the ORIGINAL block via
+ * incrementScheduleItemCarriedOver (accumulates, never overwrites), so a
+ * second Carry Over on the same block later can never re-carry the same
+ * minutes twice. The original block's own row, date, and completed/
+ * completed_minutes are never touched here.
+ */
+export async function acceptCarryOver(userId, preview, segments) {
+  const created = [];
+  for (const seg of (segments || []).filter((s) => s.minutes > 0)) {
+    // eslint-disable-next-line no-await-in-loop
+    const destSchedule = await getOrCreateScheduleForDate(userId, seg.date);
+    // eslint-disable-next-line no-await-in-loop
+    const row = await insertStudySubject(
+      destSchedule.id,
+      userId,
+      {
+        name: preview.name,
+        minutes_requested: seg.minutes,
+        priority: preview.priority,
+        due_date: preview.dueDate,
+        notes: preview.notes,
+        origin_subject_id: preview.rootId,
+      },
+      0
+    );
+    created.push(row);
+  }
+  const carriedTotal = created.reduce((sum, r) => sum + r.minutes_requested, 0);
+  if (carriedTotal > 0) {
+    await incrementScheduleItemCarriedOver(preview.itemId, carriedTotal);
+  }
+  return { created, carriedTotal };
 }

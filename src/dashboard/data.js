@@ -379,3 +379,48 @@ export async function deleteStudySubjects(ids) {
   const { error } = await supabase.from('study_subjects').delete().in('id', ids);
   if (error) throw error;
 }
+
+// ---------------- Missed Task + Auto Carry Over (Phase 14) ----------------
+// Thin reads/writes only, same split as Phase 13 above — the actual
+// remaining-minutes math lives in carryOverModel.js and the actual
+// scheduling reuses scheduler.js/multiDayPlanner.js exactly as Phase 13
+// already does (see multiDayPlan.js's buildCarryOverPreview/acceptCarryOver).
+
+export async function setScheduleItemMissed(id, missed) {
+  const { error } = await supabase.from('schedule_items').update({ missed }).eq('id', id);
+  if (error) throw error;
+}
+
+// Records completed minutes separately from the block's full planned
+// duration and keeps the existing `completed` boolean in sync in the same
+// write (caller decides `completed` via carryOverModel.js's
+// isFullyCompletedByMinutes) — so a block logged as fully done through this
+// path reads identically to one marked done via the plain Done button, and
+// a partially-done block correctly reads as NOT completed everywhere
+// (Done/Undo button state, analytics, Phase 13 carry-over eligibility).
+export async function setScheduleItemPartialCompletion(id, completedMinutes, completed) {
+  const { error } = await supabase.from('schedule_items').update({ completed_minutes: completedMinutes, completed }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function getStudySubjectById(id) {
+  if (!id) return null;
+  const { data, error } = await supabase.from('study_subjects').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Accumulates rather than overwrites — re-running Carry Over on the same
+// block (e.g. its first attempt only partially fit before the due date)
+// must never re-carry minutes already successfully moved forward. See
+// carryOverModel.js's computeRemainingMinutes, which subtracts this same
+// running total before offering any more of the block to carry.
+export async function incrementScheduleItemCarriedOver(id, addMinutes) {
+  if (!addMinutes) return 0;
+  const { data: row, error: fetchError } = await supabase.from('schedule_items').select('carried_over_minutes').eq('id', id).single();
+  if (fetchError) throw fetchError;
+  const next = (row?.carried_over_minutes || 0) + addMinutes;
+  const { error } = await supabase.from('schedule_items').update({ carried_over_minutes: next }).eq('id', id);
+  if (error) throw error;
+  return next;
+}

@@ -27,6 +27,9 @@ import {
   listScheduleItemsForScheduleIds,
   listStudySubjectsForScheduleIds,
   listUpcomingStudySubjects,
+  setScheduleItemMissed,
+  setScheduleItemPartialCompletion,
+  getStudySubjectById,
 } from './data.js';
 import {
   generateSchedule,
@@ -38,7 +41,8 @@ import {
   timeToMinutes,
   minutesToClock,
 } from './scheduler.js';
-import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan } from './multiDayPlan.js';
+import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan, buildCarryOverPreview, recomputeCarryOverSegments, acceptCarryOver } from './multiDayPlan.js';
+import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMinutesInput, canCarryOverBlock, canMarkMissed } from './carryOverModel.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
@@ -962,6 +966,26 @@ async function init(session) {
   // an unrelated reason (lock/done toggle, regenerate, date switch).
   let editingItemId = null;
 
+  // ---------------- Missed Task + Auto Carry Over (Phase 14) ----------------
+  // Two more single-panel-at-a-time states, same pattern as editingItemId —
+  // opening any one of the three (manual edit / partial completion /
+  // carry-over preview) closes the other two via closeSecondaryPanels(),
+  // since a block only ever shows one inline panel at once.
+  let partialPanelItemId = null;
+  let carryOverPanelItemId = null;
+  let carryOverPreview = null;
+  let carryOverLoading = false;
+  let carryOverError = '';
+
+  function closeSecondaryPanels() {
+    editingItemId = null;
+    partialPanelItemId = null;
+    carryOverPanelItemId = null;
+    carryOverPreview = null;
+    carryOverLoading = false;
+    carryOverError = '';
+  }
+
   function minutesToInputTime(mins) {
     const m = ((mins % 1440) + 1440) % 1440;
     const h = Math.floor(m / 60);
@@ -991,6 +1015,120 @@ async function init(session) {
     return `Due ${due.toLocaleDateString()}`;
   }
 
+  // Phase 14: the inline Carry Over / Re-plan Remaining preview panel for
+  // whichever study block currently has one open (carryOverPanelItemId).
+  // Mirrors the shape of Phase 13's multiday-panel in addStudyRow's
+  // renderMultiDayPanel — same reused segment-editing UI, just fed by
+  // buildCarryOverPreview/recomputeCarryOverSegments instead of
+  // buildMultiDayPreview/recomputeMultiDaySegments.
+  function buildCarryOverPanelHtml(itemId) {
+    if (carryOverLoading || !carryOverPreview) {
+      return `<div class="edit-panel carryover-panel"><p class="hint">${escapeAttr(t('multiday.loading'))}</p></div>`;
+    }
+    const preview = carryOverPreview;
+    const { segments, unscheduledMinutes } = recomputeCarryOverSegments(preview);
+
+    const segmentsHtml =
+      segments.length > 0
+        ? segments
+            .map(
+              (s) => `
+              <div class="multiday-seg-row">
+                <span class="md-seg-date">${escapeAttr(formatDateLabel(s.date))}</span>
+                <input type="number" class="co-seg-minutes" min="0" step="5" data-date="${escapeAttr(s.date)}" value="${s.minutes}">
+              </div>`
+            )
+            .join('')
+        : `<p class="hint">${escapeAttr(t('multiday.noSegments'))}</p>`;
+
+    const warningHtml =
+      unscheduledMinutes > 0
+        ? `<div class="edit-error">${unscheduledMinutes} ${escapeAttr(t('carryOver.unscheduledSuffix'))}</div>`
+        : '';
+    const errorHtml = carryOverError ? `<div class="edit-error">${escapeAttr(carryOverError)}</div>` : '';
+
+    return `
+      <div class="edit-panel carryover-panel">
+        <p class="hint">${escapeAttr(t('carryOver.remainingMinutesLabel'))}: ${preview.remainingMinutes} min</p>
+        <div class="multiday-range-row">
+          <label>${escapeAttr(t('multiday.startDate'))}
+            <input type="date" class="co-start-date" value="${escapeAttr(preview.startDate)}">
+          </label>
+          <label>${escapeAttr(t('multiday.endDate'))}
+            <input type="date" class="co-end-date" value="${escapeAttr(preview.endDate)}">
+          </label>
+        </div>
+        <label class="co-extend-label">
+          <input type="checkbox" class="co-extend-checkbox" ${preview.ignoreDueDate ? 'checked' : ''}>
+          ${escapeAttr(t('carryOver.extendPastDue'))}
+        </label>
+        <button type="button" class="co-action-btn co-recompute-btn" data-id="${itemId}">${escapeAttr(t('multiday.recompute'))}</button>
+        <div class="multiday-segments-title hint">${escapeAttr(t('multiday.segmentsTitle'))}</div>
+        <div class="multiday-segments">${segmentsHtml}</div>
+        ${warningHtml}
+        ${errorHtml}
+        <div class="edit-actions">
+          <button type="button" class="co-primary-btn co-accept-btn" data-id="${itemId}">${escapeAttr(t('carryOver.replanRemaining'))}</button>
+          <button type="button" class="co-cancel-btn" data-id="${itemId}">${escapeAttr(t('multiday.cancel'))}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function openCarryOverPanel(item) {
+    closeSecondaryPanels();
+    carryOverPanelItemId = item.id;
+    carryOverLoading = true;
+    renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+
+    let subjectRow;
+    try {
+      subjectRow = await getStudySubjectById(item.sourceSubjectId);
+    } catch (err) {
+      console.error(err);
+      if (carryOverPanelItemId !== item.id) return;
+      carryOverLoading = false;
+      carryOverError = 'Could not load this task — check your connection.';
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+    if (carryOverPanelItemId !== item.id) return; // panel closed while this was loading
+    if (!subjectRow) {
+      carryOverLoading = false;
+      carryOverError = 'This task no longer exists.';
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const remaining = computeRemainingMinutes({
+      start: item.start,
+      end: item.end,
+      completed: item.completed,
+      completedMinutes: item.completedMinutes,
+      carriedOverMinutes: item.carriedOverMinutes,
+    });
+    const startDate = addDaysToDateStr(schedule.for_date, 1);
+    const endDate = subjectRow.due_date && subjectRow.due_date > startDate ? subjectRow.due_date : addDaysToDateStr(startDate, 13);
+    await loadCarryOverPreview(item, subjectRow, remaining, startDate, endDate, false);
+  }
+
+  async function loadCarryOverPreview(item, subjectRow, remainingMinutes, startDate, endDate, ignoreDueDate) {
+    const token = activeToken;
+    try {
+      const raw = await buildCarryOverPreview(userId, item, subjectRow, remainingMinutes, startDate, endDate, { ignoreDueDate });
+      if (token !== activeToken || carryOverPanelItemId !== item.id) return; // navigated away or panel closed
+      carryOverPreview = { ...raw, startDate, endDate };
+      carryOverLoading = false;
+      carryOverError = '';
+    } catch (e) {
+      console.error(e);
+      if (token !== activeToken || carryOverPanelItemId !== item.id) return;
+      carryOverLoading = false;
+      carryOverError = 'Could not load a carry-over preview — check your connection.';
+    }
+    renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+  }
+
   function renderScheduleEvents(events, subjectsForLookup) {
     if (!events || events.length === 0) {
       output.innerHTML = '<div class="placeholder">Nothing to show yet.</div>';
@@ -1004,9 +1142,13 @@ async function init(session) {
         const metaParts = [`${formatClock(e.start)} – ${formatClock(e.end)}`, durText];
 
         let priorityBadge = '';
+        let missedBadge = '';
         let lockControl = '';
         let doneControl = '';
         let editControl = '';
+        let partialControl = '';
+        let missedControl = '';
+        let carryOverControl = '';
         let nameHtml = escapeAttr(e.name);
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
@@ -1017,6 +1159,18 @@ async function init(session) {
           if (dueText) metaParts.push(dueText);
 
           if (e.completed) nameHtml = `✓ ${nameHtml}`;
+          if (e.missed) missedBadge = `<span class="tl-badge tl-badge-missed">${escapeAttr(t('carryOver.missedBadge'))}</span>`;
+
+          // Phase 14: partial-completion + carried-over audit trail, shown
+          // right alongside the existing time/duration/due-date meta line —
+          // never replacing it.
+          const duration = e.end - e.start;
+          if (e.completedMinutes > 0 && !e.completed) {
+            metaParts.push(`${t('carryOver.completedMinutesLabel')}: ${e.completedMinutes}/${duration} min`);
+          }
+          if (e.carriedOverMinutes > 0) {
+            metaParts.push(`${t('carryOver.carriedOverNote')} ${e.carriedOverMinutes} min`);
+          }
 
           if (e.id) {
             lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${e.locked ? '🔒 Locked' : '🔓 Lock'}</button>`;
@@ -1038,10 +1192,49 @@ async function init(session) {
             } else if (!e.locked) {
               editControl = `<button type="button" class="edit-btn" data-id="${e.id}">Edit</button>`;
             }
+
+            // Phase 14: Partial Completion / Missed / Carry Over — same rule
+            // as Edit above, a LOCKED block is never touched by any of these
+            // without an explicit unlock first (see carryOverModel.js's
+            // canCarryOverBlock/canMarkMissed).
+            if (!e.locked) {
+              if (e.id === partialPanelItemId) {
+                partialControl = `
+                  <div class="edit-panel partial-panel">
+                    <label>${escapeAttr(t('carryOver.completedMinutesLabel'))} (0–${duration})</label>
+                    <input type="number" class="partial-minutes-input" min="0" max="${duration}" step="5" value="${e.completedMinutes || 0}">
+                    <div class="edit-actions">
+                      <button type="button" class="co-primary-btn partial-save-btn" data-id="${e.id}">${escapeAttr(t('carryOver.save'))}</button>
+                      <button type="button" class="partial-cancel-btn" data-id="${e.id}">${escapeAttr(t('multiday.cancel'))}</button>
+                    </div>
+                    <div class="edit-error"></div>
+                  </div>
+                `;
+              } else {
+                partialControl = `<button type="button" class="co-action-btn partial-btn" data-id="${e.id}">${escapeAttr(t('carryOver.partialCompletion'))}</button>`;
+              }
+
+              if (e.missed) {
+                missedControl = `<button type="button" class="co-action-btn unmark-missed-btn" data-id="${e.id}">${escapeAttr(t('carryOver.unmarkMissed'))}</button>`;
+              } else if (canMarkMissed(e)) {
+                missedControl = `<button type="button" class="co-action-btn mark-missed-btn" data-id="${e.id}">${escapeAttr(t('carryOver.markAsMissed'))}</button>`;
+              }
+
+              if (canCarryOverBlock(e)) {
+                carryOverControl = `<button type="button" class="co-action-btn carry-over-btn" data-id="${e.id}">${escapeAttr(t('carryOver.carryOver'))}</button>`;
+              }
+
+              if (e.id === carryOverPanelItemId) {
+                carryOverControl += buildCarryOverPanelHtml(e.id);
+              }
+            }
           }
         }
 
-        const actionsHtml = lockControl || doneControl || editControl ? `<div class="tl-actions">${lockControl}${doneControl}${editControl}</div>` : '';
+        const actionsHtml =
+          lockControl || doneControl || editControl || partialControl || missedControl || carryOverControl
+            ? `<div class="tl-actions">${lockControl}${doneControl}${editControl}${partialControl}${missedControl}${carryOverControl}</div>`
+            : '';
 
         return `
           <div class="tl-row tl-${e.type}${e.locked ? ' tl-locked' : ''}${e.completed ? ' tl-completed' : ''}">
@@ -1051,6 +1244,7 @@ async function init(session) {
               <div class="tl-card-top">
                 <span class="tl-name">${nameHtml}</span>
                 ${priorityBadge}
+                ${missedBadge}
               </div>
               <div class="tl-meta">${escapeAttr(metaParts.join(' · '))}</div>
               ${actionsHtml}
@@ -1110,6 +1304,7 @@ async function init(session) {
 
     const editBtn = e.target.closest('.edit-btn');
     if (editBtn) {
+      closeSecondaryPanels();
       editingItemId = editBtn.dataset.id;
       renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       return;
@@ -1117,7 +1312,7 @@ async function init(session) {
 
     const cancelBtn = e.target.closest('.edit-cancel-btn');
     if (cancelBtn) {
-      editingItemId = null;
+      closeSecondaryPanels();
       renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       return;
     }
@@ -1184,6 +1379,200 @@ async function init(session) {
         errorEl.textContent = 'Could not save — check your connection.';
         saveBtn.disabled = false;
       }
+      return;
+    }
+
+    // ---------------- Phase 14: Partial Completion ----------------
+    const partialBtn = e.target.closest('.partial-btn');
+    if (partialBtn) {
+      closeSecondaryPanels();
+      partialPanelItemId = partialBtn.dataset.id;
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const partialCancelBtn = e.target.closest('.partial-cancel-btn');
+    if (partialCancelBtn) {
+      closeSecondaryPanels();
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const partialSaveBtn = e.target.closest('.partial-save-btn');
+    if (partialSaveBtn) {
+      const id = partialSaveBtn.dataset.id;
+      const panel = partialSaveBtn.closest('.partial-panel');
+      const input = panel.querySelector('.partial-minutes-input');
+      const errorEl = panel.querySelector('.edit-error');
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (!item) return;
+
+      const duration = item.end - item.start;
+      const validated = validateCompletedMinutesInput(input.value, duration);
+      if (!validated.ok) {
+        errorEl.textContent = validated.error;
+        return;
+      }
+      const completed = isFullyCompletedByMinutes(validated.value, duration);
+
+      const token = activeToken;
+      partialSaveBtn.disabled = true;
+      try {
+        await setScheduleItemPartialCompletion(id, validated.value, completed);
+        if (token !== activeToken) return; // navigated away before this resolved
+        item.completedMinutes = validated.value;
+        item.completed = completed;
+        closeSecondaryPanels();
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        renderDailySummaryFromCurrent();
+        refreshHistoryList();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = 'Could not save — check your connection.';
+        partialSaveBtn.disabled = false;
+      }
+      return;
+    }
+
+    // ---------------- Phase 14: Missed ----------------
+    const markMissedBtn = e.target.closest('.mark-missed-btn');
+    if (markMissedBtn) {
+      const id = markMissedBtn.dataset.id;
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (!item) return;
+      const token = activeToken;
+      markMissedBtn.disabled = true;
+      try {
+        await setScheduleItemMissed(id, true);
+        if (token !== activeToken) return;
+        item.missed = true;
+        flashSaved();
+        // "Missed -> Preview new plan -> Confirm": marking a block missed
+        // immediately offers the same Carry Over preview — nothing is
+        // actually moved until the student explicitly accepts it there.
+        await openCarryOverPanel(item);
+      } catch (err) {
+        console.error(err);
+        flashError('Could not mark this block missed — check your connection.');
+        markMissedBtn.disabled = false;
+      }
+      return;
+    }
+
+    const unmarkMissedBtn = e.target.closest('.unmark-missed-btn');
+    if (unmarkMissedBtn) {
+      const id = unmarkMissedBtn.dataset.id;
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (!item) return;
+      const token = activeToken;
+      unmarkMissedBtn.disabled = true;
+      try {
+        await setScheduleItemMissed(id, false);
+        if (token !== activeToken) return;
+        item.missed = false;
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        flashError('Could not update this block — check your connection.');
+        unmarkMissedBtn.disabled = false;
+      }
+      return;
+    }
+
+    // ---------------- Phase 14: Carry Over / Re-plan Remaining ----------------
+    const carryOverBtn = e.target.closest('.carry-over-btn');
+    if (carryOverBtn) {
+      const id = carryOverBtn.dataset.id;
+      const item = currentScheduleItems.find((i) => i.id === id);
+      if (!item) return;
+      await openCarryOverPanel(item);
+      return;
+    }
+
+    const coCancelBtn = e.target.closest('.co-cancel-btn');
+    if (coCancelBtn) {
+      closeSecondaryPanels();
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      return;
+    }
+
+    const coRecomputeBtn = e.target.closest('.co-recompute-btn');
+    if (coRecomputeBtn) {
+      const id = coRecomputeBtn.dataset.id;
+      const item = currentScheduleItems.find((i) => i.id === id);
+      const panel = coRecomputeBtn.closest('.carryover-panel');
+      if (!item || !panel) return;
+
+      const startDate = panel.querySelector('.co-start-date').value;
+      const endDate = panel.querySelector('.co-end-date').value;
+      const ignoreDueDate = panel.querySelector('.co-extend-checkbox').checked;
+      if (!startDate || !endDate || endDate < startDate) {
+        carryOverError = 'Choose a valid start and end date.';
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        return;
+      }
+
+      carryOverLoading = true;
+      carryOverError = '';
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+
+      try {
+        const subjectRow = await getStudySubjectById(item.sourceSubjectId);
+        if (carryOverPanelItemId !== item.id) return; // panel closed while this was loading
+        if (!subjectRow) {
+          carryOverLoading = false;
+          carryOverError = 'This task no longer exists.';
+          renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+          return;
+        }
+        const remaining = computeRemainingMinutes({
+          start: item.start,
+          end: item.end,
+          completed: item.completed,
+          completedMinutes: item.completedMinutes,
+          carriedOverMinutes: item.carriedOverMinutes,
+        });
+        await loadCarryOverPreview(item, subjectRow, remaining, startDate, endDate, ignoreDueDate);
+      } catch (err) {
+        console.error(err);
+        if (carryOverPanelItemId !== item.id) return;
+        carryOverLoading = false;
+        carryOverError = 'Could not load a carry-over preview — check your connection.';
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      }
+      return;
+    }
+
+    const coAcceptBtn = e.target.closest('.co-accept-btn');
+    if (coAcceptBtn) {
+      const id = coAcceptBtn.dataset.id;
+      const item = currentScheduleItems.find((i) => i.id === id);
+      const panel = coAcceptBtn.closest('.carryover-panel');
+      if (!item || !panel || !carryOverPreview) return;
+
+      const segments = Array.from(panel.querySelectorAll('.co-seg-minutes'))
+        .map((input) => ({ date: input.dataset.date, minutes: parseInt(input.value, 10) || 0 }))
+        .filter((s) => s.minutes > 0);
+
+      const token = activeToken;
+      coAcceptBtn.disabled = true;
+      try {
+        const result = await acceptCarryOver(userId, carryOverPreview, segments);
+        if (token !== activeToken) return; // navigated away while saving
+        item.carriedOverMinutes = (item.carriedOverMinutes || 0) + result.carriedTotal;
+        closeSecondaryPanels();
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        refreshHistoryList();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        carryOverError = 'Could not save the carry-over plan — check your connection.';
+        coAcceptBtn.disabled = false;
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      }
+      return;
     }
   });
 
@@ -1284,7 +1673,7 @@ async function init(session) {
   async function runGeneration(lockedBlocks) {
     const scheduleId = schedule.id;
     const token = activeToken;
-    editingItemId = null; // the whole timeline is about to be replaced
+    closeSecondaryPanels(); // the whole timeline is about to be replaced
 
     const classesInput = Array.from(classList.children).map((row) => ({
       name: row.querySelector('.class-name').value.trim(),
@@ -1358,6 +1747,9 @@ async function init(session) {
           end: r.end_minutes,
           locked: r.locked,
           completed: r.completed,
+          completedMinutes: r.completed_minutes,
+          missed: r.missed,
+          carriedOverMinutes: r.carried_over_minutes,
           sourceSubjectId: r.source_subject_id,
         })),
       ].sort((a, b) => a.start - b.start);
@@ -1495,7 +1887,7 @@ async function init(session) {
     classList.innerHTML = '';
     studyList.innerHTML = '';
     currentScheduleItems = [];
-    editingItemId = null;
+    closeSecondaryPanels();
     closeMultiDayPanel();
     output.innerHTML = '<div class="placeholder">Loading…</div>';
     renderNotes([]);
@@ -1557,6 +1949,9 @@ async function init(session) {
             end: i.end_minutes,
             locked: i.locked,
             completed: i.completed,
+            completedMinutes: i.completed_minutes,
+            missed: i.missed,
+            carriedOverMinutes: i.carried_over_minutes,
             sourceSubjectId: i.source_subject_id,
           }))
           .sort((a, b) => a.start - b.start);

@@ -130,7 +130,11 @@ export function initAnalyticsSection(userId, hostApi = {}) {
 
       const values = document.createElement('span');
       values.className = 'analytics-subject-values';
-      values.textContent = `${t('analytics.planned')}: ${formatDuration(s.planned)}  ·  ${t('analytics.completed')}: ${formatDuration(s.completed)}`;
+      // Missed (Phase 14) is shown only when there's actually something to
+      // report — most subjects have nothing missed, and the row shouldn't
+      // grow a permanent "Missed: 0m" for every subject that never needed it.
+      const missedPart = s.missed > 0 ? `  ·  ${t('analytics.missed')}: ${formatDuration(s.missed)}` : '';
+      values.textContent = `${t('analytics.planned')}: ${formatDuration(s.planned)}  ·  ${t('analytics.completed')}: ${formatDuration(s.completed)}${missedPart}`;
 
       row.appendChild(name);
       row.appendChild(values);
