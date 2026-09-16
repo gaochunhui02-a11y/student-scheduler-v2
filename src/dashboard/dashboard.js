@@ -48,7 +48,6 @@ import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
-import { initAdvisorSection } from '../advisor/advisor.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
 import { initNotificationsSection } from '../notifications/notifications.js';
 import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
@@ -220,21 +219,18 @@ async function init(session) {
     });
   }
 
-  // ---------------- alternate views (Board, AI Advisor, Dashboard) ----------------
-  // Board, Advisor, and the analytics Dashboard are full alternate views,
-  // not anchors within the planner's continuous scroll — so
-  // "Planner"/"History"/etc. and "Board"/"AI Advisor"/"Dashboard" use two
-  // different nav-click patterns that coexist: data-scroll-target
-  // (existing, untouched below) smooth-scrolls within the always-mounted
-  // planner layout, while data-view-target swaps which top-level section
-  // is visible. All Board DOM/state lives in src/board/board.js, all
-  // Advisor DOM/state lives in src/advisor/advisor.js, and all Dashboard/
-  // analytics DOM/state lives in src/analytics/analytics.js — this file
-  // only owns the show/hide toggle between #plannerForm and whichever
-  // alternate view is active.
-  const altViewEls = [document.getElementById('boardView'), document.getElementById('advisorView'), document.getElementById('analyticsView')].filter(
-    Boolean
-  );
+  // ---------------- alternate views (Board, Dashboard) ----------------
+  // Board and the analytics Dashboard are full alternate views, not
+  // anchors within the planner's continuous scroll — so "Planner"/
+  // "History"/etc. and "Board"/"Dashboard" use two different nav-click
+  // patterns that coexist: data-scroll-target (existing, untouched below)
+  // smooth-scrolls within the always-mounted planner layout, while
+  // data-view-target swaps which top-level section is visible. All Board
+  // DOM/state lives in src/board/board.js, all Dashboard/analytics
+  // DOM/state lives in src/analytics/analytics.js — this file only owns
+  // the show/hide toggle between #plannerForm and whichever alternate view
+  // is active.
+  const altViewEls = [document.getElementById('boardView'), document.getElementById('analyticsView')].filter(Boolean);
   function showPlannerView() {
     altViewEls.forEach((el) => {
       el.hidden = true;
@@ -248,10 +244,10 @@ async function init(session) {
     });
   }
 
-  // Shared by Board's/the Advisor's/Analytics' "go to Planner" bridges —
-  // switches back to the planner view, marks the Planner nav item active,
-  // and scrolls to the study-tasks card. One implementation, several
-  // callers, same as every other cross-feature bridge in this file.
+  // Shared by Board's/Analytics' "go to Planner" bridges — switches back to
+  // the planner view, marks the Planner nav item active, and scrolls to
+  // the study-tasks card. One implementation, several callers, same as
+  // every other cross-feature bridge in this file.
   function goToPlannerStudyList() {
     document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
     const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
@@ -285,45 +281,12 @@ async function init(session) {
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 
-  // ---------------- AI Advisor -> existing Planner + Board (Phase 9) ----------------
-  // advisor.js never imports data.js or boardData.js directly — it only
-  // calls these host functions. Planner tasks go through the exact same
-  // insertStudySubject + addStudyRow path as Board's "Add to Planner"
-  // above; Board nodes go through boardSection.addNodeFromExternal, which
-  // itself just calls the existing boardData.createNode. Nothing here
-  // creates a second Planner-task or Board-node system.
-  const advisorHostApi = {
-    getPlannerContext: async () => {
-      if (!schedule) return null;
-      const [subjects, classesList] = await Promise.all([listStudySubjects(schedule.id), listClasses(schedule.id)]);
-      return { schedule, studySubjects: subjects, classes: classesList, scheduleItems: currentScheduleItems };
-    },
-    getBoardContext: () => (boardSection && typeof boardSection.getGoalNodesSummary === 'function' ? boardSection.getGoalNodesSummary() : []),
-    createStudyTaskFromAdvisor: async (fields) => {
-      if (!schedule) throw new Error('No active schedule to attach the study task to.');
-      const sortOrder = studyList.children.length;
-      const created = await insertStudySubject(schedule.id, userId, fields, sortOrder);
-      addStudyRow(created);
-      refreshHistoryList();
-      return created;
-    },
-    addBoardNodeFromAdvisor: (title) => {
-      if (!boardSection || typeof boardSection.addNodeFromExternal !== 'function') {
-        return Promise.reject(new Error('no_active_board'));
-      }
-      return boardSection.addNodeFromExternal(title);
-    },
-  };
-  const advisorSection = initAdvisorSection(userId, advisorHostApi);
-
-  // ---------------- Dashboard/Analytics -> existing Planner + Board + Advisor (Phase 10) ----------------
-  // analytics.js never imports data.js/boardData.js/the Advisor directly —
-  // it only calls these host functions. Every number it shows is derived
-  // read-only from the exact same tables (schedules/schedule_items/
-  // study_subjects/boards) every other feature already reads; nothing here
-  // writes anything. "Ask AI Advisor" reuses the existing Advisor via
-  // advisorSection.prefillAndFocus — it never sends a message itself, and
-  // there is no second AI integration here.
+  // ---------------- Dashboard/Analytics -> existing Planner + Board (Phase 10) ----------------
+  // analytics.js never imports data.js/boardData.js directly — it only
+  // calls these host functions. Every number it shows is derived read-only
+  // from the exact same tables (schedules/schedule_items/study_subjects/
+  // boards) every other feature already reads; nothing here writes
+  // anything.
   const analyticsHostApi = {
     getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
     getWeekData: async (startDate, endDate) => {
@@ -335,16 +298,6 @@ async function init(session) {
     getUpcomingDeadlines: (fromDate) => listUpcomingStudySubjects(userId, fromDate),
     getBoardsSummary: () => listBoards(userId),
     viewInPlanner: goToPlannerStudyList,
-    openAdvisorWithMessage: (text) => {
-      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
-      const advisorNavBtn = document.querySelector('.nav-item[data-view-target="advisorView"]');
-      if (advisorNavBtn) advisorNavBtn.classList.add('active');
-      showAltView(document.getElementById('advisorView'));
-      if (advisorSection) {
-        if (typeof advisorSection.onShow === 'function') advisorSection.onShow();
-        if (typeof advisorSection.prefillAndFocus === 'function') advisorSection.prefillAndFocus(text);
-      }
-    },
   };
   const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
 
@@ -415,7 +368,6 @@ async function init(session) {
 
   const altViewSections = {
     boardView: boardSection,
-    advisorView: advisorSection,
     analyticsView: analyticsSection,
   };
   document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {

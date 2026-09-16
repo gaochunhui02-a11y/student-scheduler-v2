@@ -24,7 +24,6 @@
       <button type="button" class="nav-item" data-scroll-target="historyCard"><span class="nav-dot"></span><span data-i18n="nav.history">History</span></button>
       <button type="button" class="nav-item" data-scroll-target="studyPrefsForm"><span class="nav-dot"></span><span data-i18n="nav.settings">Settings</span></button>
       <button type="button" class="nav-item" data-view-target="boardView"><span class="nav-dot"></span><span data-i18n="nav.board">Board</span></button>
-      <button type="button" class="nav-item" data-view-target="advisorView"><span class="nav-dot"></span><span data-i18n="nav.advisor">AI Advisor</span></button>
       <button type="button" class="nav-item" data-view-target="analyticsView"><span class="nav-dot"></span><span data-i18n="nav.dashboard">Dashboard</span></button>
     </nav>
 
@@ -349,31 +348,6 @@
         <div class="card board-no-board" id="boardNoBoardState" hidden>
           <p class="hint" data-i18n="board.noBoardHint">You don't have a board yet.</p>
           <button type="button" class="btn-primary" id="boardCreateBtn" data-i18n="board.createFirstBoard">Create your first Board</button>
-        </div>
-      </section>
-
-      <section class="advisor-view" id="advisorView" hidden>
-        <div class="advisor-header">
-          <h2 data-i18n="nav.advisor">AI Advisor</h2>
-        </div>
-
-        <div class="advisor-conversation" id="advisorMessages">
-          <div class="placeholder advisor-empty" id="advisorEmptyState" data-i18n="advisor.emptyState">Ask about your study plan to get started.</div>
-        </div>
-
-        <p class="hint" id="advisorStatus" hidden></p>
-
-        <div class="advisor-prompt-chips" id="advisorPromptChips">
-          <button type="button" class="advisor-chip" data-i18n="advisor.promptToday">What should I study today?</button>
-          <button type="button" class="advisor-chip" data-i18n="advisor.promptWeek">Plan my study week</button>
-          <button type="button" class="advisor-chip" data-i18n="advisor.promptExam">Help me prepare for an exam</button>
-          <button type="button" class="advisor-chip" data-i18n="advisor.promptBehind">I am behind on my tasks</button>
-          <button type="button" class="advisor-chip" data-i18n="advisor.promptPrioritize">Help me prioritize my work</button>
-        </div>
-
-        <div class="advisor-input-row">
-          <textarea id="advisorInput" class="advisor-input" rows="2" data-i18n-placeholder="advisor.inputPlaceholder" placeholder="Ask about your study plan" data-i18n-aria-label="advisor.inputPlaceholder" aria-label="Ask about your study plan"></textarea>
-          <button type="button" class="btn-primary advisor-send-btn" id="advisorSendBtn" data-i18n="advisor.send">Send</button>
         </div>
       </section>
 

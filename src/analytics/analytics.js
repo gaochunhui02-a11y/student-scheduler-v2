@@ -13,9 +13,10 @@
 //
 // No AI is used for any of the analytics/risk numbers — every calculation
 // comes from src/analytics/analyticsModel.js's deterministic pure
-// functions. The only AI touchpoint is the optional "Ask AI Advisor"
-// button, which reuses Phase 9's Advisor as-is (hostApi.openAdvisorWithMessage)
-// rather than building a second AI flow.
+// functions. The "Ask AI Advisor" bridge that used to live here was
+// removed with the AI Advisor itself (final non-AI product redesign,
+// Checkpoint A) — analyticsModel.js's buildAdvisorPromptForTask is kept,
+// unimported, alongside the rest of the optional/future AI code.
 
 import { t } from '../shared/i18n.js';
 import {
@@ -28,7 +29,6 @@ import {
   countByRisk,
   computeProductivityPeriod,
   summarizeBoards,
-  buildAdvisorPromptForTask,
 } from './analyticsModel.js';
 import { formatDuration } from '../dashboard/summary.js';
 
@@ -189,24 +189,6 @@ export function initAnalyticsSection(userId, hostApi = {}) {
 
       row.appendChild(main);
       row.appendChild(riskBadge);
-
-      if (item.risk === 'at_risk' && typeof hostApi.openAdvisorWithMessage === 'function') {
-        const askBtn = document.createElement('button');
-        askBtn.type = 'button';
-        askBtn.className = 'board-node-link-btn';
-        askBtn.dataset.i18n = 'analytics.askAiAdvisor';
-        askBtn.textContent = t('analytics.askAiAdvisor');
-        askBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const prompt = buildAdvisorPromptForTask(item, {
-            help: t('analytics.advisorPromptHelp'),
-            due: t('analytics.advisorPromptDue'),
-            riskNote: t('analytics.advisorPromptRisk'),
-          });
-          hostApi.openAdvisorWithMessage(prompt);
-        });
-        row.appendChild(askBtn);
-      }
 
       function goToPlanner() {
         if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
