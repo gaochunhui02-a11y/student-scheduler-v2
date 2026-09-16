@@ -141,8 +141,37 @@ async function callProvider(message: string, context: unknown): Promise<unknown>
     }),
   });
 
-  if (res.status === 429) throw new RateLimitError();
-  if (!res.ok) throw new Error(`provider responded ${res.status}`);
+  if (res.status === 429) {
+    // Same diagnostic logging as the !res.ok branch below, applied here too
+    // since this check runs first and previously threw RateLimitError()
+    // before the body was ever read — the exact reason for the 429
+    // (message/type/code) was never visible. Behavior is unchanged: this
+    // still throws RateLimitError() with no message, so the outer catch's
+    // `if (err instanceof RateLimitError) return json({ error: 'rate_limited' }, 429)`
+    // maps to the exact same client-facing response as before. Never logs
+    // OPENAI_API_KEY or the Authorization header — only OpenAI's own body.
+    const errorBody = await res.text();
+    let providerError: { message?: unknown; type?: unknown; code?: unknown } | null = null;
+    try {
+      providerError = JSON.parse(errorBody)?.error ?? null;
+    } catch {
+      providerError = null;
+    }
+    console.error(
+      `ai-advisor: OpenAI rate-limited (429) — message=${providerError?.message ?? 'unknown'} ` +
+        `type=${providerError?.type ?? 'unknown'} code=${providerError?.code ?? 'unknown'}`
+    );
+    throw new RateLimitError();
+  }
+  if (!res.ok) {
+    // Log the provider's own error body server-side (Supabase Function
+    // Logs) so a real failure (bad/revoked key, wrong org, quota, etc.) is
+    // diagnosable — never log OPENAI_API_KEY or the Authorization header
+    // itself; only what OpenAI's response body says.
+    const errorBody = await res.text();
+    console.error(`ai-advisor: OpenAI request failed with status ${res.status}: ${errorBody}`);
+    throw new Error(`provider responded ${res.status}`);
+  }
 
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
