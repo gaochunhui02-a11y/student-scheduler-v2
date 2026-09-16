@@ -539,14 +539,14 @@ button { font-family: inherit; }
 }
 
 /* ---------------- scheduler layout ---------------- */
-.layout {
+.planner-layout {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 1fr 380px;
   gap: 20px;
   align-items: start;
 }
 @media (max-width: 1080px) {
-  .layout { grid-template-columns: 1fr; }
+  .planner-layout { grid-template-columns: 1fr; }
 }
 
 .row-2 {
@@ -1894,6 +1894,149 @@ button { font-family: inherit; }
   .home-stat-cards { grid-template-columns: 1fr; }
   .home-qa-row { grid-template-columns: 1fr; }
   .home-hero::before { display: none; }
+}
+
+/* ==========================================================================
+   Planner + Study Tasks redesign (Checkpoint C). Reuses .card, .hint,
+   .btn-primary, .btn-secondary, .row-2, .meal-row, .entry-row, .tl-cards
+   and .add-btn as-is throughout - nothing here replaces or duplicates any
+   of that, it only adds the new header, two-column layout, collapsible
+   groups, Next Up card, and empty and sort-shell polish.
+   ========================================================================== */
+.planner-page > * + * { margin-top: 18px; }
+
+.planner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.planner-eyebrow {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.planner-date-heading { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+.planner-date-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+
+.planner-header-controls { display: flex; flex-direction: column; gap: 8px; width: 280px; flex: 0 0 auto; }
+.planner-date-nav { margin-bottom: 0; }
+.planner-date-nav .planner-today-btn { width: auto; height: 38px; padding: 0 14px; flex: 0 0 auto; }
+.planner-date-input { height: 38px; }
+.planner-generate-row { display: flex; flex-direction: column; gap: 6px; }
+.planner-save-status { text-align: center; min-height: 15px; margin: 0; }
+.planner-save-status.hint-error { color: var(--danger); font-weight: 600; }
+
+@media (max-width: 700px) {
+  .planner-header-controls { width: 100%; }
+}
+
+/* ---- Next Up: dynamically derived from the currently loaded schedule +
+   the real clock, only ever shown for today, never persisted anywhere ---- */
+.planner-nextup-card .nextup-row { display: flex; align-items: center; gap: 12px; }
+.planner-nextup-card .nextup-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--study-color); flex: none; }
+.planner-nextup-card .nextup-dot.is-live { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+.planner-nextup-card .nextup-info { min-width: 0; }
+.planner-nextup-card .nextup-name { font-size: 14px; font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
+.planner-nextup-card .nextup-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.planner-nextup-card .nextup-empty { font-size: 13px; color: var(--muted); }
+
+/* ---- empty schedule state (before the first Generate) ---- */
+.planner-empty-state { padding: 30px 10px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.planner-empty-glyph { font-size: 26px; margin-bottom: 6px; }
+.planner-empty-title { margin: 0; font-size: 14.5px; font-weight: 650; color: var(--text); }
+.planner-empty-state .hint { margin: 2px 0 0; max-width: 40ch; }
+
+/* ---- Study Tasks panel heading + sort-order shell (Checkpoint C ships the
+   control only — real multi-key sorting is deferred to a later checkpoint) ---- */
+.planner-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.planner-panel-heading h2 { margin: 0; }
+.task-sort-shell {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: not-allowed;
+}
+
+.planner-subheading { margin: 16px 0 8px; font-size: 12.5px; font-weight: 650; color: var(--text-soft); }
+
+/* ---- collapsible groups (Day Settings / Study Preferences) — <details>
+   styled to look like the surrounding .card, summary as its h2 ---- */
+.planner-collapsible { padding: 0; }
+.planner-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 18px 20px;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.planner-collapsible > summary::-webkit-details-marker { display: none; }
+.planner-collapsible > summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted-2);
+  border-bottom: 2px solid var(--muted-2);
+  transform: rotate(45deg);
+  transition: transform var(--dur) var(--ease);
+}
+.planner-collapsible[open] > summary::after { transform: rotate(-135deg); }
+.planner-collapsible[open] > summary { padding-bottom: 10px; }
+.planner-collapsible-body { padding: 0 20px 18px; }
+
+/* ---- secondary tools drawer (History / Notifications / Calendar / Copy Day) ---- */
+.planner-more-tools {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.planner-more-tools > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 15px 20px;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.planner-more-tools > summary::-webkit-details-marker { display: none; }
+.planner-more-tools > summary::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted-2);
+  border-bottom: 2px solid var(--muted-2);
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease);
+  flex: none;
+}
+.planner-more-tools[open] > summary::before { transform: rotate(45deg); }
+.planner-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+.planner-tools-grid > .card { margin-bottom: 0; }
+
+@media (max-width: 600px) {
+  .planner-tools-grid { grid-template-columns: 1fr; }
 }
 
 /* ==========================================================================

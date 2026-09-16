@@ -384,7 +384,14 @@ async function init(session) {
     if (navBtn) navBtn.classList.add('active');
     showPlannerView();
     const target = document.getElementById(targetId);
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (target) {
+      // Checkpoint C: History/Preferences/Calendar can now live inside a
+      // collapsed <details> — open whichever one contains the jump target
+      // before scrolling, or the nav link would land on a hidden section.
+      const collapsible = target.closest('details');
+      if (collapsible && !collapsible.open) collapsible.open = true;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
     btn.addEventListener('click', () => activatePlannerScroll(btn.dataset.scrollTarget));
@@ -479,13 +486,13 @@ async function init(session) {
 
   function flashSaved() {
     saveStatus.textContent = 'Saved';
-    saveStatus.className = 'hint';
+    saveStatus.classList.remove('hint-error');
     clearTimeout(flashSaved._t);
     flashSaved._t = setTimeout(() => { saveStatus.textContent = ''; }, 1200);
   }
   function flashError(msg) {
     saveStatus.textContent = msg;
-    saveStatus.className = 'hint';
+    saveStatus.classList.add('hint-error');
   }
 
   // serializes saves per row so a fast second edit never races ahead of the
@@ -613,6 +620,30 @@ async function init(session) {
     if (!schedule) return;
     loadScheduleForDate(addDaysToDateStr(schedule.for_date, 1));
   });
+  const todayBtn = document.getElementById('todayBtn');
+  const todayDateStr = () => addDaysToDateStr(tomorrowDateStr(), -1);
+  todayBtn.addEventListener('click', () => loadScheduleForDate(todayDateStr()));
+
+  // Checkpoint C: human-readable heading in the new Planner header — purely
+  // derived from `schedule.for_date` each time a date loads, never its own
+  // stored value.
+  const plannerDateHeading = document.getElementById('plannerDateHeading');
+  const plannerDateSub = document.getElementById('plannerDateSub');
+  function updatePlannerHeader() {
+    if (!schedule) return;
+    const today = todayDateStr();
+    let relLabel = '';
+    if (schedule.for_date === today) relLabel = t('planner.relToday');
+    else if (schedule.for_date === addDaysToDateStr(today, 1)) relLabel = t('planner.relTomorrow');
+    else if (schedule.for_date === addDaysToDateStr(today, -1)) relLabel = t('planner.relYesterday');
+    const weekday = new Date(`${schedule.for_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' });
+    plannerDateHeading.textContent = relLabel ? `${relLabel} · ${formatDateLabel(schedule.for_date)}` : `${weekday}, ${formatDateLabel(schedule.for_date)}`;
+    const classCount = classList.children.length;
+    const studyCount = studyList.children.length;
+    plannerDateSub.textContent = t('planner.dayIncludes')
+      .replace('{classes}', classCount)
+      .replace('{subjects}', studyCount);
+  }
 
   // ---------------- classes ----------------
   const classList = document.getElementById('classList');
@@ -632,6 +663,7 @@ async function init(session) {
     `;
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
+      updatePlannerHeader();
       chainSave(el, async () => {
         if (el.dataset.id) {
           await deleteClass(el.dataset.id);
@@ -640,6 +672,7 @@ async function init(session) {
       });
     });
     classList.appendChild(el);
+    updatePlannerHeader();
     return el;
   }
 
@@ -707,6 +740,7 @@ async function init(session) {
     el.querySelector('.remove-btn').addEventListener('click', () => {
       if (planningRowId === el.dataset.id) closeMultiDayPanel();
       el.remove();
+      updatePlannerHeader();
       chainSave(el, async () => {
         if (el.dataset.id) {
           await deleteStudySubject(el.dataset.id);
@@ -715,6 +749,7 @@ async function init(session) {
       });
     });
     studyList.appendChild(el);
+    updatePlannerHeader();
     return el;
   }
 
@@ -1165,7 +1200,14 @@ async function init(session) {
 
   function renderScheduleEvents(events, subjectsForLookup) {
     if (!events || events.length === 0) {
-      output.innerHTML = '<div class="placeholder">Nothing to show yet.</div>';
+      output.innerHTML = `
+        <div class="planner-empty-state">
+          <span class="planner-empty-glyph" aria-hidden="true">🗓️</span>
+          <p class="planner-empty-title">${escapeAttr(t('planner.emptyScheduleTitle'))}</p>
+          <p class="hint">${escapeAttr(t('planner.emptyScheduleBody'))}</p>
+        </div>
+      `;
+      renderNextUp([]);
       return;
     }
     const subjectByName = new Map((subjectsForLookup || []).map((s) => [s.name, s]));
@@ -1288,6 +1330,50 @@ async function init(session) {
       })
       .join('');
     output.innerHTML = `<div class="timeline">${html}</div>`;
+    renderNextUp(events);
+  }
+
+  // ---------------- Next Up (Checkpoint C) ----------------
+  // Purely derived from whatever is currently rendered in the timeline plus
+  // the real clock — nothing here is stored; it's recomputed on every
+  // renderScheduleEvents() call and only ever shown while viewing today.
+  const nextUpCard = document.getElementById('nextUpCard');
+  const nextUpBody = document.getElementById('nextUpBody');
+
+  function currentClockMinutes() {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+
+  function renderNextUp(events) {
+    if (!schedule || schedule.for_date !== todayDateStr() || !events || events.length === 0) {
+      nextUpCard.hidden = true;
+      nextUpBody.innerHTML = '';
+      return;
+    }
+    const nowMinutes = currentClockMinutes();
+    const sorted = [...events].sort((a, b) => a.start - b.start);
+    const current = sorted.find((e) => nowMinutes >= e.start && nowMinutes < e.end && e.type !== 'free');
+    const next = !current ? sorted.find((e) => e.start > nowMinutes && e.type !== 'free') : null;
+    const block = current || next;
+
+    if (!block) {
+      nextUpCard.hidden = false;
+      nextUpBody.innerHTML = `<p class="nextup-empty">${escapeAttr(t('planner.nextUpEmpty'))}</p>`;
+      return;
+    }
+
+    nextUpCard.hidden = false;
+    const label = current ? t('planner.nextUpNowLabel') : t('planner.nextUpNextLabel');
+    nextUpBody.innerHTML = `
+      <div class="nextup-row">
+        <span class="nextup-dot${current ? ' is-live' : ''}"></span>
+        <div class="nextup-info">
+          <div class="nextup-name">${escapeAttr(block.name)}</div>
+          <div class="nextup-meta">${escapeAttr(label)} · ${formatClock(block.start)} – ${formatClock(block.end)}</div>
+        </div>
+      </div>
+    `;
   }
 
   output.addEventListener('click', async (e) => {
@@ -1807,8 +1893,25 @@ async function init(session) {
       .map((i) => ({ name: i.name, start: i.start, end: i.end, sourceSubjectId: i.sourceSubjectId }));
   }
 
-  document.getElementById('generateBtn').addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
-  regenerateBtn.addEventListener('click', () => runGeneration(lockedBlocksFromCurrent()));
+  const generateBtn = document.getElementById('generateBtn');
+  // Checkpoint C: a visible "Generating…" state on whichever button was
+  // clicked instead of a silent wait — runGeneration's own error handling
+  // (showScheduleError/flashError) is untouched, this only brackets it.
+  async function handleGenerateClick(btn) {
+    const originalText = btn.textContent;
+    generateBtn.disabled = true;
+    regenerateBtn.disabled = true;
+    btn.textContent = t('actions.generating');
+    try {
+      await runGeneration(lockedBlocksFromCurrent());
+    } finally {
+      generateBtn.disabled = false;
+      regenerateBtn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+  generateBtn.addEventListener('click', () => handleGenerateClick(generateBtn));
+  regenerateBtn.addEventListener('click', () => handleGenerateClick(regenerateBtn));
 
   // ---------------- history ----------------
   const historyListEl = document.getElementById('historyList');
@@ -1969,6 +2072,7 @@ async function init(session) {
     } catch (e) {
       console.error(e);
     }
+    updatePlannerHeader();
 
     try {
       const savedItems = await listScheduleItems(schedule.id);

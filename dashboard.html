@@ -111,238 +111,274 @@
 
       <div id="loadError" class="msg error"></div>
 
-      <div class="layout" id="plannerForm" style="display:none;">
-    <div>
-      <div id="daySettingsForm">
-      <div class="card">
-        <h2 data-i18n="day.title">Your Day</h2>
-        <label for="forDate" data-i18n="day.planningFor">Planning for</label>
-        <div class="date-nav-row">
+      <div class="planner-page" id="plannerForm" style="display:none;">
+
+    <div class="planner-header">
+      <div class="planner-header-info">
+        <p class="planner-eyebrow" data-i18n="planner.eyebrow">Planner</p>
+        <h1 class="planner-date-heading" id="plannerDateHeading">&nbsp;</h1>
+        <p class="planner-date-sub" id="plannerDateSub"></p>
+      </div>
+      <div class="planner-header-controls">
+        <div class="date-nav-row planner-date-nav">
           <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
-          <input type="date" id="forDate">
+          <button type="button" class="btn-secondary planner-today-btn" id="todayBtn" data-i18n="planner.today">Today</button>
+          <label for="forDate" class="sr-only" data-i18n="day.planningFor">Planning for</label>
+          <input type="date" id="forDate" class="planner-date-input">
           <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day">→</button>
         </div>
-        <div class="row-2">
-          <div>
-            <label for="wakeTime" data-i18n="day.wakeTime">Wake-up time</label>
-            <input type="time" id="wakeTime">
+        <div class="planner-generate-row">
+          <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Schedule</button>
+          <button class="btn-secondary" id="regenerateBtn" type="button" hidden data-i18n="actions.regenerate">Regenerate Schedule</button>
+        </div>
+        <p class="hint planner-save-status" id="saveStatus"></p>
+      </div>
+    </div>
+
+    <div class="planner-layout">
+      <div class="planner-primary">
+        <div class="card warning-card" id="lockConflictWarning" hidden>
+          <h2 data-i18n="lockConflict.title">Locked block conflict</h2>
+          <div id="lockConflictBody"></div>
+        </div>
+
+        <div class="card planner-nextup-card" id="nextUpCard" hidden>
+          <h2 data-i18n="planner.nextUpTitle">Next Up</h2>
+          <div id="nextUpBody"></div>
+        </div>
+
+        <div class="card planner-schedule-card">
+          <h2 data-i18n="schedule.title">Your Schedule</h2>
+          <div class="legend">
+            <span><i class="swatch" style="background:var(--class-color)"></i><span data-i18n="legend.class">Class</span></span>
+            <span><i class="swatch" style="background:var(--meal-color)"></i><span data-i18n="legend.meal">Meal</span></span>
+            <span><i class="swatch" style="background:var(--study-color)"></i><span data-i18n="legend.study">Study</span></span>
+            <span><i class="swatch" style="background:var(--break-color)"></i><span data-i18n="legend.break">Break</span></span>
+            <span><i class="swatch" style="background:var(--free-color)"></i><span data-i18n="legend.free">Free time</span></span>
           </div>
-          <div>
-            <label for="sleepTime" data-i18n="day.sleepTime">Sleep time</label>
-            <input type="time" id="sleepTime">
+          <div id="output">
+            <div class="planner-empty-state">
+              <span class="planner-empty-glyph" aria-hidden="true">🗓️</span>
+              <p class="planner-empty-title" data-i18n="planner.emptyScheduleTitle">No schedule yet</p>
+              <p class="hint" data-i18n="planner.emptyScheduleBody">Add your classes and study subjects on the right, then generate your day.</p>
+            </div>
           </div>
+          <div class="notes" id="notes"></div>
         </div>
-        <p class="hint"><span data-i18n="day.hintBefore">Staying up past midnight? Enter the early time as-is (e.g.</span> <strong>1:00 AM</strong><span data-i18n="day.hintAfter">) — it's read as after midnight, not before your wake-up time.</span></p>
-        <p class="hint" id="dayLengthHint"></p>
-      </div>
 
-      <div class="card" id="historyCard">
-        <h2 data-i18n="history.title">History</h2>
-        <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
-      </div>
+        <div class="card warning-card" id="shortfallWarning" hidden>
+          <h2 data-i18n="shortfall.title">Not enough available time</h2>
+          <div id="shortfallWarningBody"></div>
+        </div>
 
-      <div class="card">
-        <h2 data-i18n="meals.title">Meals to include</h2>
-        <div class="meal-row">
-          <input type="checkbox" id="mealBreakfastOn">
-          <label for="mealBreakfastTime"><span data-i18n="meals.breakfast">Breakfast</span><span class="meal-dur" data-i18n="meals.min30">30 min</span></label>
-          <input type="time" id="mealBreakfastTime">
-        </div>
-        <div class="meal-row">
-          <input type="checkbox" id="mealLunchOn">
-          <label for="mealLunchTime"><span data-i18n="meals.lunch">Lunch</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
-          <input type="time" id="mealLunchTime">
-        </div>
-        <div class="meal-row">
-          <input type="checkbox" id="mealDinnerOn">
-          <label for="mealDinnerTime"><span data-i18n="meals.dinner">Dinner</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
-          <input type="time" id="mealDinnerTime">
+        <div class="card" id="dailySummaryCard" hidden>
+          <h2 data-i18n="summary.title">Daily Summary</h2>
+          <div id="dailySummaryBody"></div>
         </div>
       </div>
-      </div>
 
-      <div class="card">
-        <h2 data-i18n="classes.title">Classes</h2>
-        <div id="classList"></div>
-        <button class="add-btn" id="addClassBtn" type="button">+ <span data-i18n="classes.add">Add class</span></button>
-      </div>
-
-      <div class="card">
-        <h2 data-i18n="study.title">Subjects to study</h2>
-        <div id="studyList"></div>
-        <button class="add-btn" id="addStudyBtn" type="button">+ <span data-i18n="study.add">Add subject</span></button>
-      </div>
-
-      <div class="card" id="studyPrefsForm">
-        <h2 data-i18n="prefs.title">Study preferences</h2>
-        <div class="row-2">
-          <div>
-            <label for="preferredStudyPeriod" data-i18n="prefs.preferredTime">Preferred study time</label>
-            <select id="preferredStudyPeriod">
-              <option value="none" data-i18n="prefs.periodNone">No preference</option>
-              <option value="morning" data-i18n="prefs.periodMorning">Morning</option>
-              <option value="afternoon" data-i18n="prefs.periodAfternoon">Afternoon</option>
-              <option value="evening" data-i18n="prefs.periodEvening">Evening</option>
+      <div class="planner-secondary">
+        <div class="card planner-tasks-card">
+          <div class="planner-panel-heading">
+            <h2 data-i18n="study.title">Study Tasks</h2>
+            <select class="task-sort-shell" id="taskSortSelect" disabled title="Coming soon" data-i18n-title="planner.sortComingSoon">
+              <option value="priority" data-i18n="planner.sortPriority">Priority</option>
+              <option value="due" data-i18n="planner.sortDue">Due date</option>
+              <option value="name" data-i18n="planner.sortName">Name</option>
             </select>
           </div>
-          <div></div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="sessionCapMinutes" data-i18n="prefs.maxSession">Max study session (min)</label>
-            <input type="number" id="sessionCapMinutes" min="5" step="5">
-          </div>
-          <div>
-            <label for="breakMinutes" data-i18n="prefs.breakLength">Break length (min)</label>
-            <input type="number" id="breakMinutes" min="0" step="5">
-          </div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="minBlockMinutes" data-i18n="prefs.minBlock">Minimum study block (min)</label>
-            <input type="number" id="minBlockMinutes" min="5" step="5">
-          </div>
-          <div></div>
-        </div>
-        <div class="row-2">
-          <div>
-            <label for="earliestStudyTime" data-i18n="prefs.earliestTime">Earliest study time</label>
-            <input type="time" id="earliestStudyTime">
-          </div>
-          <div>
-            <label for="latestStudyTime" data-i18n="prefs.latestTime">Latest study time</label>
-            <input type="time" id="latestStudyTime">
-          </div>
-        </div>
-        <p class="hint" data-i18n="prefs.hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
-      </div>
-
-      <div class="card" id="notificationSettingsCard">
-        <h2 data-i18n="notifications.title">Notifications</h2>
-        <p class="hint" data-i18n="notifications.explain">Get a reminder shortly before a study session starts, or when a task is due today or tomorrow.</p>
-        <p class="hint" id="notificationPermissionHint" data-i18n="notifications.permissionDefault">Notifications are not enabled yet.</p>
-        <button type="button" class="btn-secondary" id="enableNotificationsBtn" style="width:100%;" data-i18n="notifications.enable">Enable Notifications</button>
-
-        <div class="row-2" style="margin-top:14px;">
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="studyReminderToggle">
-            <label for="studyReminderToggle" data-i18n="notifications.studyReminders">Study Reminders</label>
-          </div>
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="deadlineReminderToggle">
-            <label for="deadlineReminderToggle" data-i18n="notifications.deadlineReminders">Deadline Reminders</label>
-          </div>
+          <div id="studyList"></div>
+          <button class="add-btn" id="addStudyBtn" type="button">+ <span data-i18n="study.add">Add subject</span></button>
         </div>
 
-        <label for="reminderLeadSelect" data-i18n="notifications.remindMeBefore">Remind me before</label>
-        <select id="reminderLeadSelect">
-          <option value="5" data-i18n="notifications.lead5">5 minutes before</option>
-          <option value="10" data-i18n="notifications.lead10">10 minutes before</option>
-          <option value="15" data-i18n="notifications.lead15">15 minutes before</option>
-          <option value="30" data-i18n="notifications.lead30">30 minutes before</option>
-        </select>
-        <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
-      </div>
-
-      <div class="card" id="calendarExportCard">
-        <h2 data-i18n="calendar.exportTitle">Export Calendar</h2>
-        <p class="hint" data-i18n="calendar.exportHint">Save your schedule as a .ics file you can import into Google Calendar, Apple Calendar, or Outlook.</p>
-
-        <div class="row-2">
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="exportTypeClass" checked>
-            <label for="exportTypeClass" data-i18n="calendar.typeClasses">Classes</label>
-          </div>
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="exportTypeStudy" checked>
-            <label for="exportTypeStudy" data-i18n="calendar.typeStudy">Study Sessions</label>
-          </div>
-        </div>
-        <div class="row-2">
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="exportTypeMeal">
-            <label for="exportTypeMeal" data-i18n="calendar.typeMeals">Meals</label>
-          </div>
-          <div class="meal-row" style="grid-template-columns:18px 1fr;">
-            <input type="checkbox" id="exportTypeBreak">
-            <label for="exportTypeBreak" data-i18n="calendar.typeBreaks">Breaks</label>
-          </div>
+        <div class="card">
+          <h2 data-i18n="classes.title">Classes</h2>
+          <div id="classList"></div>
+          <button class="add-btn" id="addClassBtn" type="button">+ <span data-i18n="classes.add">Add class</span></button>
         </div>
 
-        <button type="button" class="btn-secondary" id="exportTodayBtn" style="width:100%;" data-i18n="calendar.exportToday">Export Today</button>
+        <details class="card planner-collapsible" open>
+          <summary data-i18n="day.title">Your Day</summary>
+          <div class="planner-collapsible-body" id="daySettingsForm">
+            <div class="row-2">
+              <div>
+                <label for="wakeTime" data-i18n="day.wakeTime">Wake-up time</label>
+                <input type="time" id="wakeTime">
+              </div>
+              <div>
+                <label for="sleepTime" data-i18n="day.sleepTime">Sleep time</label>
+                <input type="time" id="sleepTime">
+              </div>
+            </div>
+            <p class="hint"><span data-i18n="day.hintBefore">Staying up past midnight? Enter the early time as-is (e.g.</span> <strong>1:00 AM</strong><span data-i18n="day.hintAfter">) — it's read as after midnight, not before your wake-up time.</span></p>
+            <p class="hint" id="dayLengthHint"></p>
 
-        <div class="row-2" style="margin-top:10px;">
-          <div>
-            <label for="exportRangeStart" data-i18n="calendar.rangeStart">Start date</label>
-            <input type="date" id="exportRangeStart">
+            <h3 class="planner-subheading" data-i18n="meals.title">Meals to include</h3>
+            <div class="meal-row">
+              <input type="checkbox" id="mealBreakfastOn">
+              <label for="mealBreakfastTime"><span data-i18n="meals.breakfast">Breakfast</span><span class="meal-dur" data-i18n="meals.min30">30 min</span></label>
+              <input type="time" id="mealBreakfastTime">
+            </div>
+            <div class="meal-row">
+              <input type="checkbox" id="mealLunchOn">
+              <label for="mealLunchTime"><span data-i18n="meals.lunch">Lunch</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
+              <input type="time" id="mealLunchTime">
+            </div>
+            <div class="meal-row">
+              <input type="checkbox" id="mealDinnerOn">
+              <label for="mealDinnerTime"><span data-i18n="meals.dinner">Dinner</span><span class="meal-dur" data-i18n="meals.min45">45 min</span></label>
+              <input type="time" id="mealDinnerTime">
+            </div>
           </div>
-          <div>
-            <label for="exportRangeEnd" data-i18n="calendar.rangeEnd">End date</label>
-            <input type="date" id="exportRangeEnd">
+        </details>
+
+        <details class="card planner-collapsible">
+          <summary data-i18n="prefs.title">Study preferences</summary>
+          <div class="planner-collapsible-body" id="studyPrefsForm">
+            <div class="row-2">
+              <div>
+                <label for="preferredStudyPeriod" data-i18n="prefs.preferredTime">Preferred study time</label>
+                <select id="preferredStudyPeriod">
+                  <option value="none" data-i18n="prefs.periodNone">No preference</option>
+                  <option value="morning" data-i18n="prefs.periodMorning">Morning</option>
+                  <option value="afternoon" data-i18n="prefs.periodAfternoon">Afternoon</option>
+                  <option value="evening" data-i18n="prefs.periodEvening">Evening</option>
+                </select>
+              </div>
+              <div></div>
+            </div>
+            <div class="row-2">
+              <div>
+                <label for="sessionCapMinutes" data-i18n="prefs.maxSession">Max study session (min)</label>
+                <input type="number" id="sessionCapMinutes" min="5" step="5">
+              </div>
+              <div>
+                <label for="breakMinutes" data-i18n="prefs.breakLength">Break length (min)</label>
+                <input type="number" id="breakMinutes" min="0" step="5">
+              </div>
+            </div>
+            <div class="row-2">
+              <div>
+                <label for="minBlockMinutes" data-i18n="prefs.minBlock">Minimum study block (min)</label>
+                <input type="number" id="minBlockMinutes" min="5" step="5">
+              </div>
+              <div></div>
+            </div>
+            <div class="row-2">
+              <div>
+                <label for="earliestStudyTime" data-i18n="prefs.earliestTime">Earliest study time</label>
+                <input type="time" id="earliestStudyTime">
+              </div>
+              <div>
+                <label for="latestStudyTime" data-i18n="prefs.latestTime">Latest study time</label>
+                <input type="time" id="latestStudyTime">
+              </div>
+            </div>
+            <p class="hint" data-i18n="prefs.hint">Leave earliest/latest study time blank to allow studying any time between wake-up and bedtime.</p>
           </div>
-        </div>
-        <button type="button" class="btn-secondary" id="exportRangeBtn" style="width:100%;" data-i18n="calendar.exportDateRange">Export Date Range</button>
-        <p class="hint" id="calendarExportStatus" hidden></p>
-      </div>
-
-      <div class="card" id="calendarImportCard">
-        <h2 data-i18n="calendar.importTitle">Import Calendar</h2>
-        <p class="hint" data-i18n="calendar.importHint">Import events from a .ics file as fixed events that block study time. You'll preview them before anything is saved.</p>
-        <input type="file" id="calendarFileInput" accept=".ics,text/calendar" style="display:none;">
-        <button type="button" class="btn-secondary" id="importCalendarBtn" style="width:100%;" data-i18n="calendar.chooseFile">Choose Calendar File</button>
-        <p class="hint" id="calendarImportStatus" hidden></p>
-      </div>
-
-      <div class="card" id="copyToAnotherDayCard">
-        <h2 data-i18n="copy.title">Copy to another day</h2>
-        <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>
-        <div class="row-2">
-          <div>
-            <label for="copyDestDate" data-i18n="copy.destDate">Destination date</label>
-            <input type="date" id="copyDestDate">
-          </div>
-          <div></div>
-        </div>
-        <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;" data-i18n="copy.button">Copy to another day</button>
-        <p class="hint" id="copyStatus"></p>
-      </div>
-
-      <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Schedule</button>
-      <button class="btn-secondary" id="regenerateBtn" type="button" style="width:100%;margin-top:8px;" hidden data-i18n="actions.regenerate">Regenerate Schedule</button>
-      <p class="hint" id="saveStatus" style="text-align:center;"></p>
-    </div>
-
-    <div>
-      <div class="card warning-card" id="lockConflictWarning" hidden>
-        <h2 data-i18n="lockConflict.title">Locked block conflict</h2>
-        <div id="lockConflictBody"></div>
-      </div>
-
-      <div class="card">
-        <h2 data-i18n="schedule.title">Your Schedule</h2>
-        <div class="legend">
-          <span><i class="swatch" style="background:var(--class-color)"></i><span data-i18n="legend.class">Class</span></span>
-          <span><i class="swatch" style="background:var(--meal-color)"></i><span data-i18n="legend.meal">Meal</span></span>
-          <span><i class="swatch" style="background:var(--study-color)"></i><span data-i18n="legend.study">Study</span></span>
-          <span><i class="swatch" style="background:var(--break-color)"></i><span data-i18n="legend.break">Break</span></span>
-          <span><i class="swatch" style="background:var(--free-color)"></i><span data-i18n="legend.free">Free time</span></span>
-        </div>
-        <div id="output">
-          <div class="placeholder">Fill in your day, classes, and subjects, then click "Generate Schedule".</div>
-        </div>
-        <div class="notes" id="notes"></div>
-      </div>
-
-      <div class="card warning-card" id="shortfallWarning" hidden>
-        <h2 data-i18n="shortfall.title">Not enough available time</h2>
-        <div id="shortfallWarningBody"></div>
-      </div>
-
-      <div class="card" id="dailySummaryCard" hidden>
-        <h2 data-i18n="summary.title">Daily Summary</h2>
-        <div id="dailySummaryBody"></div>
+        </details>
       </div>
     </div>
+
+    <details class="planner-more-tools" id="plannerMoreTools">
+      <summary data-i18n="planner.moreTools">More tools</summary>
+      <div class="planner-tools-grid">
+        <div class="card" id="historyCard">
+          <h2 data-i18n="history.title">History</h2>
+          <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
+        </div>
+
+        <div class="card" id="notificationSettingsCard">
+          <h2 data-i18n="notifications.title">Notifications</h2>
+          <p class="hint" data-i18n="notifications.explain">Get a reminder shortly before a study session starts, or when a task is due today or tomorrow.</p>
+          <p class="hint" id="notificationPermissionHint" data-i18n="notifications.permissionDefault">Notifications are not enabled yet.</p>
+          <button type="button" class="btn-secondary" id="enableNotificationsBtn" style="width:100%;" data-i18n="notifications.enable">Enable Notifications</button>
+
+          <div class="row-2" style="margin-top:14px;">
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="studyReminderToggle">
+              <label for="studyReminderToggle" data-i18n="notifications.studyReminders">Study Reminders</label>
+            </div>
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="deadlineReminderToggle">
+              <label for="deadlineReminderToggle" data-i18n="notifications.deadlineReminders">Deadline Reminders</label>
+            </div>
+          </div>
+
+          <label for="reminderLeadSelect" data-i18n="notifications.remindMeBefore">Remind me before</label>
+          <select id="reminderLeadSelect">
+            <option value="5" data-i18n="notifications.lead5">5 minutes before</option>
+            <option value="10" data-i18n="notifications.lead10">10 minutes before</option>
+            <option value="15" data-i18n="notifications.lead15">15 minutes before</option>
+            <option value="30" data-i18n="notifications.lead30">30 minutes before</option>
+          </select>
+          <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
+        </div>
+
+        <div class="card" id="calendarExportCard">
+          <h2 data-i18n="calendar.exportTitle">Export Calendar</h2>
+          <p class="hint" data-i18n="calendar.exportHint">Save your schedule as a .ics file you can import into Google Calendar, Apple Calendar, or Outlook.</p>
+
+          <div class="row-2">
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="exportTypeClass" checked>
+              <label for="exportTypeClass" data-i18n="calendar.typeClasses">Classes</label>
+            </div>
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="exportTypeStudy" checked>
+              <label for="exportTypeStudy" data-i18n="calendar.typeStudy">Study Sessions</label>
+            </div>
+          </div>
+          <div class="row-2">
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="exportTypeMeal">
+              <label for="exportTypeMeal" data-i18n="calendar.typeMeals">Meals</label>
+            </div>
+            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+              <input type="checkbox" id="exportTypeBreak">
+              <label for="exportTypeBreak" data-i18n="calendar.typeBreaks">Breaks</label>
+            </div>
+          </div>
+
+          <button type="button" class="btn-secondary" id="exportTodayBtn" style="width:100%;" data-i18n="calendar.exportToday">Export Today</button>
+
+          <div class="row-2" style="margin-top:10px;">
+            <div>
+              <label for="exportRangeStart" data-i18n="calendar.rangeStart">Start date</label>
+              <input type="date" id="exportRangeStart">
+            </div>
+            <div>
+              <label for="exportRangeEnd" data-i18n="calendar.rangeEnd">End date</label>
+              <input type="date" id="exportRangeEnd">
+            </div>
+          </div>
+          <button type="button" class="btn-secondary" id="exportRangeBtn" style="width:100%;" data-i18n="calendar.exportDateRange">Export Date Range</button>
+          <p class="hint" id="calendarExportStatus" hidden></p>
+        </div>
+
+        <div class="card" id="calendarImportCard">
+          <h2 data-i18n="calendar.importTitle">Import Calendar</h2>
+          <p class="hint" data-i18n="calendar.importHint">Import events from a .ics file as fixed events that block study time. You'll preview them before anything is saved.</p>
+          <input type="file" id="calendarFileInput" accept=".ics,text/calendar" style="display:none;">
+          <button type="button" class="btn-secondary" id="importCalendarBtn" style="width:100%;" data-i18n="calendar.chooseFile">Choose Calendar File</button>
+          <p class="hint" id="calendarImportStatus" hidden></p>
+        </div>
+
+        <div class="card" id="copyToAnotherDayCard">
+          <h2 data-i18n="copy.title">Copy to another day</h2>
+          <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>
+          <div class="row-2">
+            <div>
+              <label for="copyDestDate" data-i18n="copy.destDate">Destination date</label>
+              <input type="date" id="copyDestDate">
+            </div>
+            <div></div>
+          </div>
+          <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;" data-i18n="copy.button">Copy to another day</button>
+          <p class="hint" id="copyStatus"></p>
+        </div>
+      </div>
+    </details>
   </div>
 
       <section class="board-view" id="boardView" hidden>
