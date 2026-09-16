@@ -1776,22 +1776,22 @@ async function init(session) {
       return;
     }
     const rows = [
-      ['Classes', summary.classMinutes],
-      ['Study', summary.studyMinutes],
-      ['Meals', summary.mealMinutes],
-      ['Breaks', summary.breakMinutes],
-      ['Free time', summary.freeMinutes],
-      ['Awake time', summary.awakeMinutes],
+      [t('summary.classes'), summary.classMinutes],
+      [t('summary.study'), summary.studyMinutes],
+      [t('summary.meals'), summary.mealMinutes],
+      [t('summary.breaks'), summary.breakMinutes],
+      [t('summary.freeTime'), summary.freeMinutes],
+      [t('summary.awakeTime'), summary.awakeMinutes],
     ];
     let html = rows
-      .map(([label, mins]) => `<div class="summary-row"><span class="label">${label}</span><span class="value">${formatDuration(mins)}</span></div>`)
+      .map(([label, mins]) => `<div class="summary-row"><span class="label">${escapeAttr(label)}</span><span class="value">${formatDuration(mins)}</span></div>`)
       .join('');
     if (summary.sleepMinutes !== null) {
-      html += `<div class="summary-row"><span class="label">Sleep</span><span class="value">${formatDuration(summary.sleepMinutes)}</span></div>`;
+      html += `<div class="summary-row"><span class="label">${escapeAttr(t('summary.sleep'))}</span><span class="value">${formatDuration(summary.sleepMinutes)}</span></div>`;
     }
     if (progress) {
       const total = progress.subjects.length;
-      html += `<div class="summary-progress">Study Progress: <strong>${progress.completedCount} / ${total}</strong> tasks completed`;
+      html += `<div class="summary-progress">${escapeAttr(t('summary.studyProgress'))} <strong>${progress.completedCount} / ${total}</strong> tasks completed`;
       if (total > 0) html += ` <span class="summary-percent">(${progress.completionPercent}% complete)</span>`;
       html += `</div>`;
     }
