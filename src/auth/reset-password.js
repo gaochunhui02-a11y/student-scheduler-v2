@@ -1,7 +1,9 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { registerServiceWorker } from '../shared/pwa.js';
+import { t, applyTranslations } from '../shared/i18n.js';
 
 registerServiceWorker();
+applyTranslations();
 
 const subtitleEl = document.getElementById('subtitleText');
 const errorEl = document.getElementById('errorMsg');
@@ -13,7 +15,7 @@ let recoveryReady = false;
 function showForm() {
   if (recoveryReady) return;
   recoveryReady = true;
-  subtitleEl.textContent = 'Enter a new password for your account.';
+  subtitleEl.textContent = t('auth.enterNewPassword');
   form.style.display = '';
 }
 
@@ -33,7 +35,7 @@ setTimeout(async () => {
     showForm();
   } else {
     subtitleEl.textContent = '';
-    errorEl.textContent = 'This password reset link is invalid or has expired. Please request a new one.';
+    errorEl.textContent = t('auth.invalidResetLink');
   }
 }, 2500);
 
@@ -45,23 +47,23 @@ form.addEventListener('submit', async (e) => {
   const confirmPassword = document.getElementById('confirmPassword').value;
 
   if (password.length < 6) {
-    errorEl.textContent = 'Password must be at least 6 characters.';
+    errorEl.textContent = t('auth.passwordTooShort');
     return;
   }
   if (password !== confirmPassword) {
-    errorEl.textContent = 'Passwords do not match.';
+    errorEl.textContent = t('auth.passwordsDontMatch');
     return;
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Updating…';
+  submitBtn.textContent = t('auth.updating');
 
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
     errorEl.textContent = error.message;
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Reset Password';
+    submitBtn.textContent = t('auth.resetPasswordButton');
     return;
   }
 

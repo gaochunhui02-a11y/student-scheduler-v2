@@ -1,7 +1,9 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { registerServiceWorker } from '../shared/pwa.js';
+import { t, applyTranslations } from '../shared/i18n.js';
 
 registerServiceWorker();
+applyTranslations();
 
 const form = document.getElementById('forgotForm');
 const errorEl = document.getElementById('errorMsg');
@@ -16,20 +18,20 @@ form.addEventListener('submit', async (e) => {
   const email = document.getElementById('email').value.trim();
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Sending…';
+  submitBtn.textContent = t('auth.sending');
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/reset-password.html`,
   });
 
   submitBtn.disabled = false;
-  submitBtn.textContent = 'Send Reset Link';
+  submitBtn.textContent = t('auth.sendResetLink');
 
   if (error) {
     errorEl.textContent = error.message;
     return;
   }
 
-  successEl.textContent = 'If an account exists for that email, a password reset link has been sent.';
+  successEl.textContent = t('auth.resetLinkSent');
   form.reset();
 });

@@ -1043,7 +1043,7 @@ async function init(session) {
 
     const warningHtml =
       unscheduledMinutes > 0
-        ? `<div class="edit-error">${unscheduledMinutes} ${escapeAttr(t('carryOver.unscheduledSuffix'))}</div>`
+        ? `<div class="edit-error"><strong>${escapeAttr(t('carryOver.couldNotReschedule'))}:</strong> ${unscheduledMinutes} ${escapeAttr(t('carryOver.unscheduledSuffix'))}</div>`
         : '';
     const errorHtml = carryOverError ? `<div class="edit-error">${escapeAttr(carryOverError)}</div>` : '';
 

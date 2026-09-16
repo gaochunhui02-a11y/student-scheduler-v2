@@ -1,9 +1,11 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { redirectIfLoggedIn } from '../shared/session.js';
 import { registerServiceWorker } from '../shared/pwa.js';
+import { t, applyTranslations } from '../shared/i18n.js';
 
 registerServiceWorker();
 redirectIfLoggedIn();
+applyTranslations();
 
 const form = document.getElementById('signupForm');
 const errorEl = document.getElementById('errorMsg');
@@ -21,20 +23,20 @@ form.addEventListener('submit', async (e) => {
   const confirmPassword = document.getElementById('confirmPassword').value;
 
   if (!name) {
-    errorEl.textContent = 'Please enter your name.';
+    errorEl.textContent = t('auth.nameRequired');
     return;
   }
   if (password.length < 6) {
-    errorEl.textContent = 'Password must be at least 6 characters.';
+    errorEl.textContent = t('auth.passwordTooShort');
     return;
   }
   if (password !== confirmPassword) {
-    errorEl.textContent = 'Passwords do not match.';
+    errorEl.textContent = t('auth.passwordsDontMatch');
     return;
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Creating account…';
+  submitBtn.textContent = t('auth.creatingAccount');
 
   // The "name" here is stored as auth user metadata. A database trigger
   // (see supabase/schema.sql) reads it back out to create the profiles row —
@@ -48,17 +50,17 @@ form.addEventListener('submit', async (e) => {
   if (error) {
     errorEl.textContent = error.message;
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Sign Up';
+    submitBtn.textContent = t('auth.signUpButton');
     return;
   }
 
   // If your Supabase project has "Confirm email" turned on, there is no
   // session yet — the user must click the confirmation link first.
   if (!data.session) {
-    successEl.textContent = 'Account created! Check your email to confirm your address, then log in.';
+    successEl.textContent = t('auth.accountCreatedCheckEmail');
     form.reset();
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Sign Up';
+    submitBtn.textContent = t('auth.signUpButton');
     return;
   }
 
