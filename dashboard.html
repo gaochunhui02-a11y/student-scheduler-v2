@@ -119,20 +119,29 @@
         <h1 class="planner-date-heading" id="plannerDateHeading">&nbsp;</h1>
         <p class="planner-date-sub" id="plannerDateSub"></p>
       </div>
-      <div class="planner-header-controls">
-        <div class="date-nav-row planner-date-nav">
+
+      <div class="planner-toolbar">
+        <div class="date-nav-row planner-toolbar-nav">
           <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
           <button type="button" class="btn-secondary planner-today-btn" id="todayBtn" data-i18n="planner.today">Today</button>
           <label for="forDate" class="sr-only" data-i18n="day.planningFor">Planning for</label>
           <input type="date" id="forDate" class="planner-date-input">
           <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day">→</button>
         </div>
-        <div class="planner-generate-row">
-          <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Schedule</button>
-          <button class="btn-secondary" id="regenerateBtn" type="button" hidden data-i18n="actions.regenerate">Regenerate Schedule</button>
+
+        <div class="planner-toolbar-actions">
+          <details class="planner-more-menu">
+            <summary class="btn-secondary planner-more-btn" data-i18n="planner.moreMenu">More ▾</summary>
+            <div class="planner-more-dropdown">
+              <button type="button" class="planner-more-item" id="plannerJumpCopyDay" data-i18n="planner.jumpCopyDay">Copy Day</button>
+              <button type="button" class="planner-more-item" id="plannerJumpMultiDay" data-i18n="planner.jumpMultiDay">Multi-Day Planning</button>
+            </div>
+          </details>
+          <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Plan</button>
+          <button class="btn-primary" id="regenerateBtn" type="button" hidden data-i18n="actions.regenerate">Regenerate</button>
         </div>
-        <p class="hint planner-save-status" id="saveStatus"></p>
       </div>
+      <p class="hint planner-save-status" id="saveStatus"></p>
     </div>
 
     <div class="planner-layout">

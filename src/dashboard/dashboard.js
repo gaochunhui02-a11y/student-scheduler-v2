@@ -45,7 +45,7 @@ import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan, bu
 import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMinutesInput, canCarryOverBlock, canMarkMissed } from './carryOverModel.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
-import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
+import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
@@ -514,7 +514,7 @@ async function init(session) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
   function formatDateLabel(dateStr) {
-    return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(`${dateStr}T00:00:00`).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   // ---------------- day settings ----------------
@@ -624,6 +624,28 @@ async function init(session) {
   const todayDateStr = () => addDaysToDateStr(tomorrowDateStr(), -1);
   todayBtn.addEventListener('click', () => loadScheduleForDate(todayDateStr()));
 
+  // Checkpoint C.1: toolbar "More ▾" menu — pure navigation shortcuts into
+  // sections that already exist (Copy Day lives in "More tools", Multi-Day
+  // Planning is the per-task "Plan Days" button on each Study Tasks row) —
+  // no new logic, just a jump + auto-close.
+  const plannerMoreMenu = document.querySelector('.planner-more-menu');
+  document.getElementById('plannerJumpCopyDay').addEventListener('click', () => {
+    plannerMoreMenu.open = false;
+    activatePlannerScroll('copyToAnotherDayCard');
+  });
+  document.getElementById('plannerJumpMultiDay').addEventListener('click', () => {
+    plannerMoreMenu.open = false;
+    activatePlannerScroll('studyList');
+  });
+  // Any open <details>-based dropdown (the toolbar's More menu, or a study
+  // block's ••• overflow menu) closes on an outside click — native <details>
+  // has no such behavior on its own.
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.planner-more-menu[open], .tl-overflow[open]').forEach((d) => {
+      if (!d.contains(e.target)) d.open = false;
+    });
+  });
+
   // Checkpoint C: human-readable heading in the new Planner header — purely
   // derived from `schedule.for_date` each time a date loads, never its own
   // stored value.
@@ -631,13 +653,15 @@ async function init(session) {
   const plannerDateSub = document.getElementById('plannerDateSub');
   function updatePlannerHeader() {
     if (!schedule) return;
-    const today = todayDateStr();
-    let relLabel = '';
-    if (schedule.for_date === today) relLabel = t('planner.relToday');
-    else if (schedule.for_date === addDaysToDateStr(today, 1)) relLabel = t('planner.relTomorrow');
-    else if (schedule.for_date === addDaysToDateStr(today, -1)) relLabel = t('planner.relYesterday');
-    const weekday = new Date(`${schedule.for_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' });
-    plannerDateHeading.textContent = relLabel ? `${relLabel} · ${formatDateLabel(schedule.for_date)}` : `${weekday}, ${formatDateLabel(schedule.for_date)}`;
+    // Checkpoint C.1: format with the app's own selected language (getLocale()),
+    // not the browser/OS locale — Intl handles weekday/month/day ordering
+    // correctly per-locale on its own (e.g. zh-CN puts the weekday last).
+    plannerDateHeading.textContent = new Date(`${schedule.for_date}T00:00:00`).toLocaleDateString(getLocale(), {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
     const classCount = classList.children.length;
     const studyCount = studyList.children.length;
     plannerDateSub.textContent = t('planner.dayIncludes')
@@ -1077,11 +1101,12 @@ async function init(session) {
     const due = new Date(`${dueDateStr}T00:00:00`);
     const base = new Date(`${forDateEl.value || dueDateStr}T00:00:00`);
     const diffDays = Math.round((due - base) / 86400000);
-    if (diffDays === 0) return 'Due today';
-    if (diffDays === 1) return 'Due tomorrow';
-    if (diffDays === -1) return 'Due yesterday (overdue)';
-    if (diffDays < -1) return `Due ${due.toLocaleDateString()} (overdue)`;
-    return `Due ${due.toLocaleDateString()}`;
+    // Checkpoint C.1: locale-aware formatting (getLocale(), not the
+    // browser/OS default) and one consistent "Due <date>" shape instead of
+    // the old today/tomorrow/yesterday special-casing.
+    const dateText = due.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
+    const label = `${t('planner.dueLabel')} ${dateText}`;
+    return diffDays < 0 ? `${label} ${t('planner.overdueSuffix')}` : label;
   }
 
   // Phase 14: the inline Carry Over / Re-plan Remaining preview panel for
@@ -1786,8 +1811,13 @@ async function init(session) {
     renderShortfallWarning(progress);
   }
 
+  // Checkpoint C.1: Generate and Regenerate are now mutually exclusive — a
+  // schedule that already exists shows Regenerate as the single primary
+  // action instead of two full-width buttons stacked at once.
   function updateRegenerateVisibility() {
-    regenerateBtn.hidden = currentScheduleItems.length === 0;
+    const hasSchedule = currentScheduleItems.length > 0;
+    regenerateBtn.hidden = !hasSchedule;
+    generateBtn.hidden = hasSchedule;
   }
 
   async function runGeneration(lockedBlocks) {

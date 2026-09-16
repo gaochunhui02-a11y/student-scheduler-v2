@@ -1920,19 +1920,78 @@ button { font-family: inherit; }
   text-transform: uppercase;
   color: var(--muted-2);
 }
-.planner-date-heading { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+.planner-date-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .planner-date-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
 
-.planner-header-controls { display: flex; flex-direction: column; gap: 8px; width: 280px; flex: 0 0 auto; }
-.planner-date-nav { margin-bottom: 0; }
-.planner-date-nav .planner-today-btn { width: auto; height: 38px; padding: 0 14px; flex: 0 0 auto; }
-.planner-date-input { height: 38px; }
-.planner-generate-row { display: flex; flex-direction: column; gap: 6px; }
-.planner-save-status { text-align: center; min-height: 15px; margin: 0; }
+/* ---- Checkpoint C.1: one coherent toolbar row (date nav left, actions
+   right) instead of date nav and Generate/Regenerate sitting in two
+   visually detached regions ---- */
+.planner-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.planner-toolbar-nav { margin-bottom: 0; flex: 0 1 auto; }
+.planner-toolbar-nav .planner-today-btn { width: auto; padding: 0 14px; flex: 0 0 auto; }
+.planner-toolbar-nav input[type="date"] { height: 36px; width: 148px; }
+.planner-toolbar-nav .date-nav-btn { width: 36px; }
+
+.planner-toolbar-actions { display: flex; align-items: stretch; gap: 8px; flex: 0 0 auto; }
+.planner-toolbar-actions .btn-primary { width: auto; height: 36px; padding: 0 18px; }
+
+.planner-more-menu { position: relative; }
+.planner-more-btn {
+  width: auto;
+  height: 36px;
+  padding: 0 14px;
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.planner-more-btn::-webkit-details-marker { display: none; }
+.planner-more-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 190px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.planner-more-item {
+  text-align: left;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-weight: 550;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.planner-more-item:hover { background: var(--surface-2); color: var(--text); }
+
+.planner-save-status { text-align: right; min-height: 15px; margin: 6px 0 0; }
 .planner-save-status.hint-error { color: var(--danger); font-weight: 600; }
 
 @media (max-width: 700px) {
-  .planner-header-controls { width: 100%; }
+  .planner-toolbar { flex-direction: column; align-items: stretch; }
+  .planner-toolbar-actions { justify-content: stretch; }
+  .planner-toolbar-actions .btn-primary { flex: 1; }
+  .planner-save-status { text-align: center; }
 }
 
 /* ---- Next Up: dynamically derived from the currently loaded schedule +
