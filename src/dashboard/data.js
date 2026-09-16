@@ -319,6 +319,13 @@ export async function listStudySubjectsForScheduleIds(scheduleIds) {
   return data;
 }
 
+export async function listClassesForScheduleIds(scheduleIds) {
+  if (!scheduleIds || scheduleIds.length === 0) return [];
+  const { data, error } = await supabase.from('classes').select('*').in('schedule_id', scheduleIds);
+  if (error) throw error;
+  return data;
+}
+
 // Every one of this user's study subjects with a due date on or after
 // `fromDate`, across every schedule/date they were created under — not
 // just the current week — for the Upcoming Deadlines list. Capped and
@@ -334,4 +341,41 @@ export async function listUpcomingStudySubjects(userId, fromDate, limit = 25) {
     .limit(limit);
   if (error) throw error;
   return data;
+}
+
+// ---------------- Smart Multi-Day Planning (Phase 13) ----------------
+// Thin reads/writes only — the actual availability/allocation logic lives
+// in scheduler.js (computeDayCapacity) and multiDayPlanner.js (pure), with
+// multiDayPlan.js stitching the two together. Nothing here decides anything
+// on its own.
+
+// Every study_subjects row belonging to one multi-day task's group: the
+// root itself (id === rootId) plus every chunk previously split off it
+// (origin_subject_id === rootId), each annotated with the calendar date it
+// lives on via the schedule_id -> schedules foreign key every other
+// embedded select in this file already relies on.
+export async function listGroupSubjectRows(userId, rootId) {
+  const { data, error } = await supabase
+    .from('study_subjects')
+    .select('*, schedules(for_date)')
+    .eq('user_id', userId)
+    .or(`id.eq.${rootId},origin_subject_id.eq.${rootId}`);
+  if (error) throw error;
+  return (data || []).map((r) => {
+    const { schedules: sched, ...rest } = r;
+    return { ...rest, for_date: sched ? sched.for_date : null };
+  });
+}
+
+export async function listScheduleItemsBySourceSubjectIds(subjectIds) {
+  if (!subjectIds || subjectIds.length === 0) return [];
+  const { data, error } = await supabase.from('schedule_items').select('*').in('source_subject_id', subjectIds);
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteStudySubjects(ids) {
+  if (!ids || ids.length === 0) return;
+  const { error } = await supabase.from('study_subjects').delete().in('id', ids);
+  if (error) throw error;
 }

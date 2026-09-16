@@ -240,6 +240,20 @@ const en = {
   'calendar.importNotACalendar': "That file doesn't look like a calendar (.ics) file",
   'calendar.importGenericError': 'Could not import that calendar file',
   'calendar.importUnsupported': "Calendar import isn't supported in this browser",
+  'multiday.planDaysButton': '📅 Plan Days',
+  'multiday.chunkHint': 'Part of a multi-day plan.',
+  'multiday.loading': 'Loading preview…',
+  'multiday.frozenNote': 'Already locked/completed on:',
+  'multiday.noSegments': 'Nothing left to spread across other days.',
+  'multiday.unscheduledWarning': 'Not enough capacity before the due date — unscheduled:',
+  'multiday.startDate': 'Start date',
+  'multiday.endDate': 'End date',
+  'multiday.keepOnDate': 'Keep on',
+  'multiday.planTotal': 'Plan total (min)',
+  'multiday.recompute': 'Recompute',
+  'multiday.segmentsTitle': 'Proposed minutes per day',
+  'multiday.accept': 'Accept',
+  'multiday.cancel': 'Cancel',
 };
 
 const zh = {
@@ -468,6 +482,20 @@ const zh = {
   'calendar.importNotACalendar': '该文件看起来不是日历（.ics）文件',
   'calendar.importGenericError': '无法导入该日历文件',
   'calendar.importUnsupported': '此浏览器不支持日历导入',
+  'multiday.planDaysButton': '📅 多日计划',
+  'multiday.chunkHint': '此任务是多日计划的一部分。',
+  'multiday.loading': '正在加载预览…',
+  'multiday.frozenNote': '以下日期已锁定/完成：',
+  'multiday.noSegments': '没有可分配到其他日期的剩余时间。',
+  'multiday.unscheduledWarning': '截止日期前容量不足——未安排：',
+  'multiday.startDate': '开始日期',
+  'multiday.endDate': '结束日期',
+  'multiday.keepOnDate': '保留在',
+  'multiday.planTotal': '计划总分钟数',
+  'multiday.recompute': '重新计算',
+  'multiday.segmentsTitle': '每日建议分钟数',
+  'multiday.accept': '接受',
+  'multiday.cancel': '取消',
 };
 
 const ja = {
@@ -696,6 +724,20 @@ const ja = {
   'calendar.importNotACalendar': 'このファイルはカレンダー（.ics）ファイルではないようです',
   'calendar.importGenericError': 'このカレンダーファイルをインポートできませんでした',
   'calendar.importUnsupported': 'このブラウザではカレンダーのインポートに対応していません',
+  'multiday.planDaysButton': '📅 複数日プラン',
+  'multiday.chunkHint': 'このタスクは複数日プランの一部です。',
+  'multiday.loading': 'プレビューを読み込み中…',
+  'multiday.frozenNote': '以下の日付はロック済み/完了済みです：',
+  'multiday.noSegments': '他の日に振り分ける残り時間はありません。',
+  'multiday.unscheduledWarning': '期限までの容量が不足しています——未割り当て：',
+  'multiday.startDate': '開始日',
+  'multiday.endDate': '終了日',
+  'multiday.keepOnDate': '残す日',
+  'multiday.planTotal': '合計計画時間（分）',
+  'multiday.recompute': '再計算',
+  'multiday.segmentsTitle': '日ごとの提案時間',
+  'multiday.accept': '承認',
+  'multiday.cancel': 'キャンセル',
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];

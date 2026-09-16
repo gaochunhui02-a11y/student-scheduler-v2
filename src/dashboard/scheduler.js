@@ -95,6 +95,27 @@ export function resolveStudyWindow(earliestStudyTime, latestStudyTime, dayStart,
   return { studyWindowStart, studyWindowEnd, collapsed: false };
 }
 
+// How many minutes of actual study fit in a single free span of the given
+// size once session-cap/stamina-break packing is applied (e.g. a 150-minute
+// span with a 60-minute cap and 15-minute stamina break packs 60+60+15+15 =
+// 150 of which 120 is study, since the last chunk is under a full session
+// and needs no trailing break). Shared by generateSchedule's own placement
+// (an unexported closure there delegates to this) and by computeDayCapacity
+// below, which needs the same packing math without actually placing events.
+function maxStudyForCapacity(capacity, sessionCap, staminaBreak) {
+  let total = 0;
+  let remaining = capacity;
+  while (remaining > 0) {
+    const session = Math.min(remaining, sessionCap);
+    total += session;
+    remaining -= session;
+    if (remaining > 0) {
+      remaining = remaining >= staminaBreak ? remaining - staminaBreak : 0;
+    }
+  }
+  return total;
+}
+
 // Splits each free gap at the earliest/latest study-time boundaries so the
 // portions outside that window are excluded from study placement but still
 // end up reported as free time (they're just gaps nothing ever gets placed
@@ -314,19 +335,6 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     const sessions = Math.ceil(minutes / sessionCap);
     return minutes + (sessions - 1) * staminaBreak;
   }
-  function maxStudyForCapacity(capacity) {
-    let total = 0;
-    let remaining = capacity;
-    while (remaining > 0) {
-      const session = Math.min(remaining, sessionCap);
-      total += session;
-      remaining -= session;
-      if (remaining > 0) {
-        remaining = remaining >= staminaBreak ? remaining - staminaBreak : 0;
-      }
-    }
-    return total;
-  }
 
   const bounds = resolveDayBounds(wakeTime, sleepTime);
   if (bounds.error) {
@@ -517,7 +525,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
       if (!best) break; // no block left worth starting a session in — reported as a shortfall below
 
       const usable = best.end - best.start - bestExtra;
-      const chunk = Math.min(subject.remaining, maxStudyForCapacity(usable));
+      const chunk = Math.min(subject.remaining, maxStudyForCapacity(usable, sessionCap, staminaBreak));
       placeInGap(best, subject, chunk, bestExtra);
     }
   }
@@ -536,4 +544,67 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   const events = [...fixedEvents, ...lockedEvents, ...studyEvents].sort((a, b) => a.start - b.start);
   return { events, notes, dayStart, dayEnd, lockConflicts: [] };
+}
+
+/**
+ * How many NEW minutes of study a day can still absorb, given its day
+ * bounds, classes, meals, study-time window, and session-cap/stamina-break
+ * packing — the same availability logic generateSchedule() itself builds
+ * (fixed events placed, gaps computed, gaps clipped to the study window),
+ * stopping short of actually assigning any subject to it. Used by the
+ * multi-day planner (Phase 13) to estimate a date's remaining capacity
+ * before any of its own minutes are decided, without writing/placing
+ * anything. `lockedBlocks` (already-locked study blocks on that date, if
+ * any) are treated exactly as generateSchedule treats them: fixed spans the
+ * new capacity must route around.
+ *
+ * @param {object} input
+ * @param {string} input.wakeTime
+ * @param {string} input.sleepTime
+ * @param {{name:string, start:string, end:string}[]} input.classes
+ * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
+ * @param {{sessionCap:number, staminaBreak:number, earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
+ * @param {{name:string, start:number, end:number}[]} [input.lockedBlocks]
+ * @returns {{ capacityMinutes: number, dayStart?: number, dayEnd?: number, error?: string }}
+ */
+export function computeDayCapacity({ wakeTime, sleepTime, classes, meals, prefs, lockedBlocks }) {
+  const { sessionCap, staminaBreak, earliestStudyTime = null, latestStudyTime = null } = prefs;
+
+  const bounds = resolveDayBounds(wakeTime, sleepTime);
+  if (bounds.error) return { capacityMinutes: 0, error: bounds.error };
+  const { dayStart, dayEnd } = bounds;
+
+  const { studyWindowStart, studyWindowEnd } = resolveStudyWindow(earliestStudyTime, latestStudyTime, dayStart, dayEnd);
+
+  const classEvents = (classes || [])
+    .map((c) => ({ start: timeToMinutes(c.start), end: timeToMinutes(c.end) }))
+    .filter((c) => c.start !== null && c.end !== null && c.end > c.start);
+
+  const fixedEvents = [...classEvents];
+  (meals || []).forEach((m) => {
+    if (!m.on) return;
+    const desired = timeToMinutes(m.time);
+    if (desired === null) return;
+    const placed = placeEvent(desired, m.duration, fixedEvents, dayStart, dayEnd);
+    if (placed) fixedEvents.push(placed);
+  });
+
+  const lockedEvents = (lockedBlocks || [])
+    .filter((b) => Number.isFinite(b.start) && Number.isFinite(b.end) && b.end > b.start)
+    .map((b) => ({ start: b.start, end: b.end }));
+
+  const occupied = [...fixedEvents, ...lockedEvents].sort((a, b) => a.start - b.start);
+  const gaps = [];
+  let cursor = dayStart;
+  occupied.forEach((e) => {
+    if (e.start > cursor) gaps.push({ start: cursor, end: e.start });
+    cursor = Math.max(cursor, e.end);
+  });
+  if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+
+  const capacityMinutes = splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd)
+    .filter((g) => g.studyAllowed)
+    .reduce((total, g) => total + maxStudyForCapacity(g.end - g.start, sessionCap, staminaBreak), 0);
+
+  return { capacityMinutes, dayStart, dayEnd };
 }

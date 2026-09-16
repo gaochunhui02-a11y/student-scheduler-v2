@@ -38,6 +38,7 @@ import {
   timeToMinutes,
   minutesToClock,
 } from './scheduler.js';
+import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan } from './multiDayPlan.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 import { t, applyTranslations, getLanguage, setLanguage } from '../shared/i18n.js';
@@ -637,7 +638,9 @@ async function init(session) {
     const el = document.createElement('div');
     el.className = 'entry-row study';
     if (row.id) el.dataset.id = row.id;
+    if (row.origin_subject_id) el.dataset.originId = row.origin_subject_id;
     const priority = row.priority || 'medium';
+    const isChunk = Boolean(row.origin_subject_id);
     el.innerHTML = `
       <div class="task-row-top">
         <input type="text" class="study-name" aria-label="Study task name" placeholder="e.g. Biology" value="${escapeAttr(row.name || '')}">
@@ -657,10 +660,14 @@ async function init(session) {
           <span>Due</span>
           <input type="date" class="study-due" value="${row.due_date || ''}">
         </label>
+        ${row.id && !isChunk ? `<button type="button" class="edit-btn plan-days-btn">${escapeAttr(t('multiday.planDaysButton'))}</button>` : ''}
       </div>
+      ${isChunk ? `<p class="hint multiday-chunk-hint">${escapeAttr(t('multiday.chunkHint'))}</p>` : ''}
       <input type="text" class="study-notes" aria-label="Notes" placeholder="Notes (optional)" value="${escapeAttr(row.notes || '')}">
+      <div class="multiday-panel-slot"></div>
     `;
     el.querySelector('.remove-btn').addEventListener('click', () => {
+      if (planningRowId === el.dataset.id) closeMultiDayPanel();
       el.remove();
       chainSave(el, async () => {
         if (el.dataset.id) {
@@ -672,6 +679,234 @@ async function init(session) {
     studyList.appendChild(el);
     return el;
   }
+
+  // ---------------- Smart Multi-Day Planning (Phase 13) ----------------
+  // Decides how many of a study task's minutes belong on WHICH date; the
+  // existing generateSchedule() above is untouched and still decides WHERE
+  // a date's minutes fit inside that day once the user generates it. At
+  // most one row's preview panel is open at a time — same single-panel
+  // pattern as editingItemId for the schedule timeline above.
+  let planningRowId = null;
+  let planningPreview = null;
+  let planningLoading = false;
+  let planningError = '';
+
+  function closeMultiDayPanel() {
+    planningRowId = null;
+    planningPreview = null;
+    planningLoading = false;
+    planningError = '';
+  }
+
+  function findStudyRow(id) {
+    return Array.from(studyList.children).find((r) => r.dataset.id === id);
+  }
+
+  function readSubjectRowData(row) {
+    return {
+      id: row.dataset.id,
+      origin_subject_id: row.dataset.originId || null,
+      name: row.querySelector('.study-name').value.trim(),
+      priority: row.querySelector('.study-priority').value,
+      due_date: row.querySelector('.study-due').value || null,
+      notes: row.querySelector('.study-notes').value.trim(),
+      minutes_requested: parseInt(row.querySelector('.study-minutes').value, 10) || 0,
+    };
+  }
+
+  function renderMultiDayPanel(row) {
+    const slot = row.querySelector('.multiday-panel-slot');
+    if (row.dataset.id !== planningRowId) {
+      slot.innerHTML = '';
+      return;
+    }
+    if (planningLoading || !planningPreview) {
+      slot.innerHTML = `<div class="edit-panel multiday-panel"><p class="hint">${escapeAttr(t('multiday.loading'))}</p></div>`;
+      return;
+    }
+
+    const preview = planningPreview;
+    const keepMinutes = preview.keepMinutes;
+    const totalMinutes = preview.totalMinutes;
+    const { segments, unscheduledMinutes } = recomputeMultiDaySegments(preview, keepMinutes, totalMinutes);
+
+    const frozenHtml =
+      preview.frozen.length > 0
+        ? `<p class="hint">${escapeAttr(t('multiday.frozenNote'))} ${escapeAttr(
+            preview.frozen.map((f) => `${formatDateLabel(f.date)} (${f.minutes}m)`).join(', ')
+          )}</p>`
+        : '';
+
+    const segmentsHtml =
+      segments.length > 0
+        ? segments
+            .map(
+              (s) => `
+              <div class="multiday-seg-row">
+                <span class="md-seg-date">${escapeAttr(formatDateLabel(s.date))}</span>
+                <input type="number" class="md-seg-minutes" min="0" step="5" data-date="${escapeAttr(s.date)}" value="${s.minutes}">
+              </div>`
+            )
+            .join('')
+        : `<p class="hint">${escapeAttr(t('multiday.noSegments'))}</p>`;
+
+    const warningHtml =
+      unscheduledMinutes > 0
+        ? `<div class="edit-error">${escapeAttr(t('multiday.unscheduledWarning'))} ${unscheduledMinutes} min</div>`
+        : '';
+    const errorHtml = planningError ? `<div class="edit-error">${escapeAttr(planningError)}</div>` : '';
+
+    slot.innerHTML = `
+      <div class="edit-panel multiday-panel">
+        <div class="multiday-range-row">
+          <label>${escapeAttr(t('multiday.startDate'))}
+            <input type="date" class="md-start-date" value="${escapeAttr(preview.startDate)}">
+          </label>
+          <label>${escapeAttr(t('multiday.endDate'))}
+            <input type="date" class="md-end-date" value="${escapeAttr(preview.endDate)}">
+          </label>
+        </div>
+        <div class="multiday-range-row">
+          <label>${escapeAttr(t('multiday.keepOnDate'))} (${escapeAttr(formatDateLabel(preview.rootDate))})
+            <input type="number" class="md-keep-minutes" min="1" step="5" value="${keepMinutes}">
+          </label>
+          <label>${escapeAttr(t('multiday.planTotal'))}
+            <input type="number" class="md-total-minutes" min="0" step="5" value="${totalMinutes}">
+          </label>
+        </div>
+        <button type="button" class="edit-btn md-recompute-btn">${escapeAttr(t('multiday.recompute'))}</button>
+        ${frozenHtml}
+        <div class="multiday-segments-title hint">${escapeAttr(t('multiday.segmentsTitle'))}</div>
+        <div class="multiday-segments">${segmentsHtml}</div>
+        ${warningHtml}
+        ${errorHtml}
+        <div class="edit-actions">
+          <button type="button" class="edit-save-btn md-accept-btn">${escapeAttr(t('multiday.accept'))}</button>
+          <button type="button" class="md-cancel-btn">${escapeAttr(t('multiday.cancel'))}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function openMultiDayPanel(row) {
+    if (!row.dataset.id) return;
+    planningRowId = row.dataset.id;
+    planningPreview = null;
+    planningLoading = true;
+    planningError = '';
+    renderMultiDayPanel(row);
+
+    const subjectRowData = readSubjectRowData(row);
+    const startDate = addDaysToDateStr(schedule.for_date, 1);
+    const endDate = subjectRowData.due_date && subjectRowData.due_date > startDate ? subjectRowData.due_date : addDaysToDateStr(startDate, 13);
+    await loadMultiDayPreview(row, subjectRowData, startDate, endDate);
+  }
+
+  async function loadMultiDayPreview(row, subjectRowData, startDate, endDate) {
+    const token = activeToken;
+    try {
+      const raw = await buildMultiDayPreview(userId, subjectRowData, startDate, endDate);
+      if (token !== activeToken || row.dataset.id !== planningRowId) return; // navigated away or panel closed
+      planningPreview = { ...raw, startDate, endDate, keepMinutes: raw.rootCurrentMinutes, totalMinutes: raw.planTotalMinutes };
+      planningLoading = false;
+      planningError = '';
+    } catch (e) {
+      console.error(e);
+      if (token !== activeToken || row.dataset.id !== planningRowId) return;
+      planningLoading = false;
+      planningError = 'Could not load a multi-day preview — check your connection.';
+    }
+    renderMultiDayPanel(row);
+  }
+
+  studyList.addEventListener('click', async (e) => {
+    const planBtn = e.target.closest('.plan-days-btn');
+    if (planBtn) {
+      const row = planBtn.closest('.entry-row');
+      if (planningRowId === row.dataset.id) {
+        closeMultiDayPanel();
+        renderMultiDayPanel(row);
+        return;
+      }
+      if (planningRowId) {
+        const previousRow = findStudyRow(planningRowId);
+        if (previousRow) previousRow.querySelector('.multiday-panel-slot').innerHTML = '';
+      }
+      await openMultiDayPanel(row);
+      return;
+    }
+
+    const cancelBtn = e.target.closest('.md-cancel-btn');
+    if (cancelBtn) {
+      const row = cancelBtn.closest('.entry-row');
+      closeMultiDayPanel();
+      renderMultiDayPanel(row);
+      return;
+    }
+
+    const recomputeBtn = e.target.closest('.md-recompute-btn');
+    if (recomputeBtn) {
+      const row = recomputeBtn.closest('.entry-row');
+      const panel = recomputeBtn.closest('.multiday-panel');
+      const startDate = panel.querySelector('.md-start-date').value;
+      const endDate = panel.querySelector('.md-end-date').value;
+      if (!startDate || !endDate || endDate < startDate) {
+        planningError = 'Choose a valid start and end date.';
+        renderMultiDayPanel(row);
+        return;
+      }
+      const keepMinutes = parseInt(panel.querySelector('.md-keep-minutes').value, 10) || 0;
+      const totalMinutes = parseInt(panel.querySelector('.md-total-minutes').value, 10) || 0;
+      const subjectRowData = readSubjectRowData(row);
+      planningLoading = true;
+      planningError = '';
+      renderMultiDayPanel(row);
+      await loadMultiDayPreview(row, subjectRowData, startDate, endDate);
+      if (planningPreview) {
+        planningPreview.keepMinutes = keepMinutes;
+        planningPreview.totalMinutes = totalMinutes;
+        renderMultiDayPanel(row);
+      }
+      return;
+    }
+
+    const acceptBtn = e.target.closest('.md-accept-btn');
+    if (acceptBtn) {
+      const row = acceptBtn.closest('.entry-row');
+      const panel = acceptBtn.closest('.multiday-panel');
+      const keepMinutes = parseInt(panel.querySelector('.md-keep-minutes').value, 10);
+      if (!Number.isFinite(keepMinutes) || keepMinutes <= 0) {
+        planningError = `${t('multiday.keepOnDate')} must be at least 1 minute.`;
+        renderMultiDayPanel(row);
+        return;
+      }
+      const segments = Array.from(panel.querySelectorAll('.md-seg-minutes'))
+        .map((input) => ({ date: input.dataset.date, minutes: parseInt(input.value, 10) || 0 }))
+        .filter((s) => s.minutes > 0);
+
+      const token = activeToken;
+      acceptBtn.disabled = true;
+      try {
+        await acceptMultiDayPlan(userId, planningPreview, keepMinutes, segments);
+        if (token !== activeToken) return; // navigated away while saving
+        closeMultiDayPanel();
+
+        const scheduleId = schedule.id;
+        const reloadedSubjects = await listStudySubjects(scheduleId);
+        if (token !== activeToken || !schedule || schedule.id !== scheduleId) return;
+        studyList.innerHTML = '';
+        reloadedSubjects.forEach((s) => addStudyRow(s));
+        refreshHistoryList();
+        flashSaved();
+      } catch (err) {
+        console.error(err);
+        planningError = 'Could not save the multi-day plan — check your connection.';
+        acceptBtn.disabled = false;
+        renderMultiDayPanel(row);
+      }
+      return;
+    }
+  });
 
   studyList.addEventListener('change', (e) => {
     // purely visual: keeps the priority select's color-coded badge in sync —
@@ -1261,6 +1496,7 @@ async function init(session) {
     studyList.innerHTML = '';
     currentScheduleItems = [];
     editingItemId = null;
+    closeMultiDayPanel();
     output.innerHTML = '<div class="placeholder">Loading…</div>';
     renderNotes([]);
     renderLockConflicts(null);

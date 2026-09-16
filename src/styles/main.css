@@ -879,6 +879,35 @@ button { font-family: inherit; }
 }
 .edit-error:empty { display: none; }
 
+.multiday-chunk-hint { margin: 4px 0 0; font-size: 11px; }
+.multiday-panel .multiday-range-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.multiday-panel .multiday-range-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.multiday-panel input[type="date"],
+.multiday-panel input[type="number"] {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+.multiday-segments-title { margin-top: 10px; margin-bottom: 6px; }
+.multiday-segments { display: flex; flex-direction: column; gap: 6px; }
+.multiday-seg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+.multiday-seg-row .md-seg-date { font-size: 12.5px; color: var(--text-soft); }
+.multiday-seg-row .md-seg-minutes { width: 76px; }
+
 .summary-percent { color: var(--muted); font-weight: 400; }
 
 .notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
