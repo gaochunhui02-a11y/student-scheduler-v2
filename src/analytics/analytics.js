@@ -29,8 +29,10 @@ import {
   countByRisk,
   computeProductivityPeriod,
   summarizeBoards,
+  computeTodayBlockStatus,
 } from './analyticsModel.js';
 import { formatDuration } from '../dashboard/summary.js';
+import { formatClock } from '../dashboard/scheduler.js';
 
 const RISK_LABEL_KEYS = { on_track: 'analytics.onTrack', needs_attention: 'analytics.needsAttention', at_risk: 'analytics.atRisk' };
 const PERIOD_LABEL_KEYS = { morning: 'analytics.periodMorning', afternoon: 'analytics.periodAfternoon', evening: 'analytics.periodEvening', night: 'analytics.periodNight' };
@@ -54,6 +56,12 @@ export function initAnalyticsSection(userId, hostApi = {}) {
   const upcomingEmptyEl = document.getElementById('analyticsUpcomingEmpty');
   const boardsCardEl = document.getElementById('analyticsBoardsCard');
   const boardsSummaryEl = document.getElementById('analyticsBoardsSummary');
+  const greetingEl = document.getElementById('homeGreeting');
+  const dateLineEl = document.getElementById('homeDateLine');
+  const plannedSecondaryEl = document.getElementById('homePlannedSecondary');
+  const completedSecondaryEl = document.getElementById('homeCompletedSecondary');
+  const atRiskSecondaryEl = document.getElementById('homeAtRiskSecondary');
+  const todayBodyEl = document.getElementById('homeTodayBody');
 
   let loading = false;
 
@@ -66,12 +74,106 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     if (statusEl) statusEl.hidden = true;
   }
 
-  function renderCards({ weekly, completionRate, upcomingCount, atRiskCount }) {
-    if (plannedValueEl) plannedValueEl.textContent = formatDuration(weekly.totalPlanned);
-    if (completedValueEl) completedValueEl.textContent = formatDuration(weekly.totalCompleted);
+  // Greeting + date line are rendered here (not just once on load) so a
+  // language switch re-translates them like everything else — dashboard.js
+  // calls onShow() again after applyTranslations() runs for exactly this
+  // reason (see the langSelect change handler).
+  function renderGreeting() {
+    if (!greetingEl) return;
+    const name = typeof hostApi.getDisplayName === 'function' ? hostApi.getDisplayName() : '';
+    const hour = new Date().getHours();
+    const key = hour < 12 ? 'home.greetingMorning' : hour < 18 ? 'home.greetingAfternoon' : 'home.greetingEvening';
+    greetingEl.textContent = t(key).replace('{name}', name || '');
+    if (dateLineEl) {
+      try {
+        dateLineEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      } catch {
+        dateLineEl.textContent = '';
+      }
+    }
+  }
+
+  function renderCards({ todayTotals, todayStudyCounts, weekly, completionRate, upcomingCount, atRiskCount }) {
+    if (plannedValueEl) plannedValueEl.textContent = formatDuration(todayTotals.totalPlanned);
+    if (completedValueEl) completedValueEl.textContent = formatDuration(todayTotals.totalCompleted);
     if (completionRateValueEl) completionRateValueEl.textContent = completionRate === null ? '—' : `${completionRate}%`;
     if (deadlinesValueEl) deadlinesValueEl.textContent = String(upcomingCount);
     if (atRiskValueEl) atRiskValueEl.textContent = String(atRiskCount);
+
+    if (plannedSecondaryEl) plannedSecondaryEl.textContent = `${todayStudyCounts.planned} ${t('home.sessionsPlannedLabel')}`;
+    if (completedSecondaryEl) completedSecondaryEl.textContent = `${todayStudyCounts.completed} ${t('home.sessionsCompletedLabel')}`;
+    if (atRiskSecondaryEl) atRiskSecondaryEl.hidden = atRiskCount <= 0;
+  }
+
+  // "Today" card: whichever of today's already-generated schedule_items is
+  // happening right now, or the next one coming up, plus how much planned
+  // study time is still ahead — all from computeTodayBlockStatus
+  // (analyticsModel.js), never a second scheduler. Empty state (nothing
+  // generated for today yet) offers the exact same Open Planner bridge
+  // every other cross-view action here already uses.
+  function goToPlanner() {
+    if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
+  }
+
+  function appendOpenPlannerButton(container) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-secondary home-today-open-btn';
+    btn.dataset.i18n = 'home.openPlanner';
+    btn.textContent = t('home.openPlanner');
+    btn.addEventListener('click', goToPlanner);
+    container.appendChild(btn);
+  }
+
+  function renderToday(status) {
+    if (!todayBodyEl) return;
+    todayBodyEl.innerHTML = '';
+    const block = status.current || status.next;
+
+    if (!block) {
+      const empty = document.createElement('div');
+      empty.className = 'home-today-empty';
+      const title = document.createElement('p');
+      title.className = 'home-empty-title';
+      title.dataset.i18n = 'home.todayEmptyTitle';
+      title.textContent = t('home.todayEmptyTitle');
+      const body = document.createElement('p');
+      body.className = 'hint';
+      body.dataset.i18n = 'home.todayEmptyBody';
+      body.textContent = t('home.todayEmptyBody');
+      empty.appendChild(title);
+      empty.appendChild(body);
+      todayBodyEl.appendChild(empty);
+      appendOpenPlannerButton(todayBodyEl);
+      return;
+    }
+
+    const badge = document.createElement('span');
+    const badgeKey = status.current ? 'home.nowLabel' : 'home.nextLabel';
+    badge.className = `home-today-badge${status.current ? ' home-today-badge-now' : ''}`;
+    badge.dataset.i18n = badgeKey;
+    badge.textContent = t(badgeKey);
+
+    const name = document.createElement('div');
+    name.className = 'home-today-name';
+    name.textContent = block.name; // user-created content — never translated
+
+    const meta = document.createElement('div');
+    meta.className = 'home-today-meta';
+    meta.textContent = `${formatClock(block.start_minutes)} – ${formatClock(block.end_minutes)}`;
+
+    todayBodyEl.appendChild(badge);
+    todayBodyEl.appendChild(name);
+    todayBodyEl.appendChild(meta);
+
+    if (status.remainingPlannedMinutes > 0) {
+      const remaining = document.createElement('div');
+      remaining.className = 'home-today-remaining';
+      remaining.textContent = `${formatDuration(status.remainingPlannedMinutes)} ${t('home.remainingTodayLabel')}`;
+      todayBodyEl.appendChild(remaining);
+    }
+
+    appendOpenPlannerButton(todayBodyEl);
   }
 
   function shortDayLabel(dateStr) {
@@ -221,16 +323,18 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     if (loading) return;
     loading = true;
     hideError();
+    renderGreeting();
     try {
       const today = typeof hostApi.getTodayDateStr === 'function' ? hostApi.getTodayDateStr() : new Date().toISOString().slice(0, 10);
       const dates = lastNDates(today, 7);
       const startDate = dates[0];
       const endDate = dates[dates.length - 1];
 
-      const [weekData, upcomingSubjects, boards] = await Promise.all([
+      const [weekData, upcomingSubjects, boards, todaySchedule] = await Promise.all([
         typeof hostApi.getWeekData === 'function' ? hostApi.getWeekData(startDate, endDate) : { schedules: [], items: [], subjects: [] },
         typeof hostApi.getUpcomingDeadlines === 'function' ? hostApi.getUpcomingDeadlines(today) : [],
         typeof hostApi.getBoardsSummary === 'function' ? hostApi.getBoardsSummary() : [],
+        typeof hostApi.getTodaySchedule === 'function' ? hostApi.getTodaySchedule() : null,
       ]);
 
       const itemsWithDate = attachDatesToItems(weekData.items, weekData.schedules);
@@ -245,7 +349,22 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       const productivity = computeProductivityPeriod(completedStudyItems);
       const boardsSummary = summarizeBoards(boards);
 
-      renderCards({ weekly, completionRate, upcomingCount: upcoming.length, atRiskCount });
+      // Today's own stat-card numbers (Study Planned/Completed) are
+      // deliberately distinct from the weekly chart below them — reuses
+      // the exact same computeWeeklyTotals a single "week" of one day is a
+      // valid input for, rather than a second planned/completed calculator.
+      const todayItems = todaySchedule ? todaySchedule.items || [] : [];
+      const todayTotals = computeWeeklyTotals(
+        todayItems.map((i) => ({ ...i, date: today })),
+        [today]
+      );
+      const todayStudyItems = todayItems.filter((i) => i.item_type === 'study');
+      const todayStudyCounts = { planned: todayStudyItems.length, completed: todayStudyItems.filter((i) => i.completed).length };
+      const now = new Date();
+      const todayStatus = computeTodayBlockStatus(todayItems, now.getHours() * 60 + now.getMinutes());
+
+      renderCards({ todayTotals, todayStudyCounts, weekly, completionRate, upcomingCount: upcoming.length, atRiskCount });
+      renderToday(todayStatus);
       renderChart(weekly.byDay);
       renderSubjects(subjectTotals);
       renderProductivity(productivity);

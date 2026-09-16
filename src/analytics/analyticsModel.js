@@ -120,6 +120,42 @@ export function computeCompletionRate(totalPlanned, totalCompleted) {
 }
 
 // ---------------------------------------------------------------------------
+// Today's block status (Home dashboard "Today" card, Phase 15 redesign)
+// ---------------------------------------------------------------------------
+
+// Which of today's already-generated schedule_items (if any) is happening
+// right now, or — if none is — which one is coming up next, plus how many
+// minutes of planned study are still ahead today. Deterministic and pure:
+// takes today's raw schedule_items (start_minutes/end_minutes/item_type/
+// completed, the same shape listScheduleItems() already returns) and the
+// current wall-clock time in minutes-since-midnight, and returns plain data
+// for the UI to render — never fetches, never guesses at a "recommended"
+// task (that's Checkpoint E's deterministic scoring engine, a separate
+// concern from "what does today's actual generated schedule say").
+//
+// "Current" prefers any item spanning `nowMinutes`, regardless of type
+// (a class or meal counts as "what's happening now" just as much as a
+// study block) — but "remaining planned study minutes" only ever counts
+// study blocks, and only the portion of each that's still ahead of now and
+// not yet completed, so a half-finished session correctly reports its
+// remaining half, not its full duration.
+export function computeTodayBlockStatus(items, nowMinutes) {
+  const list = Array.isArray(items) ? items : [];
+  const sorted = [...list]
+    .filter((i) => Number.isFinite(i.start_minutes) && Number.isFinite(i.end_minutes) && i.end_minutes > i.start_minutes)
+    .sort((a, b) => a.start_minutes - b.start_minutes);
+
+  const current = sorted.find((i) => nowMinutes >= i.start_minutes && nowMinutes < i.end_minutes) || null;
+  const next = !current ? sorted.find((i) => i.start_minutes > nowMinutes) || null : null;
+
+  const remainingPlannedMinutes = sorted
+    .filter((i) => i.item_type === 'study' && !i.completed && i.end_minutes > nowMinutes)
+    .reduce((sum, i) => sum + (i.end_minutes - Math.max(i.start_minutes, nowMinutes)), 0);
+
+  return { current, next, remainingPlannedMinutes: Math.max(0, remainingPlannedMinutes) };
+}
+
+// ---------------------------------------------------------------------------
 // Subject breakdown
 // ---------------------------------------------------------------------------
 

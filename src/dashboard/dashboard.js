@@ -216,6 +216,10 @@ async function init(session) {
       setLanguage(langSelect.value);
       applyTranslations();
       refreshThemeToggleLabel();
+      // Home's greeting/labels are rendered via t(), not [data-i18n] alone
+      // (the greeting also splices in the display name) — re-run its
+      // render pass so a language switch updates it immediately too.
+      if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
     });
   }
 
@@ -289,6 +293,7 @@ async function init(session) {
   // anything.
   const analyticsHostApi = {
     getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
+    getDisplayName: () => displayName,
     getWeekData: async (startDate, endDate) => {
       const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
       const scheduleIds = schedulesInRange.map((s) => s.id);
@@ -297,6 +302,18 @@ async function init(session) {
     },
     getUpcomingDeadlines: (fromDate) => listUpcomingStudySubjects(userId, fromDate),
     getBoardsSummary: () => listBoards(userId),
+    // Today's real generated schedule (whichever date is actually "today"),
+    // independent of whatever date the Planner itself currently has loaded
+    // — reuses the exact same getScheduleForDateIfExists/listScheduleItems
+    // data.js already exposes, never a new query shape. Null when today has
+    // no schedule row yet (a brand-new account, or a date never visited).
+    getTodaySchedule: async () => {
+      const todayStr = addDaysToDateStr(tomorrowDateStr(), -1);
+      const todaySchedule = await getScheduleForDateIfExists(userId, todayStr);
+      if (!todaySchedule) return null;
+      const items = await listScheduleItems(todaySchedule.id);
+      return { schedule: todaySchedule, items };
+    },
     viewInPlanner: goToPlannerStudyList,
   };
   const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
@@ -356,30 +373,95 @@ async function init(session) {
   };
   initCalendarSection(userId, calendarHostApi);
 
+  // Extracted to plain functions (not just inline listeners) so Quick
+  // Actions on the new Home page can trigger the EXACT same navigation —
+  // including, for a view-target, actually awaiting the section's onShow()
+  // before doing anything that depends on its DOM being ready — rather than
+  // a second copy of this logic.
+  function activatePlannerScroll(targetId) {
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+    const navBtn = document.querySelector(`.nav-item[data-scroll-target="${targetId}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    showPlannerView();
+    const target = document.getElementById(targetId);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      showPlannerView();
-      const target = document.getElementById(btn.dataset.scrollTarget);
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    btn.addEventListener('click', () => activatePlannerScroll(btn.dataset.scrollTarget));
   });
 
   const altViewSections = {
     boardView: boardSection,
     analyticsView: analyticsSection,
   };
+  async function activateView(key) {
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+    const navBtn = document.querySelector(`.nav-item[data-view-target="${key}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    showAltView(document.getElementById(key));
+    const section = altViewSections[key];
+    if (section && typeof section.onShow === 'function') await section.onShow();
+  }
   document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      const key = btn.dataset.viewTarget;
-      showAltView(document.getElementById(key));
-      const section = altViewSections[key];
-      if (section && typeof section.onShow === 'function') section.onShow();
-    });
+    btn.addEventListener('click', () => activateView(btn.dataset.viewTarget));
   });
+
+  // ---------------- mobile sidebar toggle (Checkpoint B) ----------------
+  // Purely presentational: a narrow-viewport off-canvas drawer, CSS-driven
+  // via the .sidebar-open class. Touches no existing nav wiring above —
+  // every nav-item keeps working exactly as it already does; this only
+  // additionally closes the drawer after a selection on narrow screens.
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const sidebarScrim = document.getElementById('sidebarScrim');
+  const sidebarEl = document.querySelector('.sidebar');
+  function closeSidebar() {
+    if (sidebarEl) sidebarEl.classList.remove('sidebar-open');
+    if (sidebarScrim) sidebarScrim.hidden = true;
+  }
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', () => {
+      const isOpen = sidebarEl && sidebarEl.classList.contains('sidebar-open');
+      if (isOpen) {
+        closeSidebar();
+      } else {
+        if (sidebarEl) sidebarEl.classList.add('sidebar-open');
+        if (sidebarScrim) sidebarScrim.hidden = false;
+      }
+    });
+  }
+  if (sidebarScrim) sidebarScrim.addEventListener('click', closeSidebar);
+  document.querySelectorAll('.nav-item').forEach((btn) => btn.addEventListener('click', closeSidebar));
+
+  // ---------------- Home Quick Actions (Checkpoint B) ----------------
+  // Every action reuses an EXISTING control/handler — nothing here creates
+  // a second "add study task"/"create board"/"import calendar" flow.
+  const qaAddTaskBtn = document.getElementById('homeQaAddTask');
+  if (qaAddTaskBtn) {
+    qaAddTaskBtn.addEventListener('click', () => {
+      activatePlannerScroll('plannerForm');
+      document.getElementById('addStudyBtn').click(); // exact same handler a manual click already uses
+      studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  const qaOpenPlannerBtn = document.getElementById('homeQaOpenPlanner');
+  if (qaOpenPlannerBtn) qaOpenPlannerBtn.addEventListener('click', () => activatePlannerScroll('plannerForm'));
+
+  const qaNewBoardBtn = document.getElementById('homeQaNewBoard');
+  if (qaNewBoardBtn) {
+    qaNewBoardBtn.addEventListener('click', async () => {
+      await activateView('boardView');
+      // Whichever "create a board" trigger is currently visible — a
+      // brand-new account shows boardCreateBtn (no-board empty state), an
+      // existing account shows boardNewBtn (toolbar) — both already call
+      // the Board's own real createNewBoard() flow; nothing new here.
+      const newBtn = document.getElementById('boardNewBtn');
+      const createBtn = document.getElementById('boardCreateBtn');
+      const target = newBtn && newBtn.offsetParent ? newBtn : createBtn;
+      if (target) target.click();
+    });
+  }
+  const qaImportCalendarBtn = document.getElementById('homeQaImportCalendar');
+  if (qaImportCalendarBtn) qaImportCalendarBtn.addEventListener('click', () => activatePlannerScroll('calendarImportCard'));
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that
@@ -1930,5 +2012,9 @@ async function init(session) {
 
   await loadScheduleForDate(initialDate);
 
-  plannerForm.style.display = '';
+  // Home (analyticsView) is the default landing view now, matching the
+  // "active" nav-item already marked in dashboard.html — the Planner's own
+  // data is still loaded above regardless, so switching to it is instant.
+  showAltView(document.getElementById('analyticsView'));
+  if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
 }

@@ -20,6 +20,7 @@ import {
   computeProductivityPeriod,
   summarizeBoards,
   buildAdvisorPromptForTask,
+  computeTodayBlockStatus,
 } from '../src/analytics/analyticsModel.js';
 
 let totalFailures = 0;
@@ -357,6 +358,54 @@ scenario('L. Board summary (summarizeBoards) and Advisor prompt (buildAdvisorPro
   check('buildAdvisorPromptForTask returns an empty string for a task with no title', () => {
     assert.equal(buildAdvisorPromptForTask({}), '');
     assert.equal(buildAdvisorPromptForTask(null), '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('M. Today block status (computeTodayBlockStatus) — Home dashboard "Today" card', () => {
+  check('a block spanning right now is reported as current, not next', () => {
+    const items = [
+      { item_type: 'class', start_minutes: 480, end_minutes: 540, completed: false }, // 8:00-9:00
+      { item_type: 'study', start_minutes: 540, end_minutes: 600, completed: false }, // 9:00-10:00
+    ];
+    const result = computeTodayBlockStatus(items, 500); // 8:20am, inside the class
+    assert.equal(result.current.item_type, 'class');
+    assert.equal(result.next, null);
+  });
+  check('with nothing currently happening, the soonest future block is "next"', () => {
+    const items = [
+      { item_type: 'study', start_minutes: 540, end_minutes: 600, completed: false },
+      { item_type: 'class', start_minutes: 700, end_minutes: 750, completed: false },
+    ];
+    const result = computeTodayBlockStatus(items, 620); // between the two, nothing active
+    assert.equal(result.current, null);
+    assert.equal(result.next.start_minutes, 700);
+  });
+  check('a day with nothing left at all reports both as null, no crash', () => {
+    const items = [{ item_type: 'study', start_minutes: 480, end_minutes: 540, completed: true }];
+    const result = computeTodayBlockStatus(items, 700);
+    assert.equal(result.current, null);
+    assert.equal(result.next, null);
+  });
+  check('empty/missing items never throws', () => {
+    assert.deepEqual(computeTodayBlockStatus([], 600), { current: null, next: null, remainingPlannedMinutes: 0 });
+    assert.deepEqual(computeTodayBlockStatus(null, 600), { current: null, next: null, remainingPlannedMinutes: 0 });
+  });
+  check('remainingPlannedMinutes sums only not-yet-completed study time still ahead of now', () => {
+    const items = [
+      { item_type: 'study', start_minutes: 480, end_minutes: 540, completed: true }, // done, in the past — excluded
+      { item_type: 'class', start_minutes: 540, end_minutes: 600, completed: false }, // a class, not study — excluded
+      { item_type: 'study', start_minutes: 600, end_minutes: 660, completed: false }, // fully ahead: 60 min
+    ];
+    assert.equal(computeTodayBlockStatus(items, 550).remainingPlannedMinutes, 60);
+  });
+  check('a study block already in progress only counts its remaining half, not the full duration', () => {
+    const items = [{ item_type: 'study', start_minutes: 540, end_minutes: 600, completed: false }]; // 9:00-10:00
+    assert.equal(computeTodayBlockStatus(items, 570).remainingPlannedMinutes, 30); // 9:30 -> 30 min left
+  });
+  check('a completed study block never counts toward remaining minutes even if technically still ahead', () => {
+    const items = [{ item_type: 'study', start_minutes: 700, end_minutes: 760, completed: true }];
+    assert.equal(computeTodayBlockStatus(items, 600).remainingPlannedMinutes, 0);
   });
 });
 

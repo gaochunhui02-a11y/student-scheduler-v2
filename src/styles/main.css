@@ -303,12 +303,21 @@ button { font-family: inherit; }
 }
 .brand-name { font-size: 14.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); }
 
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.nav-section { display: flex; flex-direction: column; gap: 2px; }
+.nav-section-label {
+  padding: 0 10px 4px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   color: var(--muted);
   text-decoration: none;
@@ -319,6 +328,7 @@ button { font-family: inherit; }
   background: transparent;
   width: 100%;
   text-align: left;
+  position: relative;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .nav-item .nav-dot {
@@ -329,9 +339,40 @@ button { font-family: inherit; }
   opacity: 0.55;
   flex: none;
 }
+.nav-icon { width: 17px; height: 17px; flex: none; opacity: 0.85; }
 .nav-item:hover { background: var(--card); color: var(--text); }
 .nav-item.active { background: var(--accent-soft); color: var(--accent-strong); }
 .nav-item.active .nav-dot { opacity: 1; }
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+.nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-soft-strong); }
+
+.sidebar-toggle-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-soft);
+  cursor: pointer;
+  flex: none;
+}
+.sidebar-toggle-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.sidebar-toggle-btn svg { width: 17px; height: 17px; }
 
 .sidebar-bottom { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); margin-top: 10px; }
 
@@ -1679,6 +1720,131 @@ button { font-family: inherit; }
 .analytics-productivity-result { font-size: 15px; font-weight: 650; color: var(--text); margin: 0; }
 
 /* ==========================================================================
+   Home dashboard (Checkpoint B, final non-AI redesign) — layered onto the
+   existing #analyticsView/.analytics-view DOM and CSS above, not a second
+   view. A very restrained radial accent sits behind the hero only; every
+   card below still uses the same --card/--border/--shadow-sm tokens as the
+   rest of the app, just arranged in a richer grid.
+   ========================================================================== */
+.home-hero {
+  position: relative;
+  padding: 4px 4px 20px;
+  margin-bottom: 4px;
+}
+.home-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -60px;
+  width: 320px;
+  height: 220px;
+  background: radial-gradient(closest-side, var(--accent-soft), transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: -1;
+}
+.home-greeting { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); margin: 0 0 4px; }
+.home-subtitle { font-size: 13.5px; color: var(--text-soft); margin: 0 0 2px; }
+.home-date { font-size: 12px; color: var(--muted); margin: 0; }
+
+.home-stat-cards { grid-template-columns: repeat(4, 1fr); }
+.home-stat-card { flex-direction: row; align-items: flex-start; gap: 12px; transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.home-stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.home-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  flex: none;
+}
+.home-stat-icon svg { width: 17px; height: 17px; }
+.home-stat-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.home-stat-secondary { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-stat-secondary:empty { display: none; }
+
+.home-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+.home-grid-2 > .card { margin-bottom: 0; }
+
+.home-today-card .hint, .home-recommend-card .placeholder { margin: 0; }
+.home-today-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+.home-today-badge-now { background: var(--accent-soft); color: var(--accent-strong); }
+.home-today-name { font-size: 16px; font-weight: 650; color: var(--text); margin-bottom: 2px; overflow-wrap: anywhere; }
+.home-today-meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-today-remaining { font-size: 12px; color: var(--text-soft); margin-top: 8px; }
+.home-today-open-btn { margin-top: 14px; }
+.home-today-empty { padding: 6px 0 4px; }
+.home-empty-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+
+.home-recommend-card .placeholder {
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.home-quick-actions .home-qa-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.home-qa-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.home-qa-btn svg { width: 19px; height: 19px; color: var(--accent-strong); }
+.home-qa-btn:hover { background: var(--card); border-color: var(--border-strong); color: var(--text); }
+
+@media (max-width: 1080px) {
+  .home-stat-cards { grid-template-columns: repeat(2, 1fr); }
+  .home-grid-2 { grid-template-columns: 1fr; }
+  .home-qa-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .home-stat-cards { grid-template-columns: 1fr; }
+  .home-qa-row { grid-template-columns: 1fr; }
+  .home-hero::before { display: none; }
+}
+
+/* ==========================================================================
    Notifications + PWA (Phase 11). The Notification-settings card itself
    reuses .card/.meal-row/.hint/.btn-secondary as-is — no new rules needed
    for it. Just the offline banner and the install-button state here.
@@ -1711,32 +1877,32 @@ button { font-family: inherit; }
 .calendar-import-item-meta { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
-   Responsive: sidebar collapses to a top bar on small screens
+   Responsive: sidebar becomes an off-canvas drawer on small screens
+   (Checkpoint B — replaces the old horizontal-icon-bar approach, which
+   assumed .nav-item was a direct child of .sidebar-nav; grouped
+   .nav-section wrappers need a real drawer, not a squeezed row.)
    ========================================================================== */
 @media (max-width: 860px) {
-  .app-shell { flex-direction: column; }
-  .sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    padding: 10px 14px;
-    gap: 10px;
-    overflow-x: auto;
+  .sidebar-toggle-btn { display: inline-flex; }
+  .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 14, 12, 0.4);
+    z-index: 35;
   }
-  .brand { padding: 0; }
-  .brand-name { display: none; }
-  .sidebar-nav { flex-direction: row; flex: none; }
-  .nav-item span:not(.nav-dot) { display: none; }
-  .nav-item { padding: 8px; }
-  .sidebar-bottom { flex-direction: row; align-items: center; border-top: none; margin-top: 0; padding-top: 0; margin-left: auto; }
-  .theme-toggle { width: auto; padding: 8px; }
-  .theme-toggle span { display: none; }
-  .lang-switch { width: auto; }
-  .lang-select { width: auto; padding: 8px; }
-  .user-meta { display: none; }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 248px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform var(--dur) var(--ease);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.sidebar-open { transform: translateX(0); }
   .workspace { padding: 18px 16px 40px; }
   .board-canvas-wrap { height: min(60vh, 480px); }
 }
@@ -1758,6 +1924,5 @@ button { font-family: inherit; }
   .advisor-message { max-width: 92%; }
   .advisor-input-row { flex-direction: column; align-items: stretch; }
   .advisor-send-btn { width: 100%; }
-  .analytics-cards { grid-template-columns: repeat(2, 1fr); }
   .analytics-upcoming-row { flex-wrap: wrap; }
 }
