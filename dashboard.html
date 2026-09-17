@@ -391,29 +391,62 @@
   </div>
 
       <section class="board-view" id="boardView" hidden>
-        <div class="board-selector-row" id="boardSelectorRow" hidden>
-          <select id="boardSelect" class="board-select" data-i18n-aria-label="board.boardsLabel" aria-label="Boards"></select>
-          <button type="button" class="board-toolbar-btn" id="boardRenameBtn" data-i18n="board.renameBoard" data-i18n-aria-label="board.renameBoard" aria-label="Rename Board">Rename Board</button>
-          <button type="button" class="board-toolbar-btn" id="boardNewBtn">+ <span data-i18n="board.newBoard">New Board</span></button>
-          <button type="button" class="board-toolbar-btn board-toolbar-btn-danger" id="boardDeleteBoardBtn" data-i18n="board.deleteBoard">Delete Board</button>
-        </div>
         <div class="board-header">
-          <input type="text" id="boardTitleInput" class="board-title-input" data-i18n-aria-label="board.titleLabel" aria-label="Board title" data-i18n-placeholder="board.titleLabel" placeholder="Board title">
-          <div class="board-toolbar">
-            <button type="button" class="board-add-btn" id="boardAddNodeBtn">+ <span data-i18n="board.addNode">Add node</span></button>
-            <div class="board-search">
-              <input type="search" id="boardSearchInput" class="board-search-input" data-i18n-placeholder="board.searchNodes" placeholder="Search nodes" data-i18n-aria-label="board.searchNodes" aria-label="Search nodes" autocomplete="off">
-              <div class="board-search-results" id="boardSearchResults" hidden></div>
-            </div>
-            <div class="board-zoom">
-              <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out">−</button>
-              <span class="board-zoom-label" id="boardZoomLabel">100%</span>
-              <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in">+</button>
-              <button type="button" class="board-zoom-btn board-zoom-reset" id="boardZoomResetBtn" data-i18n="board.zoomReset" data-i18n-aria-label="board.resetView" aria-label="Reset view">Reset</button>
-            </div>
-            <button type="button" class="board-toolbar-btn" id="boardFitBtn" data-i18n="board.fitToBoard">Fit to Board</button>
-            <button type="button" class="board-toolbar-btn" id="boardAutoArrangeBtn" data-i18n="board.autoArrange">Auto Arrange</button>
+          <div class="board-header-info">
+            <p class="board-eyebrow" data-i18n="board.eyebrow">Board</p>
+            <h1 class="board-heading" data-i18n="board.heading">Board</h1>
+            <p class="board-subtitle" data-i18n="board.subtitle">Plan projects and break work into connected steps.</p>
           </div>
+
+          <div class="board-selector-row" id="boardSelectorRow" hidden>
+            <label for="boardSelect" class="sr-only" data-i18n="board.boardsLabel">Boards</label>
+            <select id="boardSelect" class="board-select" data-i18n-aria-label="board.boardsLabel" aria-label="Boards"></select>
+            <input type="text" id="boardTitleInput" class="board-title-input" data-i18n-aria-label="board.titleLabel" aria-label="Board title" data-i18n-placeholder="board.titleLabel" placeholder="Board title" hidden>
+            <button type="button" class="btn-primary board-new-btn" id="boardNewBtn">+ <span data-i18n="board.newBoard">New Board</span></button>
+            <details class="board-more-menu">
+              <summary class="btn-secondary board-more-btn" aria-label="More board actions" data-i18n-aria-label="board.moreActionsLabel">⋯</summary>
+              <div class="board-more-dropdown">
+                <button type="button" class="board-more-item" id="boardRenameBtn" data-i18n="board.renameBoard">Rename Board</button>
+                <button type="button" class="board-more-item board-more-item-danger" id="boardDeleteBoardBtn" data-i18n="board.deleteBoard">Delete Board</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <div class="board-toolbar" id="boardToolbar" hidden>
+          <button type="button" class="board-tool-btn board-tool-btn-primary" id="boardAddNodeBtn" title="Add node" data-i18n-title="board.addNode">
+            <svg class="board-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="board.addNode">Add node</span>
+          </button>
+          <button type="button" class="board-tool-btn" id="boardTemplatesBtn" title="Templates" data-i18n-title="board.templates">
+            <svg class="board-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.3"/></svg>
+            <span data-i18n="board.templates">Templates</span>
+          </button>
+
+          <span class="board-toolbar-divider" aria-hidden="true"></span>
+
+          <div class="board-search">
+            <svg class="board-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20 15.5 15.5"/></svg>
+            <input type="search" id="boardSearchInput" class="board-search-input" data-i18n-placeholder="board.searchNodes" placeholder="Search nodes" data-i18n-aria-label="board.searchNodes" aria-label="Search nodes" autocomplete="off">
+            <div class="board-search-results" id="boardSearchResults" hidden></div>
+          </div>
+
+          <span class="board-toolbar-divider" aria-hidden="true"></span>
+
+          <div class="board-zoom">
+            <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out" title="Zoom out">−</button>
+            <button type="button" class="board-zoom-label" id="boardZoomLabel" data-i18n-title="board.resetView" title="Reset view">100%</button>
+            <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in" title="Zoom in">+</button>
+          </div>
+
+          <button type="button" class="board-tool-btn" id="boardFitBtn" title="Fit to Board" data-i18n-title="board.fitToBoard">
+            <svg class="board-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            <span data-i18n="board.fitToBoard">Fit</span>
+          </button>
+          <button type="button" class="board-tool-btn" id="boardAutoArrangeBtn" title="Auto Arrange" data-i18n-title="board.autoArrange">
+            <svg class="board-tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.6 7.5 10.7 15.2M16.4 7.5 13.3 15.2"/></svg>
+            <span data-i18n="board.autoArrange">Arrange</span>
+          </button>
         </div>
 
         <p class="hint" id="boardEdgeStatus" hidden></p>
@@ -428,7 +461,15 @@
                   </marker>
                 </defs>
               </svg>
-              <div class="placeholder board-empty" id="boardEmptyState" data-i18n="board.emptyState" hidden>No nodes yet.</div>
+              <div class="board-empty" id="boardEmptyState" hidden>
+                <span class="board-empty-glyph" aria-hidden="true">◇</span>
+                <p class="board-empty-title" data-i18n="board.emptyStateTitle">Plan visually</p>
+                <p class="hint" data-i18n="board.emptyStateBody">Turn a project, exam, or idea into connected steps.</p>
+                <div class="board-empty-actions">
+                  <button type="button" class="btn-primary" id="boardEmptyAddNodeBtn" data-i18n="board.addFirstNode">Add first node</button>
+                  <button type="button" class="btn-secondary" id="boardEmptyTemplateBtn" data-i18n="board.useATemplate">Use a template</button>
+                </div>
+              </div>
               <button type="button" class="board-edge-delete-btn" id="boardEdgeDeleteBtn" data-i18n="board.deleteConnection" hidden>Delete connection</button>
             </div>
           </div>
@@ -436,7 +477,10 @@
 
         <div class="card board-no-board" id="boardNoBoardState" hidden>
           <p class="hint" data-i18n="board.noBoardHint">You don't have a board yet.</p>
-          <button type="button" class="btn-primary" id="boardCreateBtn" data-i18n="board.createFirstBoard">Create your first Board</button>
+          <div class="board-empty-actions">
+            <button type="button" class="btn-primary" id="boardCreateBtn" data-i18n="board.createFirstBoard">Create your first Board</button>
+            <button type="button" class="btn-secondary" id="boardNoBoardTemplateBtn" data-i18n="board.useATemplate">Use a template</button>
+          </div>
         </div>
       </section>
 

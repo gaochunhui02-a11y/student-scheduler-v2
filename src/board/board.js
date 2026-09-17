@@ -37,7 +37,6 @@ import {
   createNodeDefaults,
   computeDragPosition,
   computeEdgeGeometry,
-  edgeMidpoint,
   screenToCanvasPoint,
   isSelfEdge,
   isDuplicateEdge,
@@ -56,12 +55,17 @@ import {
   filterNodesByQuery,
   duplicateNodeFields,
   hasChildren,
+  getDescendantNodeIds,
   computeHiddenNodeIds,
   computeAutoLayout,
   selectBoardId,
   filterNodesByBoard,
   filterEdgesByBoard,
   clearedBoardViewState,
+  computeEdgeCurvePath,
+  computeQuadraticPoint,
+  BOARD_TEMPLATES,
+  buildTemplateStructure,
 } from './boardModel.js';
 import {
   listBoards,
@@ -118,14 +122,23 @@ export function initBoardSection(userId, hostApi = {}) {
   const addNodeBtn = document.getElementById('boardAddNodeBtn');
   const zoomInBtn = document.getElementById('boardZoomInBtn');
   const zoomOutBtn = document.getElementById('boardZoomOutBtn');
-  const zoomResetBtn = document.getElementById('boardZoomResetBtn');
   const zoomLabel = document.getElementById('boardZoomLabel');
+  // Checkpoint D: the zoom percentage label IS the reset control (click it to
+  // return to 100%) — one element serving both roles, rather than a second
+  // dedicated reset button competing for space in the compact toolbar. Same
+  // existing setZoom(1) wiring below, just attached to this element instead.
+  const zoomResetBtn = zoomLabel;
+  const toolbar = document.getElementById('boardToolbar');
   const workspace = document.getElementById('boardWorkspace');
   const canvasWrap = document.getElementById('boardCanvasWrap');
   const canvas = document.getElementById('boardCanvas');
   const emptyState = document.getElementById('boardEmptyState');
+  const emptyAddNodeBtn = document.getElementById('boardEmptyAddNodeBtn');
+  const emptyTemplateBtn = document.getElementById('boardEmptyTemplateBtn');
   const noBoardState = document.getElementById('boardNoBoardState');
   const createBoardBtn = document.getElementById('boardCreateBtn');
+  const noBoardTemplateBtn = document.getElementById('boardNoBoardTemplateBtn');
+  const templatesBtn = document.getElementById('boardTemplatesBtn');
   const edgesLayer = document.getElementById('boardEdgesLayer');
   const edgeStatus = document.getElementById('boardEdgeStatus');
   const edgeDeleteBtn = document.getElementById('boardEdgeDeleteBtn');
@@ -175,6 +188,16 @@ export function initBoardSection(userId, hostApi = {}) {
       edgeStatus.hidden = true;
     }, 3000);
   }
+
+  // Checkpoint D: any open <details>-based dropdown on the Board (the
+  // header's board "⋯" menu, or a node's own "⋯" menu) closes on an
+  // outside click — native <details> has no such behavior on its own. Same
+  // technique already used for the Planner's toolbar "More ▾" menu.
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.board-more-menu[open], .board-node-menu[open]').forEach((d) => {
+      if (!d.contains(e.target)) d.open = false;
+    });
+  });
 
   // ---------------- convert node to study task (Phase 5) ----------------
 
@@ -357,45 +380,157 @@ export function initBoardSection(userId, hostApi = {}) {
     conversionModal.nameInput.focus();
   }
 
-  // The small footer row on every node card: either "Add to Planner", or —
-  // once node.linked_study_subject_id is set — a static "Already added to
-  // Planner" badge plus "View in Planner". This is also what prevents a
-  // duplicate conversion in the UI: once linked, the create action is gone.
-  function buildLinkRow(node) {
+  // Checkpoint D: the always-visible footer is now purely informational — a
+  // "✓ In Planner" badge once node.linked_study_subject_id is set, nothing
+  // to click. Both actual actions ("Send to Planner" / "View in Planner")
+  // moved into the node's "⋯" menu (buildNodeMenu, below) to cut per-card
+  // clutter; the conversion guard (a linked node can't be re-converted) is
+  // unchanged, just expressed there instead of here.
+  function buildLinkFooter(node) {
+    if (!isNodeConverted(node)) return null;
     const row = document.createElement('div');
     row.className = 'board-node-link-row';
+    const badge = document.createElement('span');
+    badge.className = 'board-node-link-badge';
+    badge.dataset.i18n = 'board.alreadyAdded';
+    badge.textContent = t('board.alreadyAdded');
+    row.appendChild(badge);
+    return row;
+  }
+
+  // The node's "⋯" overflow menu: Send to Planner / View in Planner,
+  // Duplicate, Collapse/Expand (only if it has children), and Delete — the
+  // less-common per-node actions, moved out of always-on card clutter.
+  // Every item below reuses the EXACT same click handler and Supabase call
+  // the old always-visible buttons used; only the container changed.
+  function buildNodeMenu(node) {
+    const details = document.createElement('details');
+    details.className = 'board-node-menu';
+
+    const summary = document.createElement('summary');
+    summary.className = 'board-node-menu-btn';
+    summary.textContent = '⋯';
+    summary.setAttribute('aria-label', t('board.nodeMenuLabel'));
+    summary.dataset.i18nAriaLabel = 'board.nodeMenuLabel';
+    stopDragStart(summary);
+    details.appendChild(summary);
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'board-node-menu-dropdown';
 
     if (isNodeConverted(node)) {
-      const badge = document.createElement('span');
-      badge.className = 'board-node-link-badge';
-      badge.dataset.i18n = 'board.alreadyAdded';
-      badge.textContent = t('board.alreadyAdded');
-
       const viewBtn = document.createElement('button');
       viewBtn.type = 'button';
-      viewBtn.className = 'board-node-link-btn';
+      viewBtn.className = 'board-node-menu-item';
       viewBtn.dataset.i18n = 'board.viewInPlanner';
       viewBtn.textContent = t('board.viewInPlanner');
       viewBtn.addEventListener('click', () => {
+        details.open = false;
         if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
       });
-      stopDragStart(viewBtn);
-
-      row.appendChild(badge);
-      row.appendChild(viewBtn);
+      dropdown.appendChild(viewBtn);
     } else {
-      const addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'board-node-link-btn board-node-link-btn-primary';
-      addBtn.dataset.i18n = 'board.addToPlanner';
-      addBtn.textContent = t('board.addToPlanner');
-      addBtn.addEventListener('click', () => openConversionModal(node));
-      stopDragStart(addBtn);
-
-      row.appendChild(addBtn);
+      const sendBtn = document.createElement('button');
+      sendBtn.type = 'button';
+      sendBtn.className = 'board-node-menu-item';
+      sendBtn.dataset.i18n = 'board.sendToPlanner';
+      sendBtn.textContent = t('board.sendToPlanner');
+      sendBtn.addEventListener('click', () => {
+        details.open = false;
+        openConversionModal(node);
+      });
+      dropdown.appendChild(sendBtn);
     }
 
-    return row;
+    const duplicateBtn = document.createElement('button');
+    duplicateBtn.type = 'button';
+    duplicateBtn.className = 'board-node-menu-item';
+    duplicateBtn.dataset.i18n = 'board.duplicate';
+    duplicateBtn.textContent = t('board.duplicate');
+    duplicateBtn.addEventListener('click', async () => {
+      details.open = false;
+      if (!currentBoard) return;
+      // duplicateNodeFields deliberately drops linked_study_subject_id (a
+      // duplicate is a fresh, unconverted node) and copies no edges —
+      // nothing here reads or writes `edges`.
+      const fields = duplicateNodeFields(node);
+      try {
+        const created = await createNode(userId, currentBoard.id, {
+          nodeType: fields.node_type,
+          title: fields.title,
+          x: fields.x_position,
+          y: fields.y_position,
+          color: fields.color,
+        });
+        nodes.push(created);
+        renderNodes();
+      } catch (err) {
+        console.error('Could not duplicate node:', err);
+      }
+    });
+    dropdown.appendChild(duplicateBtn);
+
+    if (hasChildren(edges, node.id)) {
+      const collapsed = collapsedNodeIds.has(node.id);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'board-node-menu-item';
+      const key = collapsed ? 'board.expand' : 'board.collapse';
+      toggleBtn.dataset.i18n = key;
+      toggleBtn.textContent = t(key);
+      toggleBtn.addEventListener('click', () => {
+        details.open = false;
+        // View-only state — never persisted, never deletes anything; just
+        // changes what renderNodes()/renderEdges() choose to show.
+        if (collapsedNodeIds.has(node.id)) collapsedNodeIds.delete(node.id);
+        else collapsedNodeIds.add(node.id);
+        renderNodes();
+        renderEdges();
+      });
+      dropdown.appendChild(toggleBtn);
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'board-node-menu-item board-node-menu-item-danger';
+    deleteBtn.dataset.i18n = 'board.deleteNode';
+    deleteBtn.textContent = t('board.deleteNode');
+    deleteBtn.addEventListener('click', async () => {
+      details.open = false;
+      try {
+        await deleteNode(userId, node.id);
+        nodes = nodes.filter((n) => n.id !== node.id);
+        // The database cascades this via ON DELETE CASCADE on
+        // board_edges.source_node_id/target_node_id (see 0002_boards.sql);
+        // this mirrors it in local state so the lines disappear from the
+        // canvas immediately, not just after the next reload.
+        edges = removeEdgesForNode(edges, node.id);
+        collapsedNodeIds.delete(node.id); // housekeeping — a deleted node can't stay "collapsed"
+        hideEdgeDeleteButton();
+        renderNodes();
+        renderEdges();
+      } catch (err) {
+        console.error('Could not delete node:', err);
+      }
+    });
+    dropdown.appendChild(deleteBtn);
+
+    details.appendChild(dropdown);
+    return details;
+  }
+
+  // Small monochrome per-type glyphs (same stroke style as the sidebar nav
+  // icons) — purely presentational, always paired with the real <select>
+  // next to it, which stays the actual node_type control (Checkpoint D
+  // doesn't add a second, parallel type-storage mechanism).
+  const NODE_TYPE_ICONS = {
+    goal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.2"/></svg>',
+    subject: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h8a3 3 0 0 1 3 3V19a2.5 2.5 0 0 0-2.5-2.5h-8.5z"/><path d="M12.5 8.5h7a3 3 0 0 1 0 6h-.01"/></svg>',
+    task: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.5 11 15l4.5-5.5"/></svg>',
+    note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h9L18.5 8v11a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1z"/><path d="M8.5 10.5h7M8.5 14h5"/></svg>',
+  };
+  function nodeTypeIconMarkup(nodeType) {
+    return NODE_TYPE_ICONS[nodeType] || NODE_TYPE_ICONS.note;
   }
 
   function applyZoom() {
@@ -626,7 +761,9 @@ export function initBoardSection(userId, hostApi = {}) {
       return;
     }
     const { x1, y1, x2, y2 } = computeEdgeGeometry(source, target, NODE_WIDTH, NODE_HEIGHT);
-    const mid = edgeMidpoint(x1, y1, x2, y2);
+    // The curve's actual midpoint (t=0.5), not the straight-line one — the
+    // button would otherwise sit visibly off the bowed line (Checkpoint D).
+    const mid = computeQuadraticPoint(x1, y1, x2, y2, 0.5);
     if (edgeDeleteBtn) {
       edgeDeleteBtn.style.left = `${mid.x}px`;
       edgeDeleteBtn.style.top = `${mid.y}px`;
@@ -669,26 +806,25 @@ export function initBoardSection(userId, hostApi = {}) {
       if (hiddenNodeIds.has(source.id) || hiddenNodeIds.has(target.id)) return;
 
       const { x1, y1, x2, y2 } = computeEdgeGeometry(source, target, NODE_WIDTH, NODE_HEIGHT);
+      // Checkpoint D: a gentle bow instead of a dead-straight line — same
+      // node-center anchors, just drawn as a single quadratic curve. The
+      // marker-end arrow follows a <path>'s tangent at its endpoint exactly
+      // as it did for a <line>, so direction is unaffected.
+      const d = computeEdgeCurvePath(x1, y1, x2, y2);
 
       const g = svgEl('g');
       g.setAttribute('class', 'board-edge');
       g.dataset.edgeId = edge.id;
       if (edge.id === selectedEdgeId) g.classList.add('selected');
 
-      const line = svgEl('line');
+      const line = svgEl('path');
       line.setAttribute('class', 'board-edge-line');
-      line.setAttribute('x1', x1);
-      line.setAttribute('y1', y1);
-      line.setAttribute('x2', x2);
-      line.setAttribute('y2', y2);
+      line.setAttribute('d', d);
       line.setAttribute('marker-end', 'url(#boardEdgeArrow)');
 
-      const hit = svgEl('line');
+      const hit = svgEl('path');
       hit.setAttribute('class', 'board-edge-hit');
-      hit.setAttribute('x1', x1);
-      hit.setAttribute('y1', y1);
-      hit.setAttribute('x2', x2);
-      hit.setAttribute('y2', y2);
+      hit.setAttribute('d', d);
       hit.setAttribute('aria-label', t('board.connectionLabel'));
       hit.dataset.i18nAriaLabel = 'board.connectionLabel';
       hit.addEventListener('click', (e) => {
@@ -871,63 +1007,6 @@ export function initBoardSection(userId, hostApi = {}) {
     cardEl.addEventListener('pointercancel', endDrag);
   }
 
-  // Small footer row: Duplicate (always), plus Collapse/Expand when the
-  // node has at least one outgoing edge (i.e. is a parent of something).
-  function buildToolsRow(node) {
-    const row = document.createElement('div');
-    row.className = 'board-node-tools-row';
-
-    const duplicateBtn = document.createElement('button');
-    duplicateBtn.type = 'button';
-    duplicateBtn.className = 'board-node-link-btn';
-    duplicateBtn.dataset.i18n = 'board.duplicate';
-    duplicateBtn.textContent = t('board.duplicate');
-    duplicateBtn.addEventListener('click', async () => {
-      if (!currentBoard) return;
-      // duplicateNodeFields deliberately drops linked_study_subject_id (a
-      // duplicate is a fresh, unconverted node) and copies no edges —
-      // nothing here reads or writes `edges`.
-      const fields = duplicateNodeFields(node);
-      try {
-        const created = await createNode(userId, currentBoard.id, {
-          nodeType: fields.node_type,
-          title: fields.title,
-          x: fields.x_position,
-          y: fields.y_position,
-          color: fields.color,
-        });
-        nodes.push(created);
-        renderNodes();
-      } catch (err) {
-        console.error('Could not duplicate node:', err);
-      }
-    });
-    stopDragStart(duplicateBtn);
-    row.appendChild(duplicateBtn);
-
-    if (hasChildren(edges, node.id)) {
-      const collapsed = collapsedNodeIds.has(node.id);
-      const toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'board-node-link-btn';
-      const key = collapsed ? 'board.expand' : 'board.collapse';
-      toggleBtn.dataset.i18n = key;
-      toggleBtn.textContent = t(key);
-      toggleBtn.addEventListener('click', () => {
-        // View-only state — never persisted, never deletes anything; just
-        // changes what renderNodes()/renderEdges() choose to show.
-        if (collapsedNodeIds.has(node.id)) collapsedNodeIds.delete(node.id);
-        else collapsedNodeIds.add(node.id);
-        renderNodes();
-        renderEdges();
-      });
-      stopDragStart(toggleBtn);
-      row.appendChild(toggleBtn);
-    }
-
-    return row;
-  }
-
   function buildNodeEl(node) {
     const el = document.createElement('div');
     el.className = 'board-node';
@@ -938,6 +1017,11 @@ export function initBoardSection(userId, hostApi = {}) {
 
     const head = document.createElement('div');
     head.className = 'board-node-head';
+
+    const typeIcon = document.createElement('span');
+    typeIcon.className = 'board-node-type-icon';
+    typeIcon.setAttribute('aria-hidden', 'true');
+    typeIcon.innerHTML = nodeTypeIconMarkup(node.node_type);
 
     const typeSelect = document.createElement('select');
     typeSelect.className = 'board-node-type';
@@ -955,6 +1039,7 @@ export function initBoardSection(userId, hostApi = {}) {
       const nextType = typeSelect.value;
       node.node_type = nextType;
       el.dataset.nodeType = nextType;
+      typeIcon.innerHTML = nodeTypeIconMarkup(nextType);
       try {
         await updateNode(userId, node.id, { nodeType: nextType });
       } catch (err) {
@@ -963,33 +1048,13 @@ export function initBoardSection(userId, hostApi = {}) {
     });
     stopDragStart(typeSelect);
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'board-node-delete';
-    deleteBtn.textContent = '×';
-    deleteBtn.setAttribute('aria-label', t('board.deleteNode'));
-    deleteBtn.dataset.i18nAriaLabel = 'board.deleteNode';
-    deleteBtn.addEventListener('click', async () => {
-      try {
-        await deleteNode(userId, node.id);
-        nodes = nodes.filter((n) => n.id !== node.id);
-        // The database cascades this via ON DELETE CASCADE on
-        // board_edges.source_node_id/target_node_id (see 0002_boards.sql);
-        // this mirrors it in local state so the lines disappear from the
-        // canvas immediately, not just after the next reload.
-        edges = removeEdgesForNode(edges, node.id);
-        collapsedNodeIds.delete(node.id); // housekeeping — a deleted node can't stay "collapsed"
-        hideEdgeDeleteButton();
-        renderNodes();
-        renderEdges();
-      } catch (err) {
-        console.error('Could not delete node:', err);
-      }
-    });
-    stopDragStart(deleteBtn);
-
+    head.appendChild(typeIcon);
     head.appendChild(typeSelect);
-    head.appendChild(deleteBtn);
+    // Checkpoint D: Edit/Duplicate/Collapse/Send to Planner/Delete all live
+    // under this one "⋯" menu now — the connection handle (bottom-right) is
+    // the only per-node affordance left always on the card, per the "reduce
+    // clutter" brief. See buildNodeMenu above.
+    head.appendChild(buildNodeMenu(node));
 
     const textarea = document.createElement('textarea');
     textarea.className = 'board-node-title';
@@ -1009,8 +1074,21 @@ export function initBoardSection(userId, hostApi = {}) {
 
     el.appendChild(head);
     el.appendChild(textarea);
-    el.appendChild(buildLinkRow(node));
-    el.appendChild(buildToolsRow(node));
+
+    const linkFooter = buildLinkFooter(node);
+    if (linkFooter) el.appendChild(linkFooter);
+
+    // Section 15: a collapsed branch shows how much it's hiding rather than
+    // just a bare Expand button with no context.
+    if (collapsedNodeIds.has(node.id)) {
+      const hiddenCount = getDescendantNodeIds(edges, node.id).length;
+      if (hiddenCount > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'board-node-hidden-badge';
+        badge.textContent = t('board.hiddenItems').replace('{count}', String(hiddenCount));
+        el.appendChild(badge);
+      }
+    }
 
     const handle = document.createElement('div');
     handle.className = 'board-node-handle';
@@ -1037,6 +1115,7 @@ export function initBoardSection(userId, hostApi = {}) {
 
   function showNoBoardState() {
     if (workspace) workspace.hidden = true;
+    if (toolbar) toolbar.hidden = true;
     if (selectorRow) selectorRow.hidden = true;
     if (noBoardState) noBoardState.hidden = false;
     if (titleInput) titleInput.value = '';
@@ -1045,6 +1124,7 @@ export function initBoardSection(userId, hostApi = {}) {
   function showWorkspaceState() {
     if (noBoardState) noBoardState.hidden = true;
     if (workspace) workspace.hidden = false;
+    if (toolbar) toolbar.hidden = false;
     if (selectorRow) selectorRow.hidden = false;
   }
 
@@ -1123,6 +1203,7 @@ export function initBoardSection(userId, hostApi = {}) {
       nodes = filterNodesByBoard(data.nodes, currentBoard.id);
       edges = filterEdgesByBoard(data.edges, currentBoard.id);
       if (titleInput) titleInput.value = currentBoard.title;
+      showBoardSelectView();
       refreshBoardSelect();
       renderNodes();
       renderEdges();
@@ -1162,15 +1243,180 @@ export function initBoardSection(userId, hostApi = {}) {
   if (createBoardBtn) createBoardBtn.addEventListener('click', createNewBoard);
   if (newBoardBtn) newBoardBtn.addEventListener('click', createNewBoard);
 
+  // ---------------- Board templates (Checkpoint D) ----------------
+  // Deterministic, local, non-AI starter content (BOARD_TEMPLATES in
+  // boardModel.js) — no network call, no second Board engine. Applying a
+  // template ALWAYS creates a brand-new board and never touches the
+  // currently open one, so there is no scenario where an existing board's
+  // nodes could be silently overwritten (Template Safety, section 12/13):
+  // picking a template from this picker IS the explicit confirmation.
+  let templateModal = null; // built lazily on first use, like conversionModal above
+
+  function closeTemplateModal() {
+    if (templateModal) templateModal.overlay.hidden = true;
+  }
+
+  function buildTemplateModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'board-modal-overlay';
+    overlay.hidden = true;
+
+    const modal = document.createElement('div');
+    modal.className = 'board-modal board-template-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+
+    const heading = document.createElement('h3');
+    heading.className = 'board-modal-title';
+    heading.textContent = t('board.templatesModalTitle');
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'hint board-template-modal-subtitle';
+    subtitle.textContent = t('board.templatesModalSubtitle');
+
+    const list = document.createElement('div');
+    list.className = 'board-template-list';
+
+    BOARD_TEMPLATES.forEach((template) => {
+      const card = document.createElement('div');
+      card.className = 'board-template-card';
+
+      const cardTitle = document.createElement('div');
+      cardTitle.className = 'board-template-card-title';
+      cardTitle.textContent = t(template.titleKey);
+
+      const steps = document.createElement('p');
+      steps.className = 'hint board-template-card-steps';
+      steps.textContent = [t(template.root.titleKey), ...template.children.map((c) => t(c.titleKey))].join(' · ');
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'btn-secondary';
+      useBtn.textContent = t('board.useTemplate');
+      useBtn.addEventListener('click', () => applyTemplate(template.key, useBtn));
+
+      card.appendChild(cardTitle);
+      card.appendChild(steps);
+      card.appendChild(useBtn);
+      list.appendChild(card);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'board-modal-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.textContent = t('board.cancel');
+    cancelBtn.addEventListener('click', closeTemplateModal);
+    actions.appendChild(cancelBtn);
+
+    modal.appendChild(heading);
+    modal.appendChild(subtitle);
+    modal.appendChild(list);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+
+    // Appended to <body>, same rationale as buildConversionModal above (the
+    // canvas's zoom transform would otherwise break position:fixed).
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeTemplateModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlay.hidden) closeTemplateModal();
+    });
+
+    return { overlay };
+  }
+
+  function openTemplateModal() {
+    if (!templateModal) templateModal = buildTemplateModal();
+    templateModal.overlay.hidden = false;
+  }
+
+  // Creates a brand-new board, then the template's root + child nodes and
+  // the parent edges connecting them, then hands the result to the EXISTING
+  // autoArrange() (defined above) for layout + position persistence — reuse
+  // of createBoard/createNode/createEdge/autoArrange end to end, no
+  // duplicate persistence or layout logic.
+  async function applyTemplate(templateKey, triggerBtn) {
+    const template = getBoardTemplate(templateKey);
+    const structure = buildTemplateStructure(template);
+    if (!structure) return;
+    if (triggerBtn) triggerBtn.disabled = true;
+    try {
+      const board = await createBoard(userId, t(structure.boardTitleKey));
+      allBoards = [board, ...allBoards];
+      showWorkspaceState();
+      // switchToBoard clears local state and loads this (still-empty) board.
+      await switchToBoard(board.id);
+
+      const createdIds = [];
+      for (const spec of structure.nodes) {
+        const created = await createNode(userId, board.id, { nodeType: spec.nodeType, title: t(spec.titleKey), x: 0, y: 0 });
+        nodes.push(created);
+        createdIds.push(created.id);
+      }
+      for (const edgeSpec of structure.edges) {
+        const created = await createEdge(userId, board.id, createdIds[edgeSpec.fromIndex], createdIds[edgeSpec.toIndex], edgeSpec.relationship);
+        edges.push(created);
+      }
+      renderNodes();
+      renderEdges();
+      await autoArrange(); // lays out the new tree cleanly and persists it
+      closeTemplateModal();
+      showBoardStatus(t('board.templateCreated'));
+    } catch (err) {
+      console.error('Could not create board from template:', err);
+      showBoardStatus(t('board.templateCreateFailed'));
+    } finally {
+      if (triggerBtn) triggerBtn.disabled = false;
+    }
+  }
+
+  if (templatesBtn) templatesBtn.addEventListener('click', openTemplateModal);
+  if (emptyTemplateBtn) emptyTemplateBtn.addEventListener('click', openTemplateModal);
+  if (noBoardTemplateBtn) noBoardTemplateBtn.addEventListener('click', openTemplateModal);
+  // Reuses the exact existing "Add node" handler — same technique as the
+  // Home page's Quick Actions calling other buttons' .click() directly.
+  if (emptyAddNodeBtn) emptyAddNodeBtn.addEventListener('click', () => addNodeBtn && addNodeBtn.click());
+
+  // Checkpoint D: the board selector row shows either the <select> (normal
+  // browsing) or the title <input> (actively renaming) — never both — so
+  // the compact header never needs a permanently-visible text field just
+  // for the rare rename action. Exactly the same renameBoard call/handler
+  // as before; only which control is on screen has changed.
+  function showBoardSelectView() {
+    if (boardSelect) boardSelect.hidden = false;
+    if (titleInput) titleInput.hidden = true;
+  }
+  function showBoardRenameView() {
+    if (!currentBoard || !titleInput) return;
+    if (boardSelect) boardSelect.hidden = true;
+    titleInput.hidden = false;
+    titleInput.value = currentBoard.title;
+    titleInput.focus();
+    titleInput.select();
+  }
+
   if (renameBoardBtn) {
     renameBoardBtn.addEventListener('click', () => {
-      if (!titleInput) return;
-      titleInput.focus();
-      titleInput.select();
+      const menu = renameBoardBtn.closest('.board-more-menu');
+      if (menu) menu.open = false;
+      showBoardRenameView();
     });
   }
 
   if (titleInput) {
+    titleInput.addEventListener('blur', showBoardSelectView);
+    titleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') titleInput.blur(); // triggers 'change' (if edited) then the blur handler above
+      if (e.key === 'Escape') {
+        titleInput.value = currentBoard ? currentBoard.title : '';
+        titleInput.blur();
+      }
+    });
     titleInput.addEventListener('change', async () => {
       if (!currentBoard) return;
       const nextTitle = titleInput.value.trim() || 'Untitled board';

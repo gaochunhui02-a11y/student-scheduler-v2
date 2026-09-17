@@ -157,6 +157,50 @@ export function edgeMidpoint(x1, y1, x2, y2) {
   return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
 }
 
+// Checkpoint D: a gentle quadratic-bezier bow instead of a dead-straight
+// line, without touching computeEdgeGeometry's anchor math (still the exact
+// same node-center x1/y1/x2/y2 every other caller — the delete button,
+// hit-testing bounds — already relies on). The control point is offset
+// perpendicular to the line by a fraction of its length, capped so long
+// edges don't bow absurdly far and a same-point edge (zero length) never
+// divides by zero.
+const EDGE_CURVE_BOW = 0.12;
+const EDGE_CURVE_BOW_MAX = 40;
+
+export function computeEdgeControlPoint(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (!(length > 0)) return { x: x1, y: y1 };
+  const bow = Math.min(EDGE_CURVE_BOW_MAX, length * EDGE_CURVE_BOW);
+  // Perpendicular unit vector (-dy, dx)/length, applied to the midpoint.
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  return { x: mx + (-dy / length) * bow, y: my + (dx / length) * bow };
+}
+
+// SVG path `d` string for the same edge, drawn as a single quadratic curve
+// through computeEdgeControlPoint — used for both the visible line and its
+// (invisible, wide-stroke) hit-test twin, so a click anywhere along the
+// visual curve — not just a straight-line approximation of it — selects it.
+export function computeEdgeCurvePath(x1, y1, x2, y2) {
+  const c = computeEdgeControlPoint(x1, y1, x2, y2);
+  return `M ${x1} ${y1} Q ${c.x} ${c.y} ${x2} ${y2}`;
+}
+
+// The point at parameter t (0..1) along that same quadratic curve — used to
+// place the edge-delete button at the curve's actual midpoint (t=0.5)
+// instead of the straight-line midpoint, which would sit visibly off the
+// bowed line.
+export function computeQuadraticPoint(x1, y1, x2, y2, t = 0.5) {
+  const c = computeEdgeControlPoint(x1, y1, x2, y2);
+  const mt = 1 - t;
+  return {
+    x: mt * mt * x1 + 2 * mt * t * c.x + t * t * x2,
+    y: mt * mt * y1 + 2 * mt * t * c.y + t * t * y2,
+  };
+}
+
 // Converts a pointer's viewport (clientX/clientY) position into canvas-local
 // coordinates — the same space node.x_position/y_position live in — given
 // the canvas element's own on-screen origin (its getBoundingClientRect's
@@ -494,4 +538,73 @@ export function filterEdgesByBoard(edges, boardId) {
 // reference) so two switches in a row can never share collapse state.
 export function clearedBoardViewState() {
   return { nodes: [], edges: [], collapsedNodeIds: new Set(), selectedEdgeId: null, connectingFromNodeId: null };
+}
+
+// ---------------------------------------------------------------------------
+// Board Templates (Checkpoint D)
+//
+// Deterministic, local, non-AI starter content — no network call, no new
+// table. Every string here is an i18n KEY, not display text: this module
+// stays translation-agnostic (no import of shared/i18n.js, consistent with
+// the rest of this file), and board.js resolves each key with t() only at
+// the moment it actually calls createBoard/createNode/createEdge. A
+// template only ever uses node_type values already in NODE_TYPES and the
+// existing 'parent' edge relationship — no new node/edge shape.
+// ---------------------------------------------------------------------------
+
+export const BOARD_TEMPLATES = [
+  {
+    key: 'examPrep',
+    titleKey: 'board.templateExamPrepTitle',
+    root: { nodeType: 'goal', titleKey: 'board.templateExamPrepRoot' },
+    children: [
+      { nodeType: 'task', titleKey: 'board.templateExamPrepStep1' },
+      { nodeType: 'task', titleKey: 'board.templateExamPrepStep2' },
+      { nodeType: 'task', titleKey: 'board.templateExamPrepStep3' },
+      { nodeType: 'task', titleKey: 'board.templateExamPrepStep4' },
+    ],
+  },
+  {
+    key: 'essay',
+    titleKey: 'board.templateEssayTitle',
+    root: { nodeType: 'goal', titleKey: 'board.templateEssayRoot' },
+    children: [
+      { nodeType: 'task', titleKey: 'board.templateEssayStep1' },
+      { nodeType: 'task', titleKey: 'board.templateEssayStep2' },
+      { nodeType: 'task', titleKey: 'board.templateEssayStep3' },
+      { nodeType: 'task', titleKey: 'board.templateEssayStep4' },
+      { nodeType: 'task', titleKey: 'board.templateEssayStep5' },
+    ],
+  },
+  {
+    key: 'project',
+    titleKey: 'board.templateProjectTitle',
+    root: { nodeType: 'goal', titleKey: 'board.templateProjectRoot' },
+    children: [
+      { nodeType: 'task', titleKey: 'board.templateProjectStep1' },
+      { nodeType: 'task', titleKey: 'board.templateProjectStep2' },
+      { nodeType: 'task', titleKey: 'board.templateProjectStep3' },
+      { nodeType: 'task', titleKey: 'board.templateProjectStep4' },
+      { nodeType: 'task', titleKey: 'board.templateProjectStep5' },
+    ],
+  },
+];
+
+export function getBoardTemplate(key) {
+  return BOARD_TEMPLATES.find((tpl) => tpl.key === key) || null;
+}
+
+// Flattens a template into the exact, generic shape board.js turns into
+// real createNode/createEdge calls: an ordered node-spec list (index 0 is
+// always the root) and an edge-spec list referencing those indices. Kept
+// generic (fromIndex/toIndex) rather than hardcoded "root+children" so it's
+// provably correct for any future template shape, and so it's testable here
+// without Supabase, the DOM, or i18n.
+export function buildTemplateStructure(template) {
+  if (!template || !template.root || !Array.isArray(template.children)) return null;
+  return {
+    boardTitleKey: template.titleKey,
+    nodes: [template.root, ...template.children],
+    edges: template.children.map((_, i) => ({ fromIndex: 0, toIndex: i + 1, relationship: 'parent' })),
+  };
 }

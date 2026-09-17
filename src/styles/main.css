@@ -1100,131 +1100,170 @@ button { font-family: inherit; }
 .summary-progress strong { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
-   Board (Phase 3) — canvas + draggable nodes. All new, additive selectors;
-   node-type accents reuse the existing --accent/--study-color/--meal-color/
-   --free-color tokens (already dark-mode-correct) rather than introducing
-   new color variables, per "don't overuse colors."
+   Board (Checkpoint D redesign) — canvas + draggable nodes, restyled into a
+   premium planning workspace consistent with the Home/Planner design system
+   (same eyebrow/heading/subtitle header pattern as .planner-header, same
+   .card/.btn-primary/.btn-secondary/.hint tokens throughout). Node-type
+   accents keep reusing the existing --accent/--study-color/--meal-color/
+   --free-color tokens rather than introducing new color variables, per
+   "don't overuse colors." No DOM id or event contract here changes what
+   src/board/board.js reads/writes — only how it looks.
    ========================================================================== */
 .board-view { margin-bottom: 16px; }
 
-/* Phase 7: multiple Boards — a compact selector row above the existing
-   title/toolbar header. Hidden until at least one board exists (toggled
+.board-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.board-eyebrow {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.board-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+.board-subtitle { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); max-width: 44ch; }
+
+/* Multiple Boards: a compact switcher (select) + New Board + a "⋯" overflow
+   for the rarer Rename/Delete actions, instead of four buttons competing
+   for space in a row. Hidden until at least one board exists (toggled
    alongside .board-workspace), same visibility pattern as the rest of the
    Board's empty/loaded states. */
 .board-selector-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  flex: 0 0 auto;
 }
-.board-select {
+.board-select,
+.board-title-input {
   width: auto;
-  max-width: 220px;
-  height: 32px;
-  padding: 0 10px;
+  min-width: 150px;
+  max-width: 240px;
+  height: 36px;
+  padding: 0 12px;
   margin-bottom: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.board-toolbar-btn-danger { color: var(--danger); }
-.board-toolbar-btn-danger:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-border); }
-
-.board-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.board-title-input {
-  max-width: 420px;
-  min-width: 160px;
-  flex: 1;
-  font-size: 18px;
-  font-weight: 650;
-  color: var(--text);
-  margin-bottom: 0 !important;
-  border-color: transparent;
-  background: transparent;
-}
-.board-title-input:hover { border-color: var(--border); }
-.board-title-input:focus { background: var(--card); border-color: var(--accent); }
-
-.board-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-
-.board-add-btn {
-  background: var(--accent-soft);
-  border: 1px dashed var(--accent-soft-strong);
-  color: var(--accent-strong);
-  padding: 9px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  font-family: inherit;
-  white-space: nowrap;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.board-add-btn:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
+.board-title-input:focus { background: var(--card); border-color: var(--accent); }
 
-.board-zoom {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.board-zoom-btn {
-  width: 26px;
-  height: 26px;
+.board-new-btn { width: auto; height: 36px; padding: 0 16px; flex: 0 0 auto; white-space: nowrap; }
+
+.board-more-menu { position: relative; flex: 0 0 auto; }
+.board-more-btn {
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  list-style: none;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  letter-spacing: 0.06em;
+}
+.board-more-btn::-webkit-details-marker { display: none; }
+.board-more-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 170px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.board-more-item {
+  text-align: left;
+  height: 32px;
+  padding: 0 10px;
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-weight: 550;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
   font-family: inherit;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.board-zoom-btn:hover { background: var(--card); color: var(--text); }
-.board-zoom-reset { width: auto; padding: 0 8px; font-size: 11.5px; font-weight: 600; }
-.board-zoom-label { font-size: 11.5px; color: var(--muted); min-width: 36px; text-align: center; font-variant-numeric: tabular-nums; }
+.board-more-item:hover { background: var(--surface-2); color: var(--text); }
+.board-more-item-danger { color: var(--danger); }
+.board-more-item-danger:hover { background: var(--danger-soft); color: var(--danger); }
 
-/* Phase 6: Fit to Board / Auto Arrange — same visual weight as the zoom group */
-.board-toolbar-btn {
-  height: 32px;
-  padding: 0 12px;
+/* ---- Compact floating toolbar: Add node / Templates | Search | Zoom |
+   Fit / Arrange — one visually coherent row instead of scattered controls
+   of different weights. ---- */
+.board-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--card);
   border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 8px;
+  margin-bottom: 12px;
+}
+.board-toolbar-divider { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); flex: 0 0 auto; }
+
+.board-tool-icon { width: 16px; height: 16px; flex: none; }
+.board-tool-btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 11.5px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12.5px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.board-toolbar-btn:hover { background: var(--card); color: var(--text); border-color: var(--border-strong); }
+.board-tool-btn:hover { background: var(--surface-2); color: var(--text); }
+.board-tool-btn-primary {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-strong);
+  color: var(--accent-strong);
+}
+.board-tool-btn-primary:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
 
-/* Phase 6: search */
-.board-search { position: relative; flex: 1; min-width: 140px; max-width: 220px; }
+.board-search { position: relative; flex: 1; min-width: 130px; max-width: 220px; }
+.board-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--muted-2);
+  pointer-events: none;
+}
 .board-search-input {
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 10px 0 30px;
   margin-bottom: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1265,6 +1304,54 @@ button { font-family: inherit; }
 .board-search-result:hover { background: var(--accent-soft); }
 .board-search-empty { padding: 8px; font-size: 12px; color: var(--muted); text-align: center; }
 
+.board-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  flex: 0 0 auto;
+}
+.board-zoom-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.board-zoom-btn:hover { background: var(--card); color: var(--text); }
+/* The zoom % label IS the reset-to-100% control (see board.js) — a button
+   styled to read as plain text until hovered, so it doesn't look like a
+   third +/- button. */
+.board-zoom-label {
+  width: auto;
+  min-width: 40px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.board-zoom-label:hover { background: var(--card); color: var(--accent-strong); }
+
 .board-canvas-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1274,24 +1361,47 @@ button { font-family: inherit; }
   height: min(70vh, 640px);
 }
 
+/* A very light dot grid for orientation, not graph paper — restrained in
+   both themes via the same --border token everything else already uses. */
 .board-canvas {
   position: relative;
   width: 2400px;
   height: 1600px;
   transform-origin: 0 0;
   background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-size: 28px 28px;
   cursor: grab;
 }
 .board-canvas.panning { cursor: grabbing; }
 
 .board-empty {
   position: absolute;
-  top: 40px;
-  left: 40px;
-  width: 260px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  text-align: center;
+  padding: 8px;
 }
+.board-empty-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 18px;
+}
+.board-empty-title { font-size: 14.5px; font-weight: 650; color: var(--text); margin: 0 0 4px; }
+.board-empty .hint { margin: 0 0 16px; }
+.board-empty-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.board-empty-actions .btn-primary,
+.board-empty-actions .btn-secondary { width: auto; padding: 0 18px; }
 
+/* ---- Node cards: small productivity-card treatment ---- */
 .board-node {
   position: absolute;
   z-index: 2;
@@ -1301,15 +1411,16 @@ button { font-family: inherit; }
   border-left: 3px solid var(--muted-2);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
-  padding: 8px;
+  padding: 10px;
   cursor: grab;
   user-select: none;
   touch-action: none;
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .board-node:hover { box-shadow: var(--shadow-md); border-color: var(--border-strong); }
-.board-node.dragging { cursor: grabbing; box-shadow: var(--shadow-lg); z-index: 5; }
+.board-node.dragging { cursor: grabbing; box-shadow: var(--shadow-lg); z-index: 5; transition: none; }
 
-/* Phase 6: brief highlight when a search result is selected */
+/* A brief highlight when a search result is selected */
 .board-node.search-highlight { animation: board-node-pulse 1.6s ease-out; z-index: 6; }
 @keyframes board-node-pulse {
   0%, 100% { box-shadow: var(--shadow-sm); }
@@ -1324,39 +1435,93 @@ button { font-family: inherit; }
 .board-node-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 4px;
+  margin-bottom: 7px;
 }
-.board-node-type {
-  width: auto;
-  height: 24px;
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  border-color: transparent;
-  background: var(--surface-2);
-  color: var(--muted);
-  cursor: pointer;
-}
-.board-node-delete {
-  width: 20px;
-  height: 20px;
-  flex: none;
+.board-node-type-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--muted);
+}
+.board-node[data-node-type="goal"] .board-node-type-icon { color: var(--accent); }
+.board-node[data-node-type="subject"] .board-node-type-icon { color: var(--study-color); }
+.board-node[data-node-type="task"] .board-node-type-icon { color: var(--meal-color); }
+.board-node[data-node-type="note"] .board-node-type-icon { color: var(--free-color); }
+.board-node-type-icon svg { width: 100%; height: 100%; }
+
+.board-node-type {
+  width: auto;
+  height: 22px;
+  padding: 0 4px;
+  margin-right: auto;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-color: transparent;
   background: transparent;
   color: var(--muted);
-  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
+}
+.board-node-type:hover { color: var(--text); }
+
+/* Every less-common per-node action (Send/View in Planner, Duplicate,
+   Collapse/Expand, Delete) lives behind this one "⋯" menu — the connection
+   handle is the only other always-on affordance a card has. */
+.board-node-menu { position: relative; flex: none; }
+.board-node-menu-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
   line-height: 1;
-  font-family: inherit;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.board-node-delete:hover { background: var(--danger-soft); color: var(--danger); }
+.board-node-menu-btn::-webkit-details-marker { display: none; }
+.board-node-menu-btn:hover { background: var(--surface-2); color: var(--text); }
+.board-node-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 150px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.board-node-menu-item {
+  text-align: left;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 550;
+  font-family: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.board-node-menu-item:hover { background: var(--surface-2); color: var(--text); }
+.board-node-menu-item-danger { color: var(--danger); }
+.board-node-menu-item-danger:hover { background: var(--danger-soft); color: var(--danger); }
 
 .board-node-title {
   width: 100%;
@@ -1371,72 +1536,65 @@ button { font-family: inherit; }
   margin: 0;
 }
 .board-node-title:focus-visible { outline: none; }
+/* "Selected" state: a restrained accent ring + border, not neon — activates
+   the instant you interact with anything inside the card. */
 .board-node:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft-strong); }
 
-/* Phase 4: the small connection handle in a node's bottom-right corner —
-   drag from here to another node to create an edge. Hidden until hover/
-   focus so it doesn't visually clutter every card at once. */
+/* The connection handle: a small VISIBLE dot at rest (so it's discoverable
+   without hovering every card) that brightens on hover/focus, with a hit
+   area noticeably larger than what's drawn — ::after paints the small dot,
+   the element itself is the bigger, easier-to-grab target. */
 .board-node-handle {
   position: absolute;
-  right: -7px;
-  bottom: -7px;
-  width: 16px;
-  height: 16px;
+  right: -9px;
+  bottom: -9px;
+  width: 22px;
+  height: 22px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.board-node-handle::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
   border-radius: 50%;
   background: var(--card);
   border: 2px solid var(--accent);
-  cursor: crosshair;
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
-  touch-action: none;
+  opacity: 0.55;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), inset var(--dur) var(--ease);
 }
-.board-node:hover .board-node-handle,
-.board-node:focus-within .board-node-handle { opacity: 1; }
-.board-node-handle:hover { transform: scale(1.15); }
+.board-node:hover .board-node-handle::after,
+.board-node:focus-within .board-node-handle::after,
+.board-node-handle:hover::after { opacity: 1; inset: 3px; }
 
-/* Phase 5: "Add to Planner" / "Already added" footer row on each card */
-.board-node-link-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-}
+/* Informational-only footer: once linked, a static badge — no button, the
+   actual "Send/View in Planner" actions live in the "⋯" menu above. */
+.board-node-link-row { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); }
 .board-node-link-badge {
+  display: inline-block;
   font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 650;
+  color: var(--success);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
-.board-node-link-btn {
-  background: transparent;
-  border: none;
-  color: var(--muted);
+
+/* Collapsed-branch indicator ("N hidden items") */
+.board-node-hidden-badge {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
   font-size: 10.5px;
   font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  color: var(--muted-2);
 }
-.board-node-link-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
-.board-node-link-btn-primary { color: var(--accent-strong); width: 100%; text-align: center; }
-.board-node-link-btn-primary:hover { background: var(--accent-soft); }
-
-/* Phase 6: Duplicate / Collapse-Expand footer row */
-.board-node-tools-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
 
 .board-no-board { text-align: center; padding: 40px 20px; }
 .board-no-board .hint { margin: 0 0 14px; }
-.board-no-board .btn-primary { width: auto; padding: 0 20px; }
 
-/* ---------------- Board edges (Phase 4) ---------------- */
+/* ---------------- Board edges ---------------- */
 .board-edges-layer {
   position: absolute;
   top: 0;
@@ -1449,6 +1607,7 @@ button { font-family: inherit; }
 .board-edge-line {
   stroke: var(--muted-2);
   stroke-width: 1.5;
+  stroke-linecap: round;
   fill: none;
   transition: stroke var(--dur) var(--ease), stroke-width var(--dur) var(--ease);
 }
@@ -1491,7 +1650,7 @@ button { font-family: inherit; }
 
 #boardEdgeStatus { margin-bottom: 10px; }
 
-/* ---------------- Board conversion modal (Phase 5) ---------------- */
+/* ---------------- Board modal (conversion + templates) ---------------- */
 /* Appended to <body> by board.js (not #boardCanvas — see the comment in
    buildConversionModal), so it sits outside any zoom transform and is
    safe to position with plain position:fixed. */
@@ -1534,6 +1693,36 @@ button { font-family: inherit; }
 .board-modal-actions .btn-secondary,
 .board-modal-actions .btn-primary { width: auto; flex: 1; }
 
+/* Templates picker (Checkpoint D) — reuses .board-modal as-is, just wider */
+.board-template-modal { max-width: 440px; }
+.board-template-modal-subtitle { margin: 0 0 14px; }
+.board-template-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.board-template-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface-2);
+}
+.board-template-card-title { font-size: 13.5px; font-weight: 650; color: var(--text); margin-bottom: 3px; }
+.board-template-card-steps { margin: 0 0 10px; }
+.board-template-card .btn-secondary { width: 100%; height: 34px; }
+
+/* Respect reduced-motion: kill the search-highlight pulse keyframe and
+   shorten every hover/selection transition on the Board to near-instant
+   rather than removing the visual feedback entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .board-node,
+  .board-node-handle::after,
+  .board-node-menu-btn,
+  .board-tool-btn,
+  .board-zoom-btn,
+  .board-zoom-label,
+  .board-edge-line {
+    transition-duration: 0.01ms;
+  }
+  .board-node.search-highlight { animation: none; box-shadow: 0 0 0 4px var(--accent-soft-strong), var(--shadow-md); }
+}
+
 /* Phase 8: "Break down with AI" suggestion checklist */
 .board-breakdown-list {
   display: flex;
@@ -1558,6 +1747,28 @@ button { font-family: inherit; }
 }
 .board-breakdown-item:hover { background: var(--surface-2); }
 .board-breakdown-item input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+
+/* Small pill-button style originally shared with the Board's own node
+   footer; Checkpoint D moved the Board's equivalent actions into
+   .board-node-menu-item (the "⋯" menu), but src/advisor/advisor.js still
+   builds its suggestion-card actions (Add to Planner / Add to Board /
+   Dismiss) with this exact class, so the rule stays here for that. */
+.board-node-link-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.board-node-link-btn:hover { background: var(--accent-soft); color: var(--accent-strong); }
+.board-node-link-btn-primary { color: var(--accent-strong); width: 100%; text-align: center; }
+.board-node-link-btn-primary:hover { background: var(--accent-soft); }
 
 /* ==========================================================================
    AI Advisor (Phase 9) — chat workspace. Reuses the same premium tokens
@@ -2168,12 +2379,13 @@ button { font-family: inherit; }
   .cls-time-group { flex-wrap: wrap; row-gap: 4px; }
   .warning-list .item { flex-direction: column; align-items: flex-start; gap: 2px; }
   .board-header { flex-direction: column; align-items: stretch; }
-  .board-title-input { max-width: none; }
+  .board-selector-row { flex-wrap: wrap; }
+  .board-title-input,
+  .board-select { max-width: none; flex: 1; }
   .board-toolbar { justify-content: space-between; }
   .board-canvas-wrap { height: min(55vh, 400px); }
-  .board-node-handle { opacity: 1; }
+  .board-node-handle::after { opacity: 1; } /* no hover on touch — the connect handle stays visible */
   .board-search { max-width: none; width: 100%; order: 1; }
-  .board-select { max-width: none; flex: 1; }
   .advisor-conversation { height: min(50vh, 420px); padding: 12px; }
   .advisor-message { max-width: 92%; }
   .advisor-input-row { flex-direction: column; align-items: stretch; }
