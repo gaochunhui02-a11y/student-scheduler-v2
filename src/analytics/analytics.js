@@ -33,6 +33,7 @@ import {
 } from './analyticsModel.js';
 import { formatDuration } from '../dashboard/summary.js';
 import { formatClock } from '../dashboard/scheduler.js';
+import { buildSmartTasks, computeAvailableStudyMinutes, rankTasks, buildReasonTags, buildExplanation } from '../dashboard/smartPriority.js';
 
 const RISK_LABEL_KEYS = { on_track: 'analytics.onTrack', needs_attention: 'analytics.needsAttention', at_risk: 'analytics.atRisk' };
 const PERIOD_LABEL_KEYS = { morning: 'analytics.periodMorning', afternoon: 'analytics.periodAfternoon', evening: 'analytics.periodEvening', night: 'analytics.periodNight' };
@@ -58,6 +59,8 @@ export function initAnalyticsSection(userId, hostApi = {}) {
   const boardsSummaryEl = document.getElementById('analyticsBoardsSummary');
   const greetingEl = document.getElementById('homeGreeting');
   const dateLineEl = document.getElementById('homeDateLine');
+  const recommendBodyEl = document.getElementById('homeRecommendBody');
+  const insightsStripEl = document.getElementById('homeInsightsStrip');
   const plannedSecondaryEl = document.getElementById('homePlannedSecondary');
   const completedSecondaryEl = document.getElementById('homeCompletedSecondary');
   const atRiskSecondaryEl = document.getElementById('homeAtRiskSecondary');
@@ -181,6 +184,141 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     }
 
     appendOpenPlannerButton(todayBodyEl, false);
+  }
+
+  // ---------------- Smart Suggestions: Recommended Next (Checkpoint E) ----------------
+  // Fully deterministic — src/dashboard/smartPriority.js does the actual
+  // scoring/reasoning from today's real study_subjects + schedule_items;
+  // this only ever translates its plain output and renders it. No AI.
+
+  function buildReasonLabels() {
+    return {
+      tag: {
+        overdue: t('smart.tagOverdue'),
+        today: t('smart.tagDueToday'),
+        tomorrow: t('smart.tagDueTomorrow'),
+        soon: t('smart.tagDueSoon'),
+        highPriority: t('smart.tagHighPriority'),
+        missed: t('smart.tagMissed'),
+        carriedOver: t('smart.tagCarryOver'),
+        fits: t('smart.tagFitsToday'),
+      },
+      clause: {
+        overdue: t('smart.clauseOverdue'),
+        today: t('smart.clauseDueToday'),
+        tomorrow: t('smart.clauseDueTomorrow'),
+        soon: t('smart.clauseDueSoon'),
+        highPriority: t('smart.clauseHighPriority'),
+        missed: t('smart.clauseMissed'),
+        carriedOver: t('smart.clauseCarriedOver'),
+        fits: t('smart.clauseFits'),
+        inProgress: t('smart.clauseInProgress'),
+        unfinished: t('smart.clauseUnfinished'),
+      },
+      explanationOne: t('smart.explanationOne'),
+      explanationTwo: t('smart.explanationTwo'),
+    };
+  }
+
+  function planTask(taskId) {
+    if (typeof hostApi.planTask === 'function') hostApi.planTask(taskId);
+  }
+
+  // `ranked`: rankTasks()'s own output (`{ task, score, ... }[]`), already
+  // capped to at most 3 by the caller. `hasAnyUnfinishedInput` distinguishes
+  // "you've added nothing yet" from "you've finished everything" (section 7
+  // of the brief) — two different empty states, never the same placeholder.
+  function renderRecommendations(ranked, hasAnyTasksToday) {
+    if (!recommendBodyEl) return;
+    recommendBodyEl.innerHTML = '';
+
+    if (ranked.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'home-empty-state';
+      const glyph = document.createElement('span');
+      glyph.className = 'home-empty-glyph';
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.textContent = hasAnyTasksToday ? '✓' : '◇';
+      const titleKey = hasAnyTasksToday ? 'home.caughtUpTitle' : 'home.recommendedEmptyTitle';
+      const bodyKey = hasAnyTasksToday ? 'home.caughtUpBody' : 'home.recommendedPlaceholder';
+      const title = document.createElement('p');
+      title.className = 'home-empty-title';
+      title.dataset.i18n = titleKey;
+      title.textContent = t(titleKey);
+      const body = document.createElement('p');
+      body.className = 'hint';
+      body.dataset.i18n = bodyKey;
+      body.textContent = t(bodyKey);
+      empty.appendChild(glyph);
+      empty.appendChild(title);
+      empty.appendChild(body);
+      recommendBodyEl.appendChild(empty);
+      return;
+    }
+
+    const labels = buildReasonLabels();
+    ranked.forEach((r, index) => {
+      const isPrimary = index === 0;
+      const item = document.createElement('div');
+      item.className = `home-recommend-item${isPrimary ? ' home-recommend-item-primary' : ''}`;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'home-recommend-name';
+      nameEl.textContent = r.task.name; // user-created content — never translated
+
+      const chips = document.createElement('div');
+      chips.className = 'home-recommend-chips';
+      buildReasonTags(r.task, r, labels, isPrimary ? 3 : 2).forEach((tagText) => {
+        const chip = document.createElement('span');
+        chip.className = 'reason-chip';
+        chip.textContent = tagText;
+        chips.appendChild(chip);
+      });
+      const minutesChip = document.createElement('span');
+      minutesChip.className = 'reason-chip reason-chip-minutes';
+      minutesChip.textContent = `${formatDuration(r.task.remainingMinutes)} ${t('home.remainingSuffix')}`;
+      chips.appendChild(minutesChip);
+
+      const explanation = document.createElement('p');
+      explanation.className = 'hint home-recommend-explanation';
+      explanation.textContent = buildExplanation(r.task, r, labels);
+
+      const planBtn = document.createElement('button');
+      planBtn.type = 'button';
+      planBtn.className = isPrimary ? 'btn-primary home-recommend-plan-btn' : 'btn-secondary home-recommend-plan-btn';
+      planBtn.textContent = t('home.planIt');
+      planBtn.addEventListener('click', () => planTask(r.task.id));
+
+      item.appendChild(nameEl);
+      item.appendChild(chips);
+      item.appendChild(explanation);
+      item.appendChild(planBtn);
+      recommendBodyEl.appendChild(item);
+    });
+  }
+
+  // A short strip of plain facts — never a percentage/trend that isn't
+  // directly backed by a real sum already computed above. Each line is
+  // omitted entirely when its value is 0, rather than showing a "0" fact.
+  function renderInsights({ dueWithin3Count, missedMinutes, unfinishedMinutes }) {
+    if (!insightsStripEl) return;
+    insightsStripEl.innerHTML = '';
+    const facts = [];
+    if (dueWithin3Count > 0) facts.push(t('home.insightDueSoon').replace('{count}', String(dueWithin3Count)));
+    if (missedMinutes > 0) facts.push(t('home.insightMissed').replace('{duration}', formatDuration(missedMinutes)));
+    if (unfinishedMinutes > 0) facts.push(t('home.insightUnfinished').replace('{duration}', formatDuration(unfinishedMinutes)));
+
+    if (facts.length === 0) {
+      insightsStripEl.hidden = true;
+      return;
+    }
+    facts.forEach((fact) => {
+      const span = document.createElement('span');
+      span.className = 'home-insight-fact';
+      span.textContent = fact;
+      insightsStripEl.appendChild(span);
+    });
+    insightsStripEl.hidden = false;
   }
 
   function shortDayLabel(dateStr) {
@@ -380,8 +518,45 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       const now = new Date();
       const todayStatus = computeTodayBlockStatus(todayItems, now.getHours() * 60 + now.getMinutes());
 
+      // Smart Suggestions (Checkpoint E) — deterministic only, no AI. Built
+      // from today's real study_subjects + schedule_items (camelCase, the
+      // exact shape smartPriority.js's carryOverModel-backed aggregation
+      // expects), never a second/duplicate fetch.
+      const todayItemsCamel = todayItems.map((i) => ({
+        type: i.item_type,
+        start: i.start_minutes,
+        end: i.end_minutes,
+        completed: i.completed,
+        completedMinutes: i.completed_minutes,
+        carriedOverMinutes: i.carried_over_minutes,
+        missed: i.missed,
+        sourceSubjectId: i.source_subject_id,
+        name: i.name,
+      }));
+      const todaySubjects = todaySchedule ? todaySchedule.subjects || [] : [];
+      const todaySubjectsCamel = todaySubjects.map((s) => ({
+        id: s.id,
+        name: s.name,
+        priority: s.priority,
+        dueDate: s.due_date,
+        minutesRequested: s.minutes_requested,
+      }));
+      const smartTasks = buildSmartTasks(todaySubjectsCamel, todayItemsCamel);
+      const availableMinutesToday = computeAvailableStudyMinutes(todayItemsCamel);
+      const ranked = rankTasks(smartTasks, { todayDateStr: today, availableMinutesToday }).slice(0, 3);
+
+      // Plain facts only — each sourced from a sum this view already
+      // computes elsewhere (upcoming deadlines, this week's planned/
+      // completed/missed totals), never a separate calculation or an
+      // invented percentage/trend.
+      const dueWithin3Count = upcoming.filter((d) => d.daysRemaining >= 0 && d.daysRemaining <= 3 && d.remainingMinutes > 0).length;
+      const missedMinutes = weekly.totalMissed;
+      const unfinishedMinutes = Math.max(0, weekly.totalPlanned - weekly.totalCompleted);
+
       renderCards({ todayTotals, todayStudyCounts, weekly, completionRate, upcomingCount: upcoming.length, atRiskCount });
       renderToday(todayStatus);
+      renderRecommendations(ranked, smartTasks.length > 0);
+      renderInsights({ dueWithin3Count, missedMinutes, unfinishedMinutes });
       renderChart(weekly.byDay);
       renderSubjects(subjectTotals);
       renderProductivity(productivity);

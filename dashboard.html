@@ -135,6 +135,7 @@
             <div class="planner-more-dropdown">
               <button type="button" class="planner-more-item" id="plannerJumpCopyDay" data-i18n="planner.jumpCopyDay">Copy Day</button>
               <button type="button" class="planner-more-item" id="plannerJumpMultiDay" data-i18n="planner.jumpMultiDay">Multi-Day Planning</button>
+              <button type="button" class="planner-more-item" id="plannerOpenTemplatesBtn" data-i18n="quickTemplates.menuItem">Quick Templates</button>
             </div>
           </details>
           <button class="btn-primary" id="generateBtn" type="button" data-i18n="actions.generate">Generate Plan</button>
@@ -190,10 +191,12 @@
         <div class="card planner-tasks-card">
           <div class="planner-panel-heading">
             <h2 data-i18n="study.title">Study Tasks</h2>
-            <select class="task-sort-shell" id="taskSortSelect" disabled title="Coming soon" data-i18n-title="planner.sortComingSoon">
-              <option value="priority" data-i18n="planner.sortPriority">Priority</option>
+            <label for="taskSortSelect" class="sr-only" data-i18n="planner.sortLabel">Sort study tasks</label>
+            <select class="task-sort-shell" id="taskSortSelect" data-i18n-aria-label="planner.sortLabel" aria-label="Sort study tasks">
+              <option value="recommended" data-i18n="planner.sortRecommended">Recommended</option>
               <option value="due" data-i18n="planner.sortDue">Due date</option>
-              <option value="name" data-i18n="planner.sortName">Name</option>
+              <option value="priority" data-i18n="planner.sortPriority">Priority</option>
+              <option value="remaining" data-i18n="planner.sortRemaining">Remaining time</option>
             </select>
           </div>
           <div id="studyList"></div>
@@ -543,10 +546,13 @@
           </div>
           <div class="card home-recommend-card">
             <h2 data-i18n="home.recommendedTitle">Recommended next</h2>
-            <div class="home-empty-state">
-              <span class="home-empty-glyph" aria-hidden="true">◇</span>
-              <p class="home-empty-title" data-i18n="home.recommendedEmptyTitle">No recommendation yet</p>
-              <p class="hint" data-i18n="home.recommendedPlaceholder">Add deadlines or study tasks to get personalized planning suggestions.</p>
+            <div class="home-insights-strip" id="homeInsightsStrip" hidden></div>
+            <div id="homeRecommendBody">
+              <div class="home-empty-state">
+                <span class="home-empty-glyph" aria-hidden="true">◇</span>
+                <p class="home-empty-title" data-i18n="home.recommendedEmptyTitle">No recommendation yet</p>
+                <p class="hint" data-i18n="home.recommendedPlaceholder">Add deadlines or study tasks to get personalized planning suggestions.</p>
+              </div>
             </div>
           </div>
         </div>

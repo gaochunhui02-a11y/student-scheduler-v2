@@ -45,6 +45,8 @@ import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan, bu
 import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMinutesInput, canCarryOverBlock, canMarkMissed } from './carryOverModel.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
+import { buildSmartTasks, computeAvailableStudyMinutes, sortTasksForDisplay } from './smartPriority.js';
+import { QUICK_TEMPLATES, getQuickTemplate, buildTemplatePreview, buildTemplatePrefsPatch } from './quickTemplates.js';
 import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
@@ -252,11 +254,32 @@ async function init(session) {
   // the planner view, marks the Planner nav item active, and scrolls to
   // the study-tasks card. One implementation, several callers, same as
   // every other cross-feature bridge in this file.
-  function goToPlannerStudyList() {
+  //
+  // Checkpoint E: an optional `taskId` additionally makes this the "Plan it"
+  // action on Home's Recommended Next — since a recommendation is always
+  // built from TODAY's study_subjects (see analyticsHostApi.getTodaySchedule
+  // below), this loads today's date first if the Planner isn't already
+  // showing it (reusing the exact existing loadScheduleForDate — no second
+  // schedule fetch/render path), then scrolls to and briefly highlights
+  // that specific row via the existing findStudyRow lookup. Never schedules
+  // or edits anything itself.
+  async function goToPlannerStudyList(taskId) {
     document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
     const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
     if (plannerNavBtn) plannerNavBtn.classList.add('active');
     showPlannerView();
+
+    if (taskId && forDateEl.value !== todayDateStr()) {
+      await loadScheduleForDate(todayDateStr());
+    }
+
+    const targetRow = taskId ? findStudyRow(taskId) : null;
+    if (targetRow) {
+      targetRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      targetRow.classList.add('study-row-highlight');
+      setTimeout(() => targetRow.classList.remove('study-row-highlight'), 1800);
+      return;
+    }
     if (studyList) studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -304,17 +327,23 @@ async function init(session) {
     getBoardsSummary: () => listBoards(userId),
     // Today's real generated schedule (whichever date is actually "today"),
     // independent of whatever date the Planner itself currently has loaded
-    // — reuses the exact same getScheduleForDateIfExists/listScheduleItems
-    // data.js already exposes, never a new query shape. Null when today has
-    // no schedule row yet (a brand-new account, or a date never visited).
+    // — reuses the exact same getScheduleForDateIfExists/listScheduleItems/
+    // listStudySubjects data.js already exposes, never a new query shape.
+    // Null when today has no schedule row yet (a brand-new account, or a
+    // date never visited). `subjects` (Checkpoint E) is what Home's
+    // Recommended Next scores via smartPriority.js's buildSmartTasks.
     getTodaySchedule: async () => {
       const todayStr = addDaysToDateStr(tomorrowDateStr(), -1);
       const todaySchedule = await getScheduleForDateIfExists(userId, todayStr);
       if (!todaySchedule) return null;
-      const items = await listScheduleItems(todaySchedule.id);
-      return { schedule: todaySchedule, items };
+      const [items, subjects] = await Promise.all([listScheduleItems(todaySchedule.id), listStudySubjects(todaySchedule.id)]);
+      return { schedule: todaySchedule, items, subjects };
     },
     viewInPlanner: goToPlannerStudyList,
+    // Checkpoint E: "Plan it" on a Home recommendation — the exact same
+    // bridge as viewInPlanner, just also given the specific task's id so it
+    // can be scrolled to and highlighted (see goToPlannerStudyList above).
+    planTask: goToPlannerStudyList,
   };
   const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
 
@@ -646,6 +675,183 @@ async function init(session) {
     });
   });
 
+  // ---------------- Quick (Study) Planning Templates (Checkpoint E) ----------------
+  // Deterministic presets for a few EXISTING Study Preferences fields (see
+  // quickTemplates.js's allow-list) — applying one is exactly the same
+  // updateSchedule(scheduleId, fields) call a manual preferences edit
+  // already makes below in saveScheduleSettings/collectStudyPrefsFields.
+  // Nothing here ever touches a study task's own priority/due date/minutes.
+  const PREF_LABEL_KEYS = {
+    preferred_study_period: 'prefs.preferredTime',
+    session_cap_minutes: 'prefs.maxSession',
+    switch_break_minutes: 'prefs.breakLength',
+    min_block_minutes: 'prefs.minBlock',
+    earliest_study_time: 'prefs.earliestTime',
+    latest_study_time: 'prefs.latestTime',
+  };
+  const PERIOD_LABEL_KEYS = { none: 'prefs.periodNone', morning: 'prefs.periodMorning', afternoon: 'prefs.periodAfternoon', evening: 'prefs.periodEvening' };
+
+  function currentSchedulePrefs() {
+    return {
+      preferred_study_period: preferredPeriodEl.value,
+      session_cap_minutes: parseInt(sessionCapEl.value, 10) || null,
+      switch_break_minutes: Number.isFinite(parseInt(breakMinutesEl.value, 10)) ? parseInt(breakMinutesEl.value, 10) : null,
+      min_block_minutes: parseInt(minBlockEl.value, 10) || null,
+      earliest_study_time: earliestStudyEl.value || null,
+      latest_study_time: latestStudyEl.value || null,
+    };
+  }
+
+  function formatPrefValue(field, value) {
+    if (value === null || value === undefined || value === '') return t('quickTemplates.noPreferenceValue');
+    if (field === 'preferred_study_period') return t(PERIOD_LABEL_KEYS[value] || PERIOD_LABEL_KEYS.none);
+    if (field === 'earliest_study_time' || field === 'latest_study_time') return value;
+    return `${value} ${t('quickTemplates.minutesSuffix')}`;
+  }
+
+  function renderTemplatePreviewText(template) {
+    const preview = buildTemplatePreview(template, currentSchedulePrefs());
+    if (preview.length === 0) return t('quickTemplates.noChanges');
+    return preview.map((c) => `${t(PREF_LABEL_KEYS[c.field])}: ${formatPrefValue(c.field, c.from)} → ${formatPrefValue(c.field, c.to)}`).join('  ·  ');
+  }
+
+  let quickTemplatesModal = null;
+  const quickTemplateCards = []; // { template, previewEl } — refreshed every time the modal opens
+
+  function refreshQuickTemplatePreviews() {
+    quickTemplateCards.forEach(({ template, previewEl }) => {
+      previewEl.textContent = renderTemplatePreviewText(template);
+    });
+  }
+
+  function closeQuickTemplatesModal() {
+    if (quickTemplatesModal) quickTemplatesModal.overlay.hidden = true;
+  }
+
+  async function applyQuickTemplate(template, btn) {
+    if (!schedule) return;
+    const patch = buildTemplatePrefsPatch(template);
+    btn.disabled = true;
+    try {
+      const updated = await updateSchedule(schedule.id, patch);
+      schedule = updated;
+      if ('preferred_study_period' in patch) preferredPeriodEl.value = patch.preferred_study_period;
+      if ('session_cap_minutes' in patch) sessionCapEl.value = patch.session_cap_minutes;
+      if ('switch_break_minutes' in patch) breakMinutesEl.value = patch.switch_break_minutes;
+      if ('min_block_minutes' in patch) minBlockEl.value = patch.min_block_minutes;
+      if ('earliest_study_time' in patch) earliestStudyEl.value = toHHMM(patch.earliest_study_time) || '';
+      if ('latest_study_time' in patch) latestStudyEl.value = toHHMM(patch.latest_study_time) || '';
+      updateDayLengthHint();
+      closeQuickTemplatesModal();
+      flashSaved();
+    } catch (err) {
+      console.error('Could not apply quick template:', err);
+      flashError('Could not apply that template — check your connection.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function buildQuickTemplatesModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'qt-modal-overlay';
+    overlay.hidden = true;
+
+    const modal = document.createElement('div');
+    modal.className = 'qt-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+
+    const heading = document.createElement('h3');
+    heading.className = 'qt-modal-title';
+    heading.textContent = t('quickTemplates.modalTitle');
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'hint qt-modal-subtitle';
+    subtitle.textContent = t('quickTemplates.modalSubtitle');
+
+    const list = document.createElement('div');
+    list.className = 'qt-list';
+
+    QUICK_TEMPLATES.forEach((template) => {
+      const card = document.createElement('div');
+      card.className = 'qt-card';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'qt-card-title';
+      nameEl.textContent = t(template.nameKey);
+
+      const descEl = document.createElement('p');
+      descEl.className = 'hint qt-card-desc';
+      descEl.textContent = t(template.descriptionKey);
+
+      const focusList = document.createElement('ul');
+      focusList.className = 'qt-card-focus';
+      template.focusKeys.forEach((key) => {
+        const li = document.createElement('li');
+        li.textContent = t(key);
+        focusList.appendChild(li);
+      });
+
+      const previewEl = document.createElement('p');
+      previewEl.className = 'qt-card-preview';
+
+      const applyBtn = document.createElement('button');
+      applyBtn.type = 'button';
+      applyBtn.className = 'btn-secondary qt-card-apply';
+      applyBtn.textContent = t('quickTemplates.apply');
+      applyBtn.addEventListener('click', () => applyQuickTemplate(template, applyBtn));
+
+      card.appendChild(nameEl);
+      card.appendChild(descEl);
+      card.appendChild(focusList);
+      card.appendChild(previewEl);
+      card.appendChild(applyBtn);
+      list.appendChild(card);
+
+      quickTemplateCards.push({ template, previewEl });
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'board-modal-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-secondary';
+    cancelBtn.textContent = t('board.cancel');
+    cancelBtn.addEventListener('click', closeQuickTemplatesModal);
+    actions.appendChild(cancelBtn);
+
+    modal.appendChild(heading);
+    modal.appendChild(subtitle);
+    modal.appendChild(list);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeQuickTemplatesModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !overlay.hidden) closeQuickTemplatesModal();
+    });
+
+    return { overlay };
+  }
+
+  function openQuickTemplatesModal() {
+    if (!quickTemplatesModal) quickTemplatesModal = buildQuickTemplatesModal();
+    refreshQuickTemplatePreviews();
+    quickTemplatesModal.overlay.hidden = false;
+  }
+
+  const plannerOpenTemplatesBtn = document.getElementById('plannerOpenTemplatesBtn');
+  if (plannerOpenTemplatesBtn) {
+    plannerOpenTemplatesBtn.addEventListener('click', () => {
+      plannerMoreMenu.open = false;
+      openQuickTemplatesModal();
+    });
+  }
+
   // Checkpoint C: human-readable heading in the new Planner header — purely
   // derived from `schedule.for_date` each time a date loads, never its own
   // stored value.
@@ -810,6 +1016,53 @@ async function init(session) {
       minutes_requested: parseInt(row.querySelector('.study-minutes').value, 10) || 0,
     };
   }
+
+  // ---------------- Smart task sorting (Checkpoint E) ----------------
+  // Presentation-only reordering of the Study Tasks DOM rows — never
+  // touches sort_order or any other stored field, and moving an existing
+  // row (appendChild on a node already in the document just relocates it)
+  // never loses in-progress typing/focus the way rebuilding the list would.
+  const taskSortSelect = document.getElementById('taskSortSelect');
+
+  // A row that isn't complete enough to score (blank/new, or missing a
+  // name/minutes) is modeled as "nothing to recommend" — sortTasksForDisplay
+  // already knows to push a completed/nothing-left task to the end, so an
+  // in-progress blank row naturally settles there too, without a special case.
+  function buildRowTask(row) {
+    const d = readSubjectRowData(row);
+    const dueDate = d.due_date;
+    const minutesRequested = d.minutes_requested;
+    if (!d.name || !minutesRequested || minutesRequested <= 0) {
+      return {
+        id: d.id || null,
+        name: d.name,
+        priority: d.priority,
+        dueDate,
+        minutesRequested: minutesRequested || 0,
+        scheduledMinutes: 0,
+        remainingMinutes: 0,
+        carriedOverMinutes: 0,
+        missed: false,
+        completed: true,
+        hasSchedule: false,
+      };
+    }
+    const [enriched] = buildSmartTasks([{ id: d.id || null, name: d.name, priority: d.priority, dueDate, minutesRequested }], currentScheduleItems);
+    return enriched;
+  }
+
+  function applyStudySortOrder() {
+    if (!taskSortSelect || !studyList) return;
+    const rows = Array.from(studyList.children);
+    if (rows.length < 2) return;
+    const availableMinutesToday = computeAvailableStudyMinutes(currentScheduleItems);
+    const context = { todayDateStr: schedule ? schedule.for_date : null, availableMinutesToday };
+    const tasks = rows.map((row) => ({ ...buildRowTask(row), _row: row }));
+    const ordered = sortTasksForDisplay(tasks, taskSortSelect.value, context);
+    ordered.forEach((task) => studyList.appendChild(task._row));
+  }
+
+  if (taskSortSelect) taskSortSelect.addEventListener('change', applyStudySortOrder);
 
   function renderMultiDayPanel(row) {
     const slot = row.querySelector('.multiday-panel-slot');
@@ -993,6 +1246,7 @@ async function init(session) {
         if (token !== activeToken || !schedule || schedule.id !== scheduleId) return;
         studyList.innerHTML = '';
         reloadedSubjects.forEach((s) => addStudyRow(s));
+        applyStudySortOrder();
         refreshHistoryList();
         flashSaved();
       } catch (err) {
@@ -1013,6 +1267,10 @@ async function init(session) {
     }
     const row = e.target.closest('.entry-row');
     if (!row) return;
+    // Re-rank immediately on a field that actually affects order (priority/
+    // due date/minutes), reading straight from the DOM rather than waiting
+    // on the async save below — name/notes edits never move a row.
+    if (e.target.matches('.study-priority, .study-due, .study-minutes')) applyStudySortOrder();
     const scheduleId = schedule.id;
     chainSave(row, async () => {
       const name = row.querySelector('.study-name').value.trim();
@@ -1233,6 +1491,7 @@ async function init(session) {
         </div>
       `;
       renderNextUp([]);
+      applyStudySortOrder();
       return;
     }
     const subjectByName = new Map((subjectsForLookup || []).map((s) => [s.name, s]));
@@ -1356,6 +1615,11 @@ async function init(session) {
       .join('');
     output.innerHTML = `<div class="timeline">${html}</div>`;
     renderNextUp(events);
+    // Checkpoint E: whatever just changed the schedule (generate, lock,
+    // done, edit, partial completion, missed, carry-over) may have changed
+    // remaining minutes / missed status — re-rank if the Study Tasks list
+    // is currently sorted by anything schedule-dependent.
+    applyStudySortOrder();
   }
 
   // ---------------- Next Up (Checkpoint C) ----------------

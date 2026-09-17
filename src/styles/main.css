@@ -2072,6 +2072,72 @@ button { font-family: inherit; }
 .home-today-remaining { font-size: 11.5px; color: var(--text-soft); margin-top: 7px; }
 .home-today-open-btn { margin-top: 12px; width: auto; min-width: 140px; }
 
+/* ==========================================================================
+   Smart Suggestions (Checkpoint E) — Home's "Recommended Next" + insight
+   strip. Reuses .card/.hint/.btn-primary/.btn-secondary/.home-empty-*
+   as-is; every color here is an existing semantic token
+   (--accent/--success/--warning/--danger), never a new one.
+   ========================================================================== */
+.home-insights-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.home-insight-fact {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+.home-insight-fact::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.home-recommend-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.home-recommend-item:first-child { padding-top: 0; border-top: none; }
+.home-recommend-item-primary {
+  margin: -2px -2px 4px;
+  padding: 14px;
+  border: 1px solid var(--accent-soft-strong);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+.home-recommend-item-primary + .home-recommend-item { border-top: none; }
+.home-recommend-name { font-size: 14.5px; font-weight: 650; color: var(--text); overflow-wrap: anywhere; margin-bottom: 6px; }
+.home-recommend-item-primary .home-recommend-name { font-size: 15.5px; }
+
+.home-recommend-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.home-recommend-item-primary .reason-chip { background: var(--card); }
+.reason-chip-minutes { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.home-recommend-item-primary .reason-chip-minutes { border-color: var(--accent-soft-strong); }
+
+.home-recommend-explanation { margin: 0 0 10px; font-size: 12px; }
+.home-recommend-plan-btn { width: auto; height: 32px; padding: 0 16px; font-size: 12.5px; }
+
 .home-quick-actions .home-qa-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -2221,21 +2287,88 @@ button { font-family: inherit; }
 .planner-empty-title { margin: 0; font-size: 14.5px; font-weight: 650; color: var(--text); }
 .planner-empty-state .hint { margin: 2px 0 0; max-width: 40ch; }
 
-/* ---- Study Tasks panel heading + sort-order shell (Checkpoint C ships the
-   control only — real multi-key sorting is deferred to a later checkpoint) ---- */
+/* ---- Study Tasks panel heading + sort control (Checkpoint E: real,
+   deterministic multi-key sorting — see src/dashboard/smartPriority.js) ---- */
 .planner-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .planner-panel-heading h2 { margin: 0; }
 .task-sort-shell {
+  width: auto;
   height: 28px;
   padding: 0 8px;
+  margin-bottom: 0;
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--text-soft);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  cursor: not-allowed;
+  cursor: pointer;
 }
+.task-sort-shell:hover { border-color: var(--border-strong); color: var(--text); }
+
+/* Brief highlight when "Plan it" (Home) navigates to a specific study row */
+.study-row-highlight { animation: study-row-pulse 1.8s ease-out; }
+@keyframes study-row-pulse {
+  0%, 100% { box-shadow: none; }
+  15%, 45% { box-shadow: 0 0 0 3px var(--accent-soft-strong); border-color: var(--accent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .study-row-highlight { animation: none; box-shadow: 0 0 0 3px var(--accent-soft-strong); border-color: var(--accent); }
+}
+
+/* ---- Quick (Study) Planning Templates modal (Checkpoint E) — same visual
+   recipe as the Board's own modal (tokens, overlay, radius, shadow) but its
+   own class family, since this is a Planner concept, not a Board one. ---- */
+.qt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(20, 19, 17, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+:root[data-theme="dark"] .qt-modal-overlay { background: rgba(0, 0, 0, 0.6); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .qt-modal-overlay { background: rgba(0, 0, 0, 0.6); }
+}
+.qt-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 22px;
+}
+.qt-modal-title { margin: 0 0 6px; font-size: 16px; font-weight: 650; color: var(--text); }
+.qt-modal-subtitle { margin: 0 0 14px; }
+.qt-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.qt-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface-2);
+}
+.qt-card-title { font-size: 13.5px; font-weight: 650; color: var(--text); margin-bottom: 3px; }
+.qt-card-desc { margin: 0 0 8px; }
+.qt-card-focus {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.qt-card-focus li { margin-bottom: 2px; }
+.qt-card-preview {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+.qt-card-apply { width: 100%; height: 34px; }
 
 .planner-subheading { margin: 16px 0 8px; font-size: 12.5px; font-weight: 650; color: var(--text-soft); }
 
