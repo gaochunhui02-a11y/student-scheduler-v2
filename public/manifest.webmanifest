@@ -1,7 +1,7 @@
 {
   "name": "Student Scheduler",
   "short_name": "Scheduler",
-  "description": "A daily study planner with AI advice, a visual board, and analytics.",
+  "description": "A daily study planner with deterministic smart scheduling, a visual board, and analytics.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

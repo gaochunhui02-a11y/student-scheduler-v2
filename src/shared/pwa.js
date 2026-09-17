@@ -11,6 +11,14 @@
 // public/sw.js's fetch handler (same-origin GET requests only).
 
 export function registerServiceWorker() {
+  // Checkpoint G fix: never register in `npm run dev` — sw.js's fetch
+  // handler is cache-first-then-revalidate (see public/sw.js), so once it
+  // installs against the dev server it keeps serving an old cached response
+  // immediately on every reload (a real edit only shows up one reload
+  // later). That's the exact "stuck on stale content locally" symptom this
+  // project had previously; production (import.meta.env.PROD) is unaffected
+  // and still gets the service worker as before.
+  if (import.meta.env.DEV) return;
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((err) => {

@@ -1,131 +1,197 @@
-# Student Scheduler V2
+# Student Scheduler
 
-A full-stack daily study/class planner with real accounts (Supabase Auth), a
-real database (Supabase Postgres + Row Level Security), a deterministic
-scheduling algorithm, a visual planning Board, an AI study advisor, and a
-Dashboard/Analytics view — built as plain HTML/CSS/JavaScript (ES modules),
-no frontend framework. You describe your day (wake/sleep time, classes,
-meals, what you need to study and how urgently), click **Generate
-Schedule**, and it builds a realistic timeline around your fixed
-commitments — then keeps it in sync with Supabase as you lock blocks, mark
-things done or partially done, miss a session and carry the rest forward,
-plan a big task across several days, or come back on a different date.
+A student productivity workspace that combines daily/weekly scheduling,
+multi-day planning, a visual project board, analytics, calendar tools, and
+deterministic smart recommendations — with real accounts, a real database,
+and **no paid AI API required**.
 
-## Screenshots
+## Overview
 
-> Add screenshots here before sharing this project — a quick way is to run
-> the app locally (see [Local setup](#local-setup) below), sign in, and
-> capture each view.
+Students don't have one problem, they have several at once: fixed classes,
+competing deadlines, study time that varies day to day, work that gets
+missed or only half-finished, and no easy way to see what actually deserves
+attention right now.
 
-| View | Screenshot |
-|---|---|
-| Planner (day view + generated schedule) | _add screenshot_ |
-| Visual Board | _add screenshot_ |
-| AI Advisor | _add screenshot_ |
-| Dashboard / Analytics | _add screenshot_ |
-| Dark mode | _add screenshot_ |
+This app addresses that directly. You describe a day once (wake/sleep time,
+classes, meals, study tasks with priority/minutes/due dates), and a
+deterministic scheduling algorithm builds a realistic timeline around your
+fixed commitments. From there, the app tracks reality as it happens — lock a
+block so it never gets rescheduled, log partial progress instead of an
+all-or-nothing "done," carry unfinished work forward instead of losing it,
+and spread a big task across several days ahead of its deadline. A separate
+visual Board lets you plan a project or exam by breaking it into connected
+steps, with one click to turn any step into a real Planner task. On top of
+all of that, a transparent scoring engine tells you what to work on next —
+using ordinary arithmetic on data you already entered, not a hosted AI
+model.
 
-## Features
+## Core Features
 
-**Accounts & security**
-- Sign up, log in, log out, forgot/reset password — all via Supabase Auth.
-  This app's own code never touches a password.
-- Every table has Row Level Security scoped to `auth.uid() = user_id`, so
-  one account can never read or write another account's data, enforced by
-  the database itself, not just the UI.
-
-**Planner & daily scheduling**
-- **Per-date schedules** — every calendar date is its own independent row
-  (wake/sleep time, meals, classes, study subjects, preferences, generated
-  schedule). Navigate with Previous/Next or the date picker.
-- **Classes & study subjects** — classes are fixed time blocks; study
-  subjects have a name, requested minutes, priority (low/medium/high), an
-  optional due date, and notes.
-- **Study preferences** — preferred time of day, max session length, break
-  length, minimum study block, and an earliest/latest study-time window.
+**Daily smart scheduling**
+- Per-date schedules: wake/sleep time, meals, classes, study subjects, and
+  study preferences, each date its own independent row.
 - **Generate / Regenerate** — a pure, deterministic algorithm
   (`src/dashboard/scheduler.js`) places classes, meals, and study blocks
-  around each other, honoring priority/due date ordering, the preferred
-  time of day as a soft preference, the study window as a hard boundary,
-  and an overnight (past-midnight) bedtime. Regenerate leaves locked blocks
-  exactly where they are.
+  around each other, honoring priority/due-date ordering, a preferred time
+  of day as a soft preference, an earliest/latest study window as a hard
+  boundary, and an overnight (past-midnight) bedtime.
 - **Lock / Unlock** a study block so Regenerate never moves it.
 - **Done / Undo** and **Partial Completion** — record exactly how many
-  minutes of a block you actually completed, separate from how many were
-  planned; a partial block is never misreported as fully done.
-- **Missed + Auto Carry Over** — flag a block as missed (a permanent audit
-  record) and preview a plan to carry its remaining minutes to a future
-  date before confirming anything; nothing moves without an explicit
-  Accept. Respects the task's due date unless you explicitly extend it, and
-  never re-carries minutes that were already carried or completed.
-- **Manual Edit** — move an unlocked block to a new start time, validated
-  against every rule Generate itself follows.
-- **Smart Multi-Day Planning** — spread a study task's minutes across
-  several days ahead of its due date, respecting each day's real remaining
-  capacity (classes, meals, locked blocks, other tasks); preview and adjust
-  per-day minutes before accepting.
-- **Daily Summary** and an explicit **insufficient-time warning** (requested
-  vs. scheduled vs. unscheduled, per subject) instead of silently cramming.
-- **Copy to another day** and **History** (every touched date, with counts
-  and completion %, one click to reopen).
-- **Calendar Import/Export (.ics)** — export today or a date range to a
-  standard calendar file; import an `.ics` file as fixed events, previewed
-  before anything is saved.
+  minutes of a block were actually completed, separate from how many were
+  planned.
+- An explicit **insufficient-time warning** (requested vs. scheduled vs.
+  unscheduled minutes, per subject) instead of silently cramming or
+  dropping work.
+
+**Priority/deadline-aware planning**
+- Study subjects carry priority (low/medium/high), an optional due date,
+  and notes; Generate honors both when deciding what gets scheduled first.
+
+**Multi-Day Planning**
+- Spread one study task's minutes across several days ahead of its due
+  date, respecting each day's real remaining capacity (classes, meals,
+  locked blocks, other tasks already there); preview and adjust per-day
+  minutes before accepting anything.
+
+**Missed Work + Carry Over**
+- Flag a block as **Missed** (a permanent audit record), then preview a
+  plan to carry its remaining minutes to a future date before confirming
+  anything — nothing moves without an explicit Accept. Respects the task's
+  due date unless you explicitly extend it, and never re-carries minutes
+  already carried or completed.
+
+**Deterministic Smart Recommendations**
+- Home's **Recommended Next** surfaces up to 3 tasks worth prioritizing
+  today, each with plain-language reasons ("Due tomorrow", "Missed",
+  "Carry over", "Fits today") derived from a transparent, additive scoring
+  model (`src/dashboard/smartPriority.js`) — see
+  [Smart Planning Without Paid AI](#smart-planning-without-paid-ai) below.
+- The Study Tasks panel can sort by that same score (**Recommended**), or
+  plainly by due date, priority, or remaining time.
+- A small **Smart Insights** strip (tasks due within 3 days, missed minutes
+  to recover, unfinished minutes this week) — every number is a real sum
+  already computed elsewhere in the app, never an invented trend.
+- **Quick Planning Templates** (Exam Week, Catch-up Day, Busy Day, Light
+  Study Day, Project Work) apply a deterministic preset to a few existing
+  Study Preferences fields (session length, break length, study window),
+  with a preview of the exact fields that will change before you apply it.
 
 **Visual Board**
-- Multiple boards per user; a pan/zoom canvas of draggable nodes (Goal /
-  Subject / Task / Note) connected by edges.
-- Search, duplicate, collapse/expand, auto-arrange, fit-to-board.
-- Convert a Board node directly into a Planner study task.
-- **AI Breakdown** — ask AI to split a Board node into smaller subtasks
-  (via a secure server-side Edge Function — see [Security notes](#security-notes)).
+- Multiple boards per account; a pan/zoom canvas of draggable Goal / Subject
+  / Task / Note nodes connected by edges.
+- Search, duplicate, collapse/expand a branch, Auto Arrange, Fit to Board.
+- **Board Templates** — Exam Prep, Essay/Paper, and Project each create a
+  new board with a ready-made root node and connected steps, laid out
+  automatically.
+- **Board → Planner** — convert any node directly into a real Planner study
+  task, with a visible "already added" indicator so it's never duplicated.
 
-**AI Student Advisor**
-- A chat-style advisor that answers study-planning questions and can
-  suggest concrete tasks with a title/minutes/priority/due date — you
-  review and explicitly confirm before anything is added to the Planner or
-  Board. The AI never creates or modifies anything on its own.
+**Analytics**
+- This week's planned vs. completed minutes, completion rate, a
+  per-subject breakdown (partial-completion-aware), upcoming deadlines with
+  a deterministic risk classification, and a productivity-period insight —
+  all computed from the same rows the Planner already writes, no duplicate
+  data store.
 
-**Dashboard / Analytics**
-- This-week planned vs. completed minutes, completion rate, per-subject
-  breakdown (now partial-completion-aware), upcoming deadlines with a
-  deterministic (non-AI) risk classification, and a productivity-period
-  insight — all computed from the same rows the Planner already writes, no
-  duplicate data store.
+**Calendar Import/Export**
+- Export today or a date range to a standard `.ics` file; import an `.ics`
+  file as fixed events, previewed before anything is saved.
 
-**Notifications & PWA**
+**Notifications / PWA**
 - Optional browser notifications for an upcoming study block or a
-  due-today/due-tomorrow task (a block flagged Missed is excluded).
-- Installable as a Progressive Web App, with an offline indicator.
+  due-today/due-tomorrow task.
+- Installable as a Progressive Web App, with an offline indicator and a
+  dedicated Settings page for install/appearance/language.
 
-**Other**
-- **Translations** — English / Simplified Chinese / Japanese, switchable
-  anywhere in the app; the choice persists and now also applies to the
-  sign-up/login/password pages.
-- **Dark mode**, following the OS preference or an explicit per-viewer
-  toggle.
+**Multilingual UI**
+- English / Simplified Chinese / Japanese, switchable from the sidebar or
+  Settings; the choice persists and applies everywhere, including the
+  sign-up/login/password pages and every dynamically-rendered panel.
 
-## Tech stack
+**Dark Mode**
+- Follows the OS preference by default, or set Light/Dark/System
+  explicitly from Settings.
 
-- **Frontend**: plain HTML/CSS/JavaScript (ES modules), no framework
+### Smart Planning Without Paid AI
+
+Every "smart" feature in this app — Recommended Next, its reasons, the
+Recommended sort order, and Smart Insights — is **deterministic and
+explainable**, not a call to a hosted AI model. A small, pure scoring
+module (`src/dashboard/smartPriority.js`) adds up plain, named factors
+already present in your own data:
+
+- **Urgency** — how soon a task is due (overdue scores highest, then
+  today/tomorrow/this week, tapering off further out; no due date is
+  neutral, never a penalty).
+- **Priority** — your own low/medium/high setting on the task.
+- **Missed / carried-over state** — a task that was flagged Missed or has
+  carried-over minutes gets a boost to resurface it.
+- **Remaining workload** — how much is actually left (using logged partial
+  completion, not the original planned duration), capped so one huge task
+  can't automatically dominate every recommendation.
+- **Fit** — whether the remaining work reasonably fits into today's actual
+  free time, reusing the same "free" blocks the generated schedule already
+  computes.
+
+The same factors drive the short, plain-language reasons shown next to
+each recommendation. Every run on the same input produces the same output
+— there is no randomness and nothing is sent to a third-party model. See
+`tests/smart-priority.test.js` for the exact, tested behavior of every
+factor.
+
+## Tech Stack
+
+- **Frontend**: plain HTML/CSS/JavaScript (ES modules) — no framework, no
+  client-side router
 - **Build tool**: [Vite](https://vitejs.dev/) — a multi-page app, one entry
   point per `.html` file (see `vite.config.js`)
-- **Backend**: [Supabase](https://supabase.com/) — Postgres, Auth, Row
-  Level Security, and two Edge Functions (Deno) for the AI features; no
-  custom server of any kind
-- **AI provider**: OpenAI (`gpt-4o-mini`), called only from the two Edge
-  Functions, never from the browser
+- **Backend**: [Supabase](https://supabase.com/) — Postgres, Auth, and Row
+  Level Security; no custom server of any kind
+- **PWA**: a hand-written service worker (`public/sw.js`) for an
+  installable, offline-capable app shell
 - **Tests**: plain Node scripts (`node:assert/strict`), no test-framework
   dependency
 
-## Local setup
+## Architecture
+
+- **Frontend** — one plain HTML page per route (`index.html`, `login.html`,
+  `signup.html`, `forgot-password.html`, `reset-password.html`,
+  `dashboard.html`). `dashboard.html` is itself a single-page app shell:
+  Planner, Board, Home/Analytics, and Settings are separate `<section>`s
+  that `src/dashboard/dashboard.js` shows/hides — there's no router, no
+  page reload between them.
+- **Supabase** — the only backend. Every table has Row Level Security
+  scoped to `auth.uid() = user_id`, enforced by Postgres itself; the
+  frontend only ever holds the public **publishable** key (see
+  [Security notes](#security-notes)).
+- **Scheduler** (`src/dashboard/scheduler.js`) — the deterministic
+  generation algorithm. It is the single source of truth for what a
+  generated schedule looks like; nothing else (including Smart Priority)
+  re-derives or overrides its output.
+- **Smart Priority** (`src/dashboard/smartPriority.js`) and **Quick
+  Templates** (`src/dashboard/quickTemplates.js`) — pure, DOM-free,
+  Supabase-free modules. Smart Priority only ever *ranks or recommends*
+  existing tasks; Quick Templates only ever adjusts a few existing Study
+  Preferences fields. Neither one touches the scheduler's own logic.
+- **Board** (`src/board/`) — a self-contained feature with its own data
+  model (`boards`/`board_nodes`/`board_edges`) and its own pure model
+  module (`boardModel.js`); the only bridge to the Planner is the explicit
+  "Send to Planner" action.
+- **Analytics** (`src/analytics/`) — read-only; it re-reads the same
+  `schedules`/`schedule_items`/`study_subjects` rows the Planner already
+  writes rather than keeping a second copy of anything.
+- **Database / Migrations** — `supabase/schema.sql` first (creates
+  `profiles`, `schedules`, `classes`, `study_subjects`, `schedule_items`),
+  then `supabase/migrations/0001` through `0004` in order (see
+  [Database structure](#database-structure)). Every file is idempotent, so
+  re-running one that's already applied is safe.
+
+## Local Development
 
 ### 1. Prerequisites
 
 - Node.js 18+ and npm
 - A free [Supabase](https://supabase.com) account
-- (Optional, for AI features) an [OpenAI](https://platform.openai.com) API
-  key and the [Supabase CLI](https://supabase.com/docs/guides/cli)
 
 ### 2. Install
 
@@ -146,43 +212,28 @@ npm install
 cp .env.example .env
 ```
 
-Fill in the two variables in `.env`:
+Fill in these two variables in `.env` (values only — see
+[`.env.example`](./.env.example) for where to find them in the Supabase
+dashboard):
 
-| Variable | Where to find it |
-|---|---|
-| `VITE_SUPABASE_URL` | Project Settings -> API Keys -> Project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Project Settings -> API Keys -> publishable key |
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-`.env` is git-ignored and will never be committed — see
-[Security notes](#security-notes). Never put the secret/service-role key
-here or anywhere in this project's frontend code.
+`.env` is git-ignored and is never committed. Never put the
+secret/service-role key here or anywhere in this project's frontend code.
 
 ### 5. Set up the database
 
 Run each of these once, **in order**, in the Supabase dashboard's
 **SQL Editor -> New query** (paste the whole file, click Run):
 
-1. [`supabase/schema.sql`](./supabase/schema.sql) — creates `profiles`,
-   `schedules`, `classes`, `study_subjects`, `schedule_items`, enables RLS
-   on all of them, and adds the sign-up trigger that creates a `profiles`
-   row.
+1. [`supabase/schema.sql`](./supabase/schema.sql)
 2. [`supabase/migrations/0001_priority_deadline_preferences_lock.sql`](./supabase/migrations/0001_priority_deadline_preferences_lock.sql)
-   — priority/due date/notes on study subjects; preferred study period and
-   earliest/latest study time; lock/completed/source-subject linking on
-   generated blocks.
 3. [`supabase/migrations/0002_boards.sql`](./supabase/migrations/0002_boards.sql)
-   — the Visual Board data model (`boards`, `board_nodes`, `board_edges`),
-   fully independent of the scheduler.
 4. [`supabase/migrations/0003_multi_day_planning.sql`](./supabase/migrations/0003_multi_day_planning.sql)
-   — adds `study_subjects.origin_subject_id`, linking a task's per-date
-   chunks back to the original row for Smart Multi-Day Planning.
 5. [`supabase/migrations/0004_missed_carry_over.sql`](./supabase/migrations/0004_missed_carry_over.sql)
-   — adds `completed_minutes`, `missed`, and `carried_over_minutes` to
-   generated blocks for partial completion and Carry Over.
 
-Every file is idempotent (`if not exists` / guarded policy creation), so
-re-running one against a database that already has it applied is safe. See
-[Database structure](#database-structure) for what each table is for.
+See [Database structure](#database-structure) for what each one adds.
 
 ### 6. Configure Auth email links
 
@@ -194,32 +245,7 @@ In the Supabase dashboard, go to **Authentication -> URL Configuration**:
 When you deploy publicly, add that deployed URL's `/reset-password.html`
 here too — you can list more than one.
 
-### 7. (Optional) Set up the AI features
-
-The AI Advisor and AI Breakdown features run entirely in two Supabase Edge
-Functions under [`supabase/functions/`](./supabase/functions/) — the
-frontend never talks to OpenAI directly and never sees the key. Skip this
-step if you don't need AI features; the rest of the app works without it
-(the AI-only buttons will show a "service unavailable" message).
-
-```
-# one-time login/link, if you haven't already
-supabase login
-supabase link --project-ref YOUR-PROJECT-REF
-
-# set the shared secret both functions read
-supabase secrets set OPENAI_API_KEY=sk-...your-key...
-
-# deploy both functions
-supabase functions deploy ai-advisor
-supabase functions deploy board-ai-breakdown
-```
-
-Both functions require a real, authenticated Supabase session on every
-request (checked server-side) so the key can never be used as an open
-proxy, even though the key itself is never exposed either way.
-
-### 8. Run it
+### 7. Run it
 
 ```
 npm run dev
@@ -231,16 +257,22 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the Vite dev server |
+| `npm run dev` | Start the Vite dev server (the service worker is skipped in dev — see [Known limitations](#known-limitations)) |
 | `npm test` | Run the full automated test suite (see [Testing](#testing)) |
 | `npm run build` | Production build to `dist/` (not committed) |
 | `npm run preview` | Serve the production build locally, to sanity-check it before deploying |
 
 ## Testing
 
-The scheduling algorithm and everything derived from it live in pure JS
-modules with **no DOM and no Supabase calls**, so they run and test
-independently of a browser or a live database:
+The scheduler, Smart Priority, Quick Templates, and every other piece of
+planning/analytics logic live in pure JS modules with **no DOM and no
+Supabase calls**, so they run and test independently of a browser or a
+live database — 18 test files, 765 individual checks, all passing as of
+this release.
+
+```
+npm test
+```
 
 | file | covers |
 |---|---|
@@ -252,24 +284,40 @@ independently of a browser or a live database:
 | `copy-schedule.test.js` | what "Copy to another day" does and doesn't copy |
 | `manual-edit.test.js` | manual start-time editing and its validation rules |
 | `board-model.test.js` | Board node/edge validation, Board -> Planner conversion mapping |
-| `ai-breakdown.test.js` | AI Breakdown request/response validation (the AI trust boundary) |
-| `advisor.test.js` | AI Advisor context building and response validation (the AI trust boundary) |
+| `board-templates.test.js` | Board template structure, edge-curve geometry |
 | `analytics.test.js` | weekly totals, completion rate, subject breakdown, deadline risk, productivity period |
 | `notifications.test.js` | reminder eligibility/timing, permission-state classification |
 | `calendar.test.js` | `.ics` parsing/generation, import validation and size limits |
 | `multi-day-planner.test.js` | day-capacity math and the multi-day allocation algorithm |
 | `carry-over.test.js` | partial completion, missed blocks, carry-over allocation, no double-counting, due-date edge cases |
+| `smart-priority.test.js` | every Smart Priority scoring factor, exclusions, tie-breaks, and reason generation |
+| `quick-templates.test.js` | Quick Template field allow-list, preview accuracy, deterministic patches |
+| `ai-breakdown.test.js`, `advisor.test.js` | validation logic for the optional/unused AI Edge Function integrations — see [Optional / Future Integrations](#optional--future-integrations) |
 
 Anything that needs Supabase (`data.js`'s functions) is tested via a small
 in-memory simulation of the same query shape, built on top of the *real*
-pure logic those functions call internally — each such test file says so
-at the top.
-
-```
-npm test
-```
+pure logic those functions call internally.
 
 Run this (and `npm run build`) before shipping any change.
+
+## Screenshots
+
+> Screenshots have not been captured yet. Run the app locally (see
+> [Local setup](#local-development) above), sign in, and add real captures
+> here before sharing this project. See the recommended shot list and demo
+> data suggestions the team put together for this — ask if you need it
+> again.
+
+| View | Screenshot |
+|---|---|
+| Home — populated dashboard | _add screenshot_ |
+| Planner — generated full day | _add screenshot_ |
+| Planner — partial/missed status | _add screenshot_ |
+| Board — connected project nodes | _add screenshot_ |
+| Board — template picker | _add screenshot_ |
+| Smart Recommendations | _add screenshot_ |
+| Insights / Analytics | _add screenshot_ |
+| Dark mode | _add screenshot_ |
 
 ## Database structure
 
@@ -282,15 +330,15 @@ preferences, preferred study period, and the earliest/latest study window.
 
 **`classes`** and **`study_subjects`** — the inputs for one schedule.
 `study_subjects` additionally carries `priority`, `due_date`, `notes`, and
-`origin_subject_id` (self-referencing — links a Smart Multi-Day Planning
-chunk back to the task it was split from; null for an ordinary task).
+`origin_subject_id` (self-referencing — links a Multi-Day Planning chunk
+back to the task it was split from; null for an ordinary task).
 
 **`schedule_items`** — the generated output: every class, meal, study
 block, break, and free-time block, with its type, name, and start/end time
 in minutes since the start of the day. Study blocks additionally carry
-`locked`, `completed`, `completed_minutes` (partial completion),
-`missed`, `carried_over_minutes` (audit trail — how much of this block has
-already been carried forward, so it's never double-carried), and
+`locked`, `completed`, `completed_minutes` (partial completion), `missed`,
+`carried_over_minutes` (audit trail — how much of this block has already
+been carried forward, so it's never double-carried), and
 `source_subject_id` (which `study_subjects` row it was generated for).
 
 **`boards`**, **`board_nodes`**, **`board_edges`** — the Visual Board,
@@ -301,64 +349,36 @@ converted into a Planner study task.
 Every table has `user_id` and RLS policies scoped to
 `auth.uid() = user_id` — enforced by Postgres itself, not just the app.
 
-## Demo workflow
-
-A short flow to show off the app end-to-end:
-
-1. Sign up, then land on the Planner for tomorrow.
-2. Add a class or two, and one study task (e.g. "Calculus", 90 minutes,
-   high priority, due in a few days).
-3. Click **Generate Schedule** — see the class, the study block, and free
-   time laid out around your wake/sleep time.
-4. Log 40 minutes of **Partial Completion** on the study block, then click
-   **Carry Over** to preview moving the remaining 50 minutes to a later
-   day before the due date, and confirm it.
-5. Switch to the **Board**, create a node for a bigger goal (e.g. "Midterm
-   prep"), add a couple of child task nodes, connect them.
-6. Convert one Board node into a Planner study task.
-7. Open the **AI Advisor** and ask "What should I study today?" — review
-   its suggestion and explicitly add it to the Planner.
-8. Open **Dashboard / Analytics** to see this week's planned vs. completed
-   time and the upcoming-deadline risk list.
-9. Toggle dark mode and switch the language (EN / 简体中文 / 日本語) from
-   the sidebar to see the whole app re-render translated.
-
-## Deployment readiness
+## Deployment
 
 This app is a **static, multi-page site** (Vite outputs plain `.html` +
 hashed assets, no server-side rendering, no client-side router) that talks
-only to Supabase — so it deploys cleanly to any static host. Recommended,
-in order of simplicity for this project: **Vercel**, **Netlify**, or
-**Cloudflare Pages**. All three:
+only to Supabase — so it deploys cleanly to any static host.
 
-- Build command: `npm run build`
-- Output directory: `dist`
-- Environment variables to set on the host: `VITE_SUPABASE_URL`,
+- **Build command**: `npm run build`
+- **Output directory**: `dist`
+- **Environment variables to set on the host**: `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_PUBLISHABLE_KEY` (same values as your local `.env`)
-- No rewrite/redirect rules are required — every page is a real `.html`
-  file Vite already emits (`index.html`, `login.html`, `signup.html`,
-  `forgot-password.html`, `reset-password.html`, `dashboard.html`), so
-  there's no SPA fallback-routing to configure.
+- **Routing**: no rewrite/redirect rules are required — every page is a
+  real `.html` file Vite already emits, so there's no SPA fallback-routing
+  to configure.
+- **PWA**: the manifest's `start_url`/`scope` are both `/`, which works
+  correctly as long as the app is deployed at the domain root; if deployed
+  under a subpath, update `public/manifest.webmanifest` accordingly.
 
-Before/after deploying, also:
+Before/after deploying, also add the deployed domain's
+`/reset-password.html` to Supabase's **Authentication -> URL
+Configuration -> Redirect URLs**, and update **Site URL** if this becomes
+the primary deployment.
 
-- Add the deployed domain's `/reset-password.html` to Supabase
-  **Authentication -> URL Configuration -> Redirect URLs**, and update
-  **Site URL** if this becomes the primary deployment.
-- Deploy the two Edge Functions (`supabase functions deploy ai-advisor` /
-  `board-ai-breakdown`) and set `OPENAI_API_KEY` via `supabase secrets set`
-  if you want the AI features live — this is independent of where the
-  frontend itself is hosted.
-- The PWA manifest's `start_url`/`scope` are both `/`, which works
-  correctly as long as the app is deployed at the domain root (not a
-  subpath); if you deploy under a subpath, update
-  `public/manifest.webmanifest` accordingly.
-- Run `npm run build && npm run preview` locally first to sanity-check the
-  production build before pushing it live.
+This project has no hosting provider configured yet — deploying is a
+deliberate, explicit choice for you to make. Reasonable options for a
+static Vite build like this one: **Vercel**, **Netlify**, or **Cloudflare
+Pages** — any of the three needs only the build command, output directory,
+and the two environment variables above.
 
-This project has **not** been deployed automatically as part of this
-phase — deploying is a deliberate, explicit action for you to take
-whenever you're ready.
+Run `npm run build && npm run preview` locally first to sanity-check the
+production build before pushing it live.
 
 ## Security notes
 
@@ -368,17 +388,6 @@ whenever you're ready.
   is safe to ship to the browser because every RLS policy still applies to
   every request it makes. The **secret**/**service-role** key is never
   used anywhere in this project.
-- The AI provider key (`OPENAI_API_KEY`) lives only in Supabase Edge
-  Function secrets (Deno server-side environment) — never in a Vite env
-  var (those are all exposed to the client), never committed. Both AI
-  Edge Functions additionally require a real, authenticated Supabase
-  session before calling the provider, so the key can't be used as an
-  open proxy even by someone with just the project's public anon key.
-- Every AI response is validated (shape, length caps, allowed enum values)
-  before it is ever rendered or used — and even then, nothing is created
-  or modified until the student explicitly clicks to confirm a specific
-  suggestion. There is no path from a raw AI response straight into the
-  database.
 - Imported `.ics` calendar files are size-capped (~2MB), capped at 500
   events, and every imported string is rendered via `textContent`, never
   `innerHTML` — an imported event title can never inject markup.
@@ -390,40 +399,53 @@ whenever you're ready.
 - Every table has Row Level Security scoped to `auth.uid() = user_id`; no
   custom RPC/stored procedure is used anywhere, so this guarantee applies
   uniformly to every read and write, including multi-step ones like Copy
-  to another day or Smart Multi-Day Planning.
+  to another day or Multi-Day Planning.
+- Normal use of the product makes **zero requests to any AI provider** —
+  see [Optional / Future Integrations](#optional--future-integrations).
 
 ## Known limitations
 
-- The AI Advisor and AI Breakdown features require the two Supabase Edge
-  Functions to be deployed with a valid `OPENAI_API_KEY` secret — without
-  that, the buttons remain visible but show a "service unavailable"
-  message rather than being hidden.
+- The service worker (`public/sw.js`) is intentionally skipped in
+  `npm run dev` (see `src/shared/pwa.js`) so local edits never get served
+  from a stale cache; it only registers in a production build/deploy.
 - Browser notifications only fire while the app is open in a tab; they
   cannot wake the device or fire when the tab/app is fully closed (a
-  documented limitation shown to the user in the Notifications settings).
-- Translations cover all static UI chrome and every dynamically-rendered
-  Phase 9+ feature panel (Board, Advisor, Analytics, Notifications,
-  Calendar, Multi-Day Planning, Carry Over, and now the auth pages);
-  a handful of the original Planner timeline's inline action labels (e.g.
-  the schedule block's own Lock/Edit/Save/Cancel buttons, predating the
-  translation system) are still English-only — a cosmetic gap, not a
-  functional one.
-- This has been verified with the full automated test suite and a
-  production build, but not against a live Supabase project inside an
-  actual browser session in this environment — see the
-  [Demo workflow](#demo-workflow) above for the exact click-through to
-  verify manually once you have real Supabase credentials configured.
-- Deadline risk on the Dashboard uses each subject's full requested
+  documented limitation shown to the user in Settings).
+- Deadline risk on Home/Analytics uses each subject's full requested
   minutes as "remaining" (a subject can span multiple days' rows); it's a
   documented simplification, not an attempt to reconstruct exact
   partial-completion history across every one of a subject's blocks.
+- There is no recurring-classes workflow — a class is entered per date,
+  not as a weekly pattern.
+- There is no Week View — the Planner is a single day at a time (plus
+  Multi-Day Planning for spreading one task across several days).
+- The Board is designed and tested for desktop; it remains usable on
+  narrower screens but is not a distinct mobile layout.
+- This has been verified with the full automated test suite and a
+  production build; interactive/browser-based verification (clicking
+  through the actual UI) should still be done manually against a real
+  Supabase project before considering the app fully verified end to end.
+
+## Optional / Future Integrations
+
+Two Supabase Edge Functions (`supabase/functions/ai-advisor` and
+`supabase/functions/board-ai-breakdown`) remain in the repository, along
+with the frontend modules that would call them
+(`src/advisor/`, `src/board/aiBreakdownClient.js`,
+`src/board/aiBreakdownModel.js`). **The current product does not use or
+require them** — they are not imported by any active page, no button in
+the shipped UI calls them, and normal use of the app makes no request to
+OpenAI or any other AI provider. They're kept only as optional,
+not-currently-wired-up code for a possible future AI-assisted mode (a
+chat-style study advisor, and AI-suggested Board subtasks), each behind
+its own server-side Edge Function boundary so a future integration would
+never expose a provider key to the browser.
 
 ## Future improvements
 
-- Extend translation coverage to the remaining untranslated inline
-  Planner timeline action labels noted above.
 - A recurring-events model for classes (currently entered per date).
+- A Week View alongside the current single-day Planner.
 - Server-side (rather than tab-only) push notifications.
 - Exporting/importing a full Board as a template.
-- Optional support for an alternate AI provider via the same Edge
-  Function boundary (no frontend change would be needed).
+- Wiring up the preserved optional AI Edge Functions above, if a future
+  version wants an AI-assisted mode alongside the deterministic one.
