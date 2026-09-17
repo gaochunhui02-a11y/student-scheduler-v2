@@ -65,6 +65,7 @@ import {
   computeEdgeCurvePath,
   computeQuadraticPoint,
   BOARD_TEMPLATES,
+  getBoardTemplate,
   buildTemplateStructure,
 } from './boardModel.js';
 import {
@@ -1345,8 +1346,13 @@ export function initBoardSection(userId, hostApi = {}) {
     const structure = buildTemplateStructure(template);
     if (!structure) return;
     if (triggerBtn) triggerBtn.disabled = true;
+    // Tracked outside the try so the catch block below can tell whether the
+    // board itself was actually created before something else in the
+    // sequence failed (see the partial-failure handling there).
+    let createdBoardId = null;
     try {
       const board = await createBoard(userId, t(structure.boardTitleKey));
+      createdBoardId = board.id;
       allBoards = [board, ...allBoards];
       showWorkspaceState();
       // switchToBoard clears local state and loads this (still-empty) board.
@@ -1362,14 +1368,30 @@ export function initBoardSection(userId, hostApi = {}) {
         const created = await createEdge(userId, board.id, createdIds[edgeSpec.fromIndex], createdIds[edgeSpec.toIndex], edgeSpec.relationship);
         edges.push(created);
       }
-      renderNodes();
-      renderEdges();
+      // Every node was created at (0,0) — go straight to the arranged
+      // layout in one render pass via autoArrange() (which renders itself)
+      // rather than rendering the stacked-at-origin state first; a
+      // template should never flash a pile of overlapping cards before
+      // snapping into its real layout.
       await autoArrange(); // lays out the new tree cleanly and persists it
       closeTemplateModal();
       showBoardStatus(t('board.templateCreated'));
     } catch (err) {
       console.error('Could not create board from template:', err);
       showBoardStatus(t('board.templateCreateFailed'));
+      // The board (and possibly some of its nodes/edges) may already be
+      // real rows in Supabase even though the sequence above failed
+      // partway through — re-load from the database rather than leave the
+      // UI showing empty/stale local state that doesn't match what's
+      // actually there. switchToBoard is the exact same load path a normal
+      // board switch already uses, so this is never a second render path.
+      if (createdBoardId) {
+        try {
+          await switchToBoard(createdBoardId);
+        } catch (reloadErr) {
+          console.error('Could not reload the partially-created board:', reloadErr);
+        }
+      }
     } finally {
       if (triggerBtn) triggerBtn.disabled = false;
     }
