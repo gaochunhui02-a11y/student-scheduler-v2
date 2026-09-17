@@ -53,7 +53,7 @@
 
       <div class="nav-section">
         <span class="nav-section-label" data-i18n="nav.sectionAccount">Account</span>
-        <button type="button" class="nav-item" data-scroll-target="studyPrefsForm">
+        <button type="button" class="nav-item" data-view-target="settingsView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><path d="M12 4.2v1.9M12 17.9v1.9M19.8 12h-1.9M6.1 12H4.2M17.4 6.6l-1.35 1.35M7.95 16.05 6.6 17.4M17.4 17.4l-1.35-1.35M7.95 7.95 6.6 6.6"/></svg>
           <span data-i18n="nav.settings">Settings</span>
         </button>
@@ -122,11 +122,11 @@
 
       <div class="planner-toolbar">
         <div class="date-nav-row planner-toolbar-nav">
-          <button class="date-nav-btn" id="prevDayBtn" type="button" title="Previous day">←</button>
+          <button class="date-nav-btn" id="prevDayBtn" type="button" data-i18n-title="planner.previousDay" title="Previous day" data-i18n-aria-label="planner.previousDay" aria-label="Previous day">←</button>
           <button type="button" class="btn-secondary planner-today-btn" id="todayBtn" data-i18n="planner.today">Today</button>
           <label for="forDate" class="sr-only" data-i18n="day.planningFor">Planning for</label>
           <input type="date" id="forDate" class="planner-date-input">
-          <button class="date-nav-btn" id="nextDayBtn" type="button" title="Next day">→</button>
+          <button class="date-nav-btn" id="nextDayBtn" type="button" data-i18n-title="planner.nextDay" title="Next day" data-i18n-aria-label="planner.nextDay" aria-label="Next day">→</button>
         </div>
 
         <div class="planner-toolbar-actions">
@@ -297,34 +297,7 @@
       <div class="planner-tools-grid">
         <div class="card" id="historyCard">
           <h2 data-i18n="history.title">History</h2>
-          <div id="historyList"><div class="placeholder">No saved dates yet.</div></div>
-        </div>
-
-        <div class="card" id="notificationSettingsCard">
-          <h2 data-i18n="notifications.title">Notifications</h2>
-          <p class="hint" data-i18n="notifications.explain">Get a reminder shortly before a study session starts, or when a task is due today or tomorrow.</p>
-          <p class="hint" id="notificationPermissionHint" data-i18n="notifications.permissionDefault">Notifications are not enabled yet.</p>
-          <button type="button" class="btn-secondary" id="enableNotificationsBtn" style="width:100%;" data-i18n="notifications.enable">Enable Notifications</button>
-
-          <div class="row-2" style="margin-top:14px;">
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
-              <input type="checkbox" id="studyReminderToggle">
-              <label for="studyReminderToggle" data-i18n="notifications.studyReminders">Study Reminders</label>
-            </div>
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
-              <input type="checkbox" id="deadlineReminderToggle">
-              <label for="deadlineReminderToggle" data-i18n="notifications.deadlineReminders">Deadline Reminders</label>
-            </div>
-          </div>
-
-          <label for="reminderLeadSelect" data-i18n="notifications.remindMeBefore">Remind me before</label>
-          <select id="reminderLeadSelect">
-            <option value="5" data-i18n="notifications.lead5">5 minutes before</option>
-            <option value="10" data-i18n="notifications.lead10">10 minutes before</option>
-            <option value="15" data-i18n="notifications.lead15">15 minutes before</option>
-            <option value="30" data-i18n="notifications.lead30">30 minutes before</option>
-          </select>
-          <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
+          <div id="historyList"><div class="placeholder" data-i18n="history.noSavedDates">No saved dates yet.</div></div>
         </div>
 
         <div class="card" id="calendarExportCard">
@@ -332,27 +305,27 @@
           <p class="hint" data-i18n="calendar.exportHint">Save your schedule as a .ics file you can import into Google Calendar, Apple Calendar, or Outlook.</p>
 
           <div class="row-2">
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <div class="checkbox-row">
               <input type="checkbox" id="exportTypeClass" checked>
               <label for="exportTypeClass" data-i18n="calendar.typeClasses">Classes</label>
             </div>
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <div class="checkbox-row">
               <input type="checkbox" id="exportTypeStudy" checked>
               <label for="exportTypeStudy" data-i18n="calendar.typeStudy">Study Sessions</label>
             </div>
           </div>
           <div class="row-2">
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <div class="checkbox-row">
               <input type="checkbox" id="exportTypeMeal">
               <label for="exportTypeMeal" data-i18n="calendar.typeMeals">Meals</label>
             </div>
-            <div class="meal-row" style="grid-template-columns:18px 1fr;">
+            <div class="checkbox-row">
               <input type="checkbox" id="exportTypeBreak">
               <label for="exportTypeBreak" data-i18n="calendar.typeBreaks">Breaks</label>
             </div>
           </div>
 
-          <button type="button" class="btn-secondary" id="exportTodayBtn" style="width:100%;" data-i18n="calendar.exportToday">Export Today</button>
+          <button type="button" class="btn-secondary" id="exportTodayBtn" data-i18n="calendar.exportToday">Export Today</button>
 
           <div class="row-2" style="margin-top:10px;">
             <div>
@@ -364,7 +337,7 @@
               <input type="date" id="exportRangeEnd">
             </div>
           </div>
-          <button type="button" class="btn-secondary" id="exportRangeBtn" style="width:100%;" data-i18n="calendar.exportDateRange">Export Date Range</button>
+          <button type="button" class="btn-secondary" id="exportRangeBtn" data-i18n="calendar.exportDateRange">Export Date Range</button>
           <p class="hint" id="calendarExportStatus" hidden></p>
         </div>
 
@@ -372,7 +345,7 @@
           <h2 data-i18n="calendar.importTitle">Import Calendar</h2>
           <p class="hint" data-i18n="calendar.importHint">Import events from a .ics file as fixed events that block study time. You'll preview them before anything is saved.</p>
           <input type="file" id="calendarFileInput" accept=".ics,text/calendar" style="display:none;">
-          <button type="button" class="btn-secondary" id="importCalendarBtn" style="width:100%;" data-i18n="calendar.chooseFile">Choose Calendar File</button>
+          <button type="button" class="btn-secondary" id="importCalendarBtn" data-i18n="calendar.chooseFile">Choose Calendar File</button>
           <p class="hint" id="calendarImportStatus" hidden></p>
         </div>
 
@@ -386,7 +359,7 @@
             </div>
             <div></div>
           </div>
-          <button class="btn-secondary" id="copyConfirmBtn" type="button" style="width:100%;" data-i18n="copy.button">Copy to another day</button>
+          <button class="btn-secondary" id="copyConfirmBtn" type="button" data-i18n="copy.button">Copy to another day</button>
           <p class="hint" id="copyStatus"></p>
         </div>
       </div>
@@ -437,9 +410,9 @@
           <span class="board-toolbar-divider" aria-hidden="true"></span>
 
           <div class="board-zoom">
-            <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out" title="Zoom out">−</button>
+            <button type="button" class="board-zoom-btn" id="boardZoomOutBtn" data-i18n-aria-label="board.zoomOut" aria-label="Zoom out" data-i18n-title="board.zoomOut" title="Zoom out">−</button>
             <button type="button" class="board-zoom-label" id="boardZoomLabel" data-i18n-title="board.resetView" title="Reset view">100%</button>
-            <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in" title="Zoom in">+</button>
+            <button type="button" class="board-zoom-btn" id="boardZoomInBtn" data-i18n-aria-label="board.zoomIn" aria-label="Zoom in" data-i18n-title="board.zoomIn" title="Zoom in">+</button>
           </div>
 
           <button type="button" class="board-tool-btn" id="boardFitBtn" title="Fit to Board" data-i18n-title="board.fitToBoard">
@@ -617,6 +590,95 @@
           <div class="card" id="analyticsBoardsCard" hidden>
             <h2 data-i18n="analytics.boardsTitle">Boards</h2>
             <p class="hint" id="analyticsBoardsSummary"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-view" id="settingsView" hidden>
+        <div class="board-header">
+          <div class="board-header-info">
+            <p class="page-eyebrow" data-i18n="settings.eyebrow">Settings</p>
+            <h1 class="page-heading" data-i18n="settings.heading">Settings</h1>
+            <p class="page-subtitle" data-i18n="settings.subtitle">Appearance, notifications, and how your account is set up.</p>
+          </div>
+        </div>
+
+        <div class="home-grid-2">
+          <div class="card">
+            <h2 data-i18n="settings.appearanceTitle">Appearance</h2>
+            <p class="hint settings-field-label" data-i18n="settings.themeLabel">Theme</p>
+            <div class="settings-theme-row">
+              <button type="button" class="settings-theme-btn" id="settingsThemeLight" data-theme-choice="light">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.2M12 18.8V21M4.2 12H2M22 12h-2.2M5.6 5.6l1.5 1.5M16.9 16.9l1.5 1.5M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5"/></svg>
+                <span data-i18n="theme.light">Light</span>
+              </button>
+              <button type="button" class="settings-theme-btn" id="settingsThemeDark" data-theme-choice="dark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+                <span data-i18n="theme.dark">Dark</span>
+              </button>
+              <button type="button" class="settings-theme-btn" id="settingsThemeSystem" data-theme-choice="system">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="12" rx="1.6"/><path d="M8.5 20h7M12 16.5V20"/></svg>
+                <span data-i18n="settings.themeSystem">System</span>
+              </button>
+            </div>
+
+            <label for="settingsLangSelect" class="hint settings-field-label" data-i18n="lang.label">Language</label>
+            <select id="settingsLangSelect" data-i18n-aria-label="lang.label" aria-label="Language">
+              <option value="en">English</option>
+              <option value="zh">简体中文</option>
+              <option value="ja">日本語</option>
+            </select>
+          </div>
+
+          <div class="card">
+            <h2 data-i18n="settings.appTitle">App</h2>
+            <p class="hint" data-i18n="settings.accountLabel">Signed in as</p>
+            <p class="settings-account-name" id="settingsAccountName">—</p>
+            <p class="hint settings-field-label" data-i18n="settings.appInstallHint">Install this app on your device for quicker access, offline support, and an app-like experience.</p>
+            <button type="button" class="btn-secondary" id="settingsInstallAppBtn" hidden data-i18n="notifications.installApp">Install App</button>
+          </div>
+        </div>
+
+        <div class="home-grid-2">
+          <div class="card" id="notificationSettingsCard">
+            <h2 data-i18n="notifications.title">Notifications</h2>
+            <p class="hint" data-i18n="notifications.explain">Get a reminder shortly before a study session starts, or when a task is due today or tomorrow.</p>
+            <p class="hint" id="notificationPermissionHint" data-i18n="notifications.permissionDefault">Notifications are not enabled yet.</p>
+            <button type="button" class="btn-secondary" id="enableNotificationsBtn" data-i18n="notifications.enable">Enable Notifications</button>
+
+            <div class="row-2 settings-field-label">
+              <div class="checkbox-row">
+                <input type="checkbox" id="studyReminderToggle">
+                <label for="studyReminderToggle" data-i18n="notifications.studyReminders">Study Reminders</label>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="deadlineReminderToggle">
+                <label for="deadlineReminderToggle" data-i18n="notifications.deadlineReminders">Deadline Reminders</label>
+              </div>
+            </div>
+
+            <label for="reminderLeadSelect" data-i18n="notifications.remindMeBefore">Remind me before</label>
+            <select id="reminderLeadSelect">
+              <option value="5" data-i18n="notifications.lead5">5 minutes before</option>
+              <option value="10" data-i18n="notifications.lead10">10 minutes before</option>
+              <option value="15" data-i18n="notifications.lead15">15 minutes before</option>
+              <option value="30" data-i18n="notifications.lead30">30 minutes before</option>
+            </select>
+            <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
+          </div>
+
+          <div class="card">
+            <h2 data-i18n="settings.studyPrefsTitle">Study Preferences</h2>
+            <p class="hint" data-i18n="settings.studyPrefsHint">Preferred study time, session length, minimum block, and breaks are set per day, in the Planner.</p>
+            <button type="button" class="btn-secondary" id="settingsOpenStudyPrefsBtn" data-i18n="settings.openInPlanner">Open in Planner</button>
+          </div>
+        </div>
+
+        <div class="home-grid-2">
+          <div class="card">
+            <h2 data-i18n="settings.calendarTitle">Calendar</h2>
+            <p class="hint" data-i18n="settings.calendarHint">Import events from a .ics file, or export a date's schedule to one — both live in the Planner.</p>
+            <button type="button" class="btn-secondary" id="settingsOpenCalendarBtn" data-i18n="settings.openInPlanner">Open in Planner</button>
           </div>
         </div>
       </section>

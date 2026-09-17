@@ -127,12 +127,18 @@ initOfflineIndicator({
 });
 
 const installAppBtn = document.getElementById('installAppBtn');
+// Checkpoint F: the Settings page's own "Install App" row mirrors the same
+// availability toggle as the sidebar's compact icon button — same
+// installPrompt, same event, just a second place it's shown.
+const settingsInstallAppBtn = document.getElementById('settingsInstallAppBtn');
 const installPrompt = initInstallPrompt({
   onAvailable: () => {
     if (installAppBtn) installAppBtn.hidden = false;
+    if (settingsInstallAppBtn) settingsInstallAppBtn.hidden = false;
   },
   onInstalled: () => {
     if (installAppBtn) installAppBtn.hidden = true;
+    if (settingsInstallAppBtn) settingsInstallAppBtn.hidden = true;
     // Briefly reuse the same banner for a one-off confirmation — it's a
     // generic small status line, not exclusively about connectivity.
     if (offlineBannerEl) {
@@ -151,6 +157,11 @@ const installPrompt = initInstallPrompt({
 });
 if (installAppBtn) {
   installAppBtn.addEventListener('click', async () => {
+    await installPrompt.prompt();
+  });
+}
+if (settingsInstallAppBtn) {
+  settingsInstallAppBtn.addEventListener('click', async () => {
     await installPrompt.prompt();
   });
 }
@@ -236,7 +247,7 @@ async function init(session) {
   // DOM/state lives in src/analytics/analytics.js — this file only owns
   // the show/hide toggle between #plannerForm and whichever alternate view
   // is active.
-  const altViewEls = [document.getElementById('boardView'), document.getElementById('analyticsView')].filter(Boolean);
+  const altViewEls = [document.getElementById('boardView'), document.getElementById('analyticsView'), document.getElementById('settingsView')].filter(Boolean);
   function showPlannerView() {
     altViewEls.forEach((el) => {
       el.hidden = true;
@@ -426,9 +437,90 @@ async function init(session) {
     btn.addEventListener('click', () => activatePlannerScroll(btn.dataset.scrollTarget));
   });
 
+  // ---------------- Settings (Checkpoint F) ----------------
+  // Every control here reuses EXISTING state/functions — theme
+  // (applyTheme/currentEffectiveTheme/THEME_STORAGE_KEY, module-level
+  // above, same as the sidebar's compact toggle), language (dispatches a
+  // real 'change' on the existing #langSelect, so it's the exact same code
+  // path, not a second one), and the Study Preferences/Calendar shortcuts
+  // reuse activatePlannerScroll exactly like the sidebar's old "Settings"
+  // nav item used to before it pointed here. No new persisted state.
+  const settingsThemeButtons = {
+    light: document.getElementById('settingsThemeLight'),
+    dark: document.getElementById('settingsThemeDark'),
+    system: document.getElementById('settingsThemeSystem'),
+  };
+  function currentThemeChoice() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      // per-viewer convenience only — fine if it can't read
+    }
+    return stored === 'light' || stored === 'dark' ? stored : 'system';
+  }
+  function syncSettingsThemeButtons() {
+    const choice = currentThemeChoice();
+    Object.entries(settingsThemeButtons).forEach(([key, btn]) => {
+      if (btn) btn.classList.toggle('active', key === choice);
+    });
+  }
+  Object.entries(settingsThemeButtons).forEach(([key, btn]) => {
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const next = key === 'system' ? null : key; // null clears the override — applyTheme then falls back to the OS preference
+      applyTheme(next);
+      try {
+        if (next) localStorage.setItem(THEME_STORAGE_KEY, next);
+        else localStorage.removeItem(THEME_STORAGE_KEY);
+      } catch {
+        // per-viewer convenience only — fine if it can't persist
+      }
+      refreshThemeToggleLabel();
+      syncSettingsThemeButtons();
+    });
+  });
+
+  const settingsLangSelect = document.getElementById('settingsLangSelect');
+  if (settingsLangSelect) {
+    settingsLangSelect.addEventListener('change', () => {
+      if (langSelect) {
+        // Reuses the sidebar select's own 'change' handler verbatim.
+        langSelect.value = settingsLangSelect.value;
+        langSelect.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  const settingsAccountNameEl = document.getElementById('settingsAccountName');
+  if (settingsAccountNameEl) settingsAccountNameEl.textContent = displayName;
+
+  function syncSettingsControls() {
+    syncSettingsThemeButtons();
+    if (settingsLangSelect) settingsLangSelect.value = getLanguage();
+  }
+  syncSettingsControls();
+
+  function jumpFromSettingsToPlanner(targetId) {
+    activatePlannerScroll(targetId);
+    const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
+    if (plannerNavBtn) plannerNavBtn.classList.add('active');
+  }
+  const settingsOpenStudyPrefsBtn = document.getElementById('settingsOpenStudyPrefsBtn');
+  if (settingsOpenStudyPrefsBtn) {
+    settingsOpenStudyPrefsBtn.addEventListener('click', () => jumpFromSettingsToPlanner('studyPrefsForm'));
+  }
+  const settingsOpenCalendarBtn = document.getElementById('settingsOpenCalendarBtn');
+  if (settingsOpenCalendarBtn) {
+    settingsOpenCalendarBtn.addEventListener('click', () => jumpFromSettingsToPlanner('calendarExportCard'));
+  }
+
+  const settingsSection = { onShow: () => syncSettingsControls() };
+
   const altViewSections = {
     boardView: boardSection,
     analyticsView: analyticsSection,
+    settingsView: settingsSection,
   };
   async function activateView(key) {
     document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
@@ -530,7 +622,7 @@ async function init(session) {
     const prev = target._savePromise || Promise.resolve();
     const next = prev.then(fn).catch((e) => {
       console.error(e);
-      flashError('Could not save — check your connection.');
+      flashError(t('errors.couldNotSave'));
     });
     target._savePromise = next;
     return next;
@@ -1164,7 +1256,7 @@ async function init(session) {
       console.error(e);
       if (token !== activeToken || row.dataset.id !== planningRowId) return;
       planningLoading = false;
-      planningError = 'Could not load a multi-day preview — check your connection.';
+      planningError = t('errors.couldNotLoadMultiDayPreview');
     }
     renderMultiDayPanel(row);
   }
@@ -1251,7 +1343,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        planningError = 'Could not save the multi-day plan — check your connection.';
+        planningError = t('errors.couldNotSaveMultiDayPlan');
         acceptBtn.disabled = false;
         renderMultiDayPanel(row);
       }
@@ -1440,7 +1532,7 @@ async function init(session) {
       console.error(err);
       if (carryOverPanelItemId !== item.id) return;
       carryOverLoading = false;
-      carryOverError = 'Could not load this task — check your connection.';
+      carryOverError = t('errors.couldNotLoadTask');
       renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       return;
     }
@@ -1476,7 +1568,7 @@ async function init(session) {
       console.error(e);
       if (token !== activeToken || carryOverPanelItemId !== item.id) return;
       carryOverLoading = false;
-      carryOverError = 'Could not load a carry-over preview — check your connection.';
+      carryOverError = t('errors.couldNotLoadCarryOverPreview');
     }
     renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
   }
@@ -1533,24 +1625,24 @@ async function init(session) {
           }
 
           if (e.id) {
-            lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${e.locked ? '🔒 Locked' : '🔓 Lock'}</button>`;
-            doneControl = `<button type="button" class="done-btn" data-id="${e.id}" data-completed="${e.completed ? '1' : '0'}">${e.completed ? 'Undo' : 'Mark Done'}</button>`;
+            lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${escapeAttr(e.locked ? t('schedule.locked') : t('schedule.lockAction'))}</button>`;
+            doneControl = `<button type="button" class="done-btn" data-id="${e.id}" data-completed="${e.completed ? '1' : '0'}">${escapeAttr(e.completed ? t('schedule.undo') : t('schedule.markDone'))}</button>`;
             // editing a locked block is blocked in favor of unlocking it first — see
             // the Phase 9 note on validateManualStudyEdit for why
             if (e.id === editingItemId) {
               editControl = `
                 <div class="edit-panel">
-                  <label>Start time</label>
+                  <label>${escapeAttr(t('schedule.startTimeLabel'))}</label>
                   <input type="time" class="edit-start-input" value="${minutesToInputTime(e.start)}">
                   <div class="edit-actions">
-                    <button type="button" class="edit-save-btn" data-id="${e.id}">Save</button>
-                    <button type="button" class="edit-cancel-btn" data-id="${e.id}">Cancel</button>
+                    <button type="button" class="edit-save-btn" data-id="${e.id}">${escapeAttr(t('carryOver.save'))}</button>
+                    <button type="button" class="edit-cancel-btn" data-id="${e.id}">${escapeAttr(t('multiday.cancel'))}</button>
                   </div>
                   <div class="edit-error"></div>
                 </div>
               `;
             } else if (!e.locked) {
-              editControl = `<button type="button" class="edit-btn" data-id="${e.id}">Edit</button>`;
+              editControl = `<button type="button" class="edit-btn" data-id="${e.id}">${escapeAttr(t('schedule.edit'))}</button>`;
             }
 
             // Phase 14: Partial Completion / Missed / Carry Over — same rule
@@ -1682,7 +1774,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        flashError('Could not update lock state — check your connection.');
+        flashError(t('errors.couldNotUpdateLock'));
         lockBtn.disabled = false;
       }
       return;
@@ -1705,7 +1797,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        flashError('Could not update completion state — check your connection.');
+        flashError(t('errors.couldNotUpdateCompletion'));
         doneBtn.disabled = false;
       }
       return;
@@ -1742,7 +1834,7 @@ async function init(session) {
       }
       const newStart = resolveClockTimeInDay(input.value, bounds.dayStart, bounds.dayEnd);
       if (newStart === null) {
-        errorEl.textContent = 'Please enter a valid time.';
+        errorEl.textContent = t('errors.invalidTime');
         return;
       }
 
@@ -1785,7 +1877,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        errorEl.textContent = 'Could not save — check your connection.';
+        errorEl.textContent = t('errors.couldNotSave');
         saveBtn.disabled = false;
       }
       return;
@@ -1838,7 +1930,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        errorEl.textContent = 'Could not save — check your connection.';
+        errorEl.textContent = t('errors.couldNotSave');
         partialSaveBtn.disabled = false;
       }
       return;
@@ -1884,7 +1976,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        flashError('Could not update this block — check your connection.');
+        flashError(t('errors.couldNotUpdateBlock'));
         unmarkMissedBtn.disabled = false;
       }
       return;
@@ -1948,7 +2040,7 @@ async function init(session) {
         console.error(err);
         if (carryOverPanelItemId !== item.id) return;
         carryOverLoading = false;
-        carryOverError = 'Could not load a carry-over preview — check your connection.';
+        carryOverError = t('errors.couldNotLoadCarryOverPreview');
         renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       }
       return;
@@ -1977,7 +2069,7 @@ async function init(session) {
         flashSaved();
       } catch (err) {
         console.error(err);
-        carryOverError = 'Could not save the carry-over plan — check your connection.';
+        carryOverError = t('errors.couldNotSaveCarryOverPlan');
         coAcceptBtn.disabled = false;
         renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
       }
@@ -2025,9 +2117,9 @@ async function init(session) {
       .join('');
     shortfallWarningBody.innerHTML = `
       <div class="warning-totals">
-        <div class="row"><span>Requested study time</span><span class="value">${progress.requestedTotal} min</span></div>
-        <div class="row"><span>Scheduled study time</span><span class="value">${progress.scheduledTotal} min</span></div>
-        <div class="row"><span>Unscheduled</span><span class="value">${progress.unscheduledTotal} min</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.requestedLabel'))}</span><span class="value">${progress.requestedTotal} min</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.scheduledLabel'))}</span><span class="value">${progress.scheduledTotal} min</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.unscheduledLabel'))}</span><span class="value">${progress.unscheduledTotal} min</span></div>
       </div>
       <div class="warning-list">${list}</div>
     `;
@@ -2055,8 +2147,8 @@ async function init(session) {
     }
     if (progress) {
       const total = progress.subjects.length;
-      html += `<div class="summary-progress">${escapeAttr(t('summary.studyProgress'))} <strong>${progress.completedCount} / ${total}</strong> tasks completed`;
-      if (total > 0) html += ` <span class="summary-percent">(${progress.completionPercent}% complete)</span>`;
+      html += `<div class="summary-progress">${escapeAttr(t('summary.studyProgress'))} <strong>${progress.completedCount} / ${total}</strong> ${escapeAttr(t('summary.tasksCompletedSuffix'))}`;
+      if (total > 0) html += ` <span class="summary-percent">${escapeAttr(t('summary.completionPercentSuffix').replace('{percent}', progress.completionPercent))}</span>`;
       html += `</div>`;
     }
     dailySummaryBody.innerHTML = html;
@@ -2212,14 +2304,14 @@ async function init(session) {
 
   function renderHistoryList(history, activeDate) {
     if (!history || history.length === 0) {
-      historyListEl.innerHTML = '<div class="placeholder">No saved dates yet.</div>';
+      historyListEl.innerHTML = `<div class="placeholder">${escapeAttr(t('history.noSavedDates'))}</div>`;
       return;
     }
     historyListEl.innerHTML = history
       .map((h) => {
         const dateLabel = formatDateLabel(h.forDate);
-        const bits = [`${h.classCount} class${h.classCount === 1 ? '' : 'es'}`, `${h.subjectCount} subject${h.subjectCount === 1 ? '' : 's'}`];
-        if (h.studyBlockCount > 0) bits.push(`${h.completionPercent}% complete`);
+        const bits = [t('history.classCount').replace('{count}', h.classCount), t('history.subjectCount').replace('{count}', h.subjectCount)];
+        if (h.studyBlockCount > 0) bits.push(t('history.completionPercent').replace('{percent}', h.completionPercent));
         return `
           <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}" tabindex="0" role="button">
             <div class="history-main">
@@ -2334,7 +2426,7 @@ async function init(session) {
       loaded = await getOrCreateScheduleForDate(userId, dateStr);
     } catch (e) {
       console.error(e);
-      if (token === activeToken) loadError.textContent = 'Could not load that date. Please try again.';
+      if (token === activeToken) loadError.textContent = t('errors.couldNotLoadDate');
       return;
     }
     if (token !== activeToken) return; // a newer navigation started before this finished

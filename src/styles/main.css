@@ -744,6 +744,14 @@ button { font-family: inherit; }
 .meal-row label { margin: 0; color: var(--text); font-size: 13.5px; font-weight: 500; }
 .meal-row .meal-dur { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 1px; }
 
+/* Checkpoint F: a plain checkbox + label row (no third time-input column) —
+   several cards were reusing .meal-row for this with an inline
+   `style="grid-template-columns:18px 1fr;"` override; this is that same
+   layout as a real, reusable class instead. */
+.checkbox-row { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+.checkbox-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+.checkbox-row label { margin: 0; color: var(--text); font-size: 13.5px; font-weight: 500; }
+
 .clear-btn {
   width: 100%;
   margin-top: 8px;
@@ -1119,7 +1127,12 @@ button { font-family: inherit; }
   gap: 16px;
   margin-bottom: 14px;
 }
-.board-eyebrow {
+/* Checkpoint F: the same eyebrow/heading/subtitle recipe the Planner
+   (.planner-eyebrow/.planner-date-heading/.planner-date-sub) and Settings
+   (.page-eyebrow/.page-heading/.page-subtitle) headers use — one shared
+   rule instead of three near-identical copies, so every page-level header
+   in the app is provably the same typography. */
+.board-eyebrow, .planner-eyebrow, .page-eyebrow {
   margin: 0 0 2px;
   font-size: 11.5px;
   font-weight: 650;
@@ -1127,8 +1140,8 @@ button { font-family: inherit; }
   text-transform: uppercase;
   color: var(--muted-2);
 }
-.board-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
-.board-subtitle { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); max-width: 44ch; }
+.board-heading, .planner-date-heading, .page-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+.board-subtitle, .planner-date-sub, .page-subtitle { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); max-width: 44ch; }
 
 /* Multiple Boards: a compact switcher (select) + New Board + a "⋯" overflow
    for the rarer Rename/Delete actions, instead of four buttons competing
@@ -1882,6 +1895,7 @@ button { font-family: inherit; }
    tokens for the chart (already dark-mode-correct) instead of new colors.
    ========================================================================== */
 .analytics-view { margin-bottom: 16px; }
+.settings-view { margin-bottom: 16px; }
 .analytics-header { margin-bottom: 14px; }
 .analytics-header h2 { font-size: 18px; font-weight: 650; color: var(--text); margin: 0; }
 
@@ -2163,6 +2177,36 @@ button { font-family: inherit; }
 .home-qa-btn svg { width: 17px; height: 17px; color: var(--accent-strong); }
 .home-qa-btn:hover { background: var(--card); border-color: var(--border-strong); color: var(--text); }
 
+/* ==========================================================================
+   Settings (Checkpoint F). Reuses .board-header/.page-eyebrow/.page-heading/
+   .page-subtitle, .home-grid-2, .card, .hint, .btn-secondary as-is — only
+   the theme segmented control and the small account-name line are new.
+   ========================================================================== */
+.settings-theme-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.settings-theme-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.settings-theme-btn svg { width: 18px; height: 18px; }
+.settings-theme-btn:hover { background: var(--card); color: var(--text); }
+.settings-theme-btn.active { background: var(--accent-soft); border-color: var(--accent-soft-strong); color: var(--accent-strong); }
+.settings-field-label { margin-top: 16px; }
+.settings-account-name { font-size: 13.5px; font-weight: 650; color: var(--text); margin: 2px 0 0; overflow-wrap: anywhere; }
+#settingsInstallAppBtn { margin-top: 10px; }
+
 @media (max-width: 1080px) {
   .home-stat-cards { grid-template-columns: repeat(2, 1fr); }
   .home-grid-2 { grid-template-columns: 1fr; }
@@ -2189,16 +2233,9 @@ button { font-family: inherit; }
   gap: 20px;
   flex-wrap: wrap;
 }
-.planner-eyebrow {
-  margin: 0 0 2px;
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted-2);
-}
-.planner-date-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
-.planner-date-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+/* .planner-eyebrow/.planner-date-heading/.planner-date-sub — see the
+   shared .board-eyebrow/.board-heading/.board-subtitle rule above
+   (Checkpoint F consolidation). */
 
 /* ---- Checkpoint C.1: one coherent toolbar row (date nav left, actions
    right) instead of date nav and Generate/Regenerate sitting in two
@@ -2487,6 +2524,10 @@ button { font-family: inherit; }
     inset: 0;
     background: rgba(15, 14, 12, 0.4);
     z-index: 35;
+  }
+  :root[data-theme="dark"] .sidebar-scrim { background: rgba(0, 0, 0, 0.55); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .sidebar-scrim { background: rgba(0, 0, 0, 0.55); }
   }
   .sidebar {
     position: fixed;
