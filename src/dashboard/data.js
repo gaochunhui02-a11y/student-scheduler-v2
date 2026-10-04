@@ -213,6 +213,54 @@ export async function deleteStudySubject(id) {
   if (error) throw error;
 }
 
+// ---------------- subtasks (V2-A) ----------------
+
+export async function listSubtasks(subjectId) {
+  const { data, error } = await supabase
+    .from('study_subject_subtasks')
+    .select('*')
+    .eq('subject_id', subjectId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+// Bulk read for a whole day's study list at once (one round trip instead of
+// one per task), same shape as listScheduleItemsForScheduleIds below.
+export async function listSubtasksForSubjectIds(subjectIds) {
+  if (!subjectIds || subjectIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('study_subject_subtasks')
+    .select('*')
+    .in('subject_id', subjectIds)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function insertSubtask(subjectId, userId, fields, sortOrder) {
+  const { data, error } = await supabase
+    .from('study_subject_subtasks')
+    .insert({ subject_id: subjectId, user_id: userId, sort_order: sortOrder, ...fields })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSubtask(id, fields) {
+  const { error } = await supabase
+    .from('study_subject_subtasks')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteSubtask(id) {
+  const { error } = await supabase.from('study_subject_subtasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ---------------- generated schedule (schedule_items) ----------------
 
 export async function listScheduleItems(scheduleId) {
