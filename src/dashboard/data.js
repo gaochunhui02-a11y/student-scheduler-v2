@@ -391,6 +391,26 @@ export async function listUpcomingStudySubjects(userId, fromDate, limit = 25) {
   return data;
 }
 
+// Every one of this user's study subjects with a due date inside
+// [startDate, endDate] inclusive, REGARDLESS of which schedule/date they
+// were created under — a task's due date is independent of the day it was
+// typed in. Used by the Week View (V2-A) to show a deadline on the day it's
+// actually due, which listUpcomingStudySubjects' open-ended "due date >=
+// fromDate" + fixed limit isn't a good fit for (a week needs an upper bound,
+// not a cap on row count).
+export async function listStudySubjectsDueInRange(userId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from('study_subjects')
+    .select('*')
+    .eq('user_id', userId)
+    .not('due_date', 'is', null)
+    .gte('due_date', startDate)
+    .lte('due_date', endDate)
+    .order('due_date', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 // ---------------- Smart Multi-Day Planning (Phase 13) ----------------
 // Thin reads/writes only — the actual availability/allocation logic lives
 // in scheduler.js (computeDayCapacity) and multiDayPlanner.js (pure), with
