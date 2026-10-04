@@ -30,6 +30,10 @@ import {
   setScheduleItemMissed,
   setScheduleItemPartialCompletion,
   getStudySubjectById,
+  listSubtasksForSubjectIds,
+  insertSubtask,
+  updateSubtask,
+  deleteSubtask,
 } from './data.js';
 import {
   generateSchedule,
@@ -47,6 +51,9 @@ import { computeDailySummary, computeSubjectProgress, formatDuration } from './s
 import { validateCopyDestination } from './copySchedule.js';
 import { buildSmartTasks, computeAvailableStudyMinutes, sortTasksForDisplay } from './smartPriority.js';
 import { QUICK_TEMPLATES, getQuickTemplate, buildTemplatePreview, buildTemplatePrefsPatch } from './quickTemplates.js';
+import { isValidSubtaskTitle, buildSubtaskFields, nextSubtaskSortOrder, computeSubtaskProgress } from './subtasksModel.js';
+import { PRESET_TASK_TAGS, normalizeTagList, toggleTag, addCustomTag } from './tagsModel.js';
+import { filterTasks, listDistinctSubjectNames, listDistinctTags } from './taskFilters.js';
 import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
@@ -1027,15 +1034,105 @@ async function init(session) {
   // ---------------- study subjects ----------------
   const studyList = document.getElementById('studyList');
 
-  function addStudyRow(row = {}) {
+  // ---------------- Tags + Subtasks (V2-A) ----------------
+  // tags live on the row's own dataset (same convention as dataset.id /
+  // dataset.originId) so they ride along with the row exactly like every
+  // other field read by readSubjectRowData/buildSubjectsInput; subtasks are
+  // kept as a plain array attached directly to the row element (el._subtasks),
+  // the same "attach plain data onto the thing that already represents it"
+  // convention applyStudySortOrder below already uses (task._row).
+
+  const PRESET_TAG_LABEL_KEYS = {
+    Exam: 'study.tagExam',
+    Homework: 'study.tagHomework',
+    Reading: 'study.tagReading',
+    Project: 'study.tagProject',
+    Review: 'study.tagReview',
+  };
+  function tagDisplayLabel(tag) {
+    const key = PRESET_TAG_LABEL_KEYS[tag];
+    return key ? t(key) : tag;
+  }
+
+  function readRowTags(el) {
+    try {
+      return normalizeTagList(JSON.parse(el.dataset.tags || '[]'));
+    } catch {
+      return [];
+    }
+  }
+  function writeRowTags(el, tags) {
+    el.dataset.tags = JSON.stringify(normalizeTagList(tags));
+  }
+
+  function renderTagsChips(el) {
+    const container = el.querySelector('.task-tags-chips');
+    if (!container) return;
+    const tags = readRowTags(el);
+    const allChipValues = Array.from(new Set([...PRESET_TASK_TAGS, ...tags]));
+    container.innerHTML = allChipValues
+      .map((tagValue) => {
+        const active = tags.includes(tagValue);
+        return `<button type="button" class="task-tag-chip${active ? ' active' : ''}" data-tag="${escapeAttr(tagValue)}">${escapeAttr(
+          tagDisplayLabel(tagValue)
+        )}</button>`;
+      })
+      .join('');
+  }
+
+  // Tags on a row that hasn't been saved yet (no dataset.id) are simply left
+  // on el.dataset.tags — they ride along automatically the first time the
+  // generic save below (studyList's "change" handler) inserts the row,
+  // since that handler's `fields` object already includes tags.
+  function saveRowTagsIfPersisted(el) {
+    if (!el.dataset.id) return;
+    chainSave(el, async () => {
+      await updateStudySubject(el.dataset.id, { tags: readRowTags(el) });
+      flashSaved();
+    });
+  }
+
+  function renderSubtasksList(el) {
+    const listEl = el.querySelector('.task-subtasks-list');
+    const subtasks = el._subtasks || [];
+    if (listEl) {
+      listEl.innerHTML = subtasks
+        .map(
+          (s) => `
+            <div class="task-subtask-row" data-subtask-id="${escapeAttr(s.id)}">
+              <input type="checkbox" class="task-subtask-toggle" ${s.completed ? 'checked' : ''}>
+              <span class="task-subtask-title${s.completed ? ' task-subtask-done' : ''}">${escapeAttr(s.title)}</span>
+              <button type="button" class="task-subtask-remove" title="Remove">✕</button>
+            </div>`
+        )
+        .join('');
+    }
+    const chip = el.querySelector('.task-chip-subtasks');
+    if (chip) {
+      const { completed, total } = computeSubtaskProgress(subtasks);
+      if (total > 0) {
+        chip.hidden = false;
+        chip.textContent = t('study.subtaskProgress').replace('{completed}', completed).replace('{total}', total);
+      } else {
+        chip.hidden = true;
+      }
+    }
+  }
+
+  function addStudyRow(row = {}, subtasks = []) {
     const el = document.createElement('div');
     el.className = 'entry-row study';
     if (row.id) el.dataset.id = row.id;
     if (row.origin_subject_id) el.dataset.originId = row.origin_subject_id;
+    writeRowTags(el, row.tags);
     const priority = row.priority || 'medium';
     const isChunk = Boolean(row.origin_subject_id);
+    const canHaveSubtasks = Boolean(row.id);
     el.innerHTML = `
       <div class="task-row-top">
+        <button type="button" class="task-expand-toggle" data-i18n-title="study.expandDetails" title="Show details" data-i18n-aria-label="study.expandDetails" aria-label="Show details" aria-expanded="false">
+          <svg class="task-expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
         <input type="text" class="study-name" aria-label="Study task name" placeholder="e.g. Biology" value="${escapeAttr(row.name || '')}">
         <select class="study-priority" aria-label="Priority" data-priority="${priority}">
           <option value="low" ${priority === 'low' ? 'selected' : ''}>Low</option>
@@ -1044,21 +1141,124 @@ async function init(session) {
         </select>
         <button class="remove-btn" type="button" title="Remove">✕</button>
       </div>
-      <div class="task-row-meta">
-        <label class="task-mini-field">
-          <span>Minutes</span>
-          <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
-        </label>
-        <label class="task-mini-field">
-          <span>Due</span>
-          <input type="date" class="study-due" value="${row.due_date || ''}">
-        </label>
-        ${row.id && !isChunk ? `<button type="button" class="edit-btn plan-days-btn">${escapeAttr(t('multiday.planDaysButton'))}</button>` : ''}
+      <div class="task-row-chips">
+        <span class="task-chip task-chip-due" hidden></span>
+        <span class="task-chip task-chip-remaining" hidden></span>
+        <span class="task-chip task-chip-subtasks" hidden></span>
       </div>
-      ${isChunk ? `<p class="hint multiday-chunk-hint">${escapeAttr(t('multiday.chunkHint'))}</p>` : ''}
-      <input type="text" class="study-notes" aria-label="Notes" placeholder="Notes (optional)" value="${escapeAttr(row.notes || '')}">
-      <div class="multiday-panel-slot"></div>
+      <div class="task-row-details">
+        <div class="task-row-meta">
+          <label class="task-mini-field">
+            <span>Minutes</span>
+            <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
+          </label>
+          <label class="task-mini-field">
+            <span>Due</span>
+            <input type="date" class="study-due" value="${row.due_date || ''}">
+          </label>
+          ${row.id && !isChunk ? `<button type="button" class="edit-btn plan-days-btn">${escapeAttr(t('multiday.planDaysButton'))}</button>` : ''}
+        </div>
+        ${isChunk ? `<p class="hint multiday-chunk-hint">${escapeAttr(t('multiday.chunkHint'))}</p>` : ''}
+        <input type="text" class="study-notes" aria-label="Notes" placeholder="Notes (optional)" value="${escapeAttr(row.notes || '')}">
+
+        <div class="task-tags-section">
+          <p class="hint task-section-label">${escapeAttr(t('study.tagsLabel'))}</p>
+          <div class="task-tags-chips"></div>
+          <div class="task-tags-add">
+            <input type="text" class="task-tag-input" placeholder="${escapeAttr(t('study.addCustomTagPlaceholder'))}" maxlength="30">
+            <button type="button" class="edit-btn task-tag-add-btn">${escapeAttr(t('study.addTagButton'))}</button>
+          </div>
+        </div>
+
+        <div class="task-subtasks-section">
+          <p class="hint task-section-label">${escapeAttr(t('study.subtasksLabel'))}</p>
+          <div class="task-subtasks-list"></div>
+          <div class="task-subtasks-add">
+            <input type="text" class="task-subtask-input" placeholder="${escapeAttr(t('study.addSubtaskPlaceholder'))}" ${canHaveSubtasks ? '' : 'disabled'}>
+            <button type="button" class="edit-btn task-subtask-add-btn" ${canHaveSubtasks ? '' : 'disabled'}>+</button>
+          </div>
+        </div>
+
+        <div class="multiday-panel-slot"></div>
+      </div>
     `;
+
+    const expandBtn = el.querySelector('.task-expand-toggle');
+    expandBtn.addEventListener('click', () => {
+      const expanded = el.classList.toggle('expanded');
+      expandBtn.setAttribute('aria-expanded', String(expanded));
+      const labelKey = expanded ? 'study.collapseDetails' : 'study.expandDetails';
+      expandBtn.title = t(labelKey);
+      expandBtn.setAttribute('aria-label', t(labelKey));
+    });
+
+    renderTagsChips(el);
+    el.querySelector('.task-tags-chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('.task-tag-chip');
+      if (!chip) return;
+      writeRowTags(el, toggleTag(readRowTags(el), chip.dataset.tag));
+      renderTagsChips(el);
+      saveRowTagsIfPersisted(el);
+    });
+    const tagInput = el.querySelector('.task-tag-input');
+    function addTagFromInput() {
+      if (!tagInput.value.trim()) return;
+      writeRowTags(el, addCustomTag(readRowTags(el), tagInput.value));
+      tagInput.value = '';
+      renderTagsChips(el);
+      saveRowTagsIfPersisted(el);
+    }
+    el.querySelector('.task-tag-add-btn').addEventListener('click', addTagFromInput);
+    tagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addTagFromInput();
+      }
+    });
+
+    el._subtasks = (subtasks || []).slice();
+    renderSubtasksList(el);
+    const subtasksListEl = el.querySelector('.task-subtasks-list');
+    subtasksListEl.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('.task-subtask-remove');
+      if (!removeBtn) return;
+      const subtaskId = removeBtn.closest('.task-subtask-row').dataset.subtaskId;
+      el._subtasks = el._subtasks.filter((s) => String(s.id) !== subtaskId);
+      renderSubtasksList(el);
+      deleteSubtask(subtaskId).catch((err) => console.error(err));
+    });
+    subtasksListEl.addEventListener('change', (e) => {
+      const toggle = e.target.closest('.task-subtask-toggle');
+      if (!toggle) return;
+      const subtaskId = toggle.closest('.task-subtask-row').dataset.subtaskId;
+      const subtask = el._subtasks.find((s) => String(s.id) === subtaskId);
+      if (!subtask) return;
+      subtask.completed = toggle.checked;
+      renderSubtasksList(el);
+      updateSubtask(subtaskId, { completed: toggle.checked }).catch((err) => console.error(err));
+    });
+    const subtaskInput = el.querySelector('.task-subtask-input');
+    async function addSubtaskFromInput() {
+      if (!el.dataset.id || !isValidSubtaskTitle(subtaskInput.value)) return;
+      const fields = buildSubtaskFields(subtaskInput.value);
+      const sortOrder = nextSubtaskSortOrder(el._subtasks.length);
+      subtaskInput.value = '';
+      try {
+        const created = await insertSubtask(el.dataset.id, userId, fields, sortOrder);
+        el._subtasks.push(created);
+        renderSubtasksList(el);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    el.querySelector('.task-subtask-add-btn').addEventListener('click', addSubtaskFromInput);
+    subtaskInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addSubtaskFromInput();
+      }
+    });
+
     el.querySelector('.remove-btn').addEventListener('click', () => {
       if (planningRowId === el.dataset.id) closeMultiDayPanel();
       el.remove();
@@ -1143,18 +1343,152 @@ async function init(session) {
     return enriched;
   }
 
+  // V2-A: a task's due-date/remaining-time header chips and the active
+  // filters both need the exact same per-row data applyStudySortOrder
+  // already builds (via buildRowTask) to reorder the list, so this now also
+  // refreshes those chips and re-applies the current filters every time it
+  // runs — and it already runs on every schedule mutation via
+  // renderScheduleEvents (see below), so no new call sites are needed for
+  // chips/filters to stay correct.
+  function updateTaskHeaderChips(task) {
+    const row = task._row;
+    const dueChip = row.querySelector('.task-chip-due');
+    const remainingChip = row.querySelector('.task-chip-remaining');
+    // A blank, just-added row (no name/minutes typed yet) is modeled by
+    // buildRowTask as "completed" (nothing to recommend) purely so Smart
+    // Priority's sort has something sane to do with it — that's not the
+    // same thing as "this task is actually done," so the chips stay hidden
+    // entirely until there's a real name to attach a status to.
+    const hasContent = Boolean(task.name);
+    if (dueChip) {
+      const label = hasContent ? formatDueDate(task.dueDate) : null;
+      dueChip.textContent = label || '';
+      dueChip.hidden = !label;
+    }
+    if (remainingChip) {
+      if (!hasContent) {
+        remainingChip.hidden = true;
+      } else if (task.completed) {
+        remainingChip.textContent = t('study.doneChip');
+        remainingChip.hidden = false;
+      } else if (task.remainingMinutes > 0) {
+        remainingChip.textContent = t('study.minutesRemaining').replace('{minutes}', task.remainingMinutes);
+        remainingChip.hidden = false;
+      } else {
+        remainingChip.hidden = true;
+      }
+    }
+  }
+
   function applyStudySortOrder() {
-    if (!taskSortSelect || !studyList) return;
+    if (!studyList) return;
     const rows = Array.from(studyList.children);
-    if (rows.length < 2) return;
+    if (rows.length === 0) return;
     const availableMinutesToday = computeAvailableStudyMinutes(currentScheduleItems);
     const context = { todayDateStr: schedule ? schedule.for_date : null, availableMinutesToday };
-    const tasks = rows.map((row) => ({ ...buildRowTask(row), _row: row }));
-    const ordered = sortTasksForDisplay(tasks, taskSortSelect.value, context);
-    ordered.forEach((task) => studyList.appendChild(task._row));
+    const tasks = rows.map((row) => ({
+      ...buildRowTask(row),
+      _row: row,
+      tags: readRowTags(row),
+      notes: row.querySelector('.study-notes').value,
+    }));
+    tasks.forEach((task) => updateTaskHeaderChips(task));
+    if (taskSortSelect && rows.length >= 2) {
+      const ordered = sortTasksForDisplay(tasks, taskSortSelect.value, context);
+      ordered.forEach((task) => studyList.appendChild(task._row));
+    }
+    applyTaskFilters(tasks);
   }
 
   if (taskSortSelect) taskSortSelect.addEventListener('change', applyStudySortOrder);
+
+  // ---------------- Task filtering + search (V2-A) ----------------
+  // Display-only: filterTasks (src/dashboard/taskFilters.js) never mutates
+  // the task list or any stored field — matching a filter just toggles
+  // `row.hidden` on rows that don't match, the same way applyStudySortOrder
+  // reorders rows by relocating the same DOM nodes rather than rebuilding them.
+  const taskFilterModesEl = document.getElementById('taskFilterModes');
+  const taskSearchInputEl = document.getElementById('taskSearchInput');
+  const taskFilterSubjectEl = document.getElementById('taskFilterSubject');
+  const taskFilterPriorityEl = document.getElementById('taskFilterPriority');
+  const taskFilterTagEl = document.getElementById('taskFilterTag');
+  const taskFilterEmptyEl = document.getElementById('taskFilterEmpty');
+
+  let taskFilterState = { mode: 'all', priority: '', tag: '', subjectName: '', query: '' };
+
+  // Rebuilds a <select>'s options from `values` (keeping its existing
+  // "any ___" first option, read back from the DOM so its i18n translation
+  // is preserved) and restores the previously-selected value if it's still
+  // present among `values`, otherwise falls back to "any". Returns the
+  // value that ended up selected, so the caller can keep taskFilterState in
+  // sync with what the control actually shows.
+  function populateFilterOptions(selectEl, values, currentValue) {
+    if (!selectEl) return currentValue;
+    const anyOption = selectEl.querySelector('option[value=""]');
+    const anyOptionHtml = anyOption ? anyOption.outerHTML : '';
+    const optionsHtml = values.map((v) => `<option value="${escapeAttr(v)}">${escapeAttr(v)}</option>`).join('');
+    selectEl.innerHTML = anyOptionHtml + optionsHtml;
+    const keep = values.includes(currentValue) ? currentValue : '';
+    selectEl.value = keep;
+    return keep;
+  }
+
+  function applyTaskFilters(precomputedTasks) {
+    if (!studyList) return;
+    const tasks =
+      precomputedTasks ||
+      Array.from(studyList.children).map((row) => ({
+        ...buildRowTask(row),
+        _row: row,
+        tags: readRowTags(row),
+        notes: row.querySelector('.study-notes').value,
+      }));
+
+    taskFilterState.subjectName = populateFilterOptions(taskFilterSubjectEl, listDistinctSubjectNames(tasks), taskFilterState.subjectName);
+    taskFilterState.tag = populateFilterOptions(taskFilterTagEl, listDistinctTags(tasks), taskFilterState.tag);
+
+    const todayDateStr = schedule ? schedule.for_date : null;
+    const matched = filterTasks(tasks, taskFilterState, todayDateStr);
+    const matchedRows = new Set(matched.map((task) => task._row));
+    tasks.forEach((task) => {
+      task._row.hidden = !matchedRows.has(task._row);
+    });
+    if (taskFilterEmptyEl) taskFilterEmptyEl.hidden = !(tasks.length > 0 && matched.length === 0);
+  }
+
+  if (taskFilterModesEl) {
+    taskFilterModesEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.task-filter-mode');
+      if (!btn) return;
+      taskFilterModesEl.querySelectorAll('.task-filter-mode').forEach((b) => b.classList.toggle('active', b === btn));
+      taskFilterState.mode = btn.dataset.filterMode;
+      applyTaskFilters();
+    });
+  }
+  if (taskSearchInputEl) {
+    taskSearchInputEl.addEventListener('input', () => {
+      taskFilterState.query = taskSearchInputEl.value;
+      applyTaskFilters();
+    });
+  }
+  if (taskFilterPriorityEl) {
+    taskFilterPriorityEl.addEventListener('change', () => {
+      taskFilterState.priority = taskFilterPriorityEl.value;
+      applyTaskFilters();
+    });
+  }
+  if (taskFilterSubjectEl) {
+    taskFilterSubjectEl.addEventListener('change', () => {
+      taskFilterState.subjectName = taskFilterSubjectEl.value;
+      applyTaskFilters();
+    });
+  }
+  if (taskFilterTagEl) {
+    taskFilterTagEl.addEventListener('change', () => {
+      taskFilterState.tag = taskFilterTagEl.value;
+      applyTaskFilters();
+    });
+  }
 
   function renderMultiDayPanel(row) {
     const slot = row.querySelector('.multiday-panel-slot');
@@ -1335,9 +1669,16 @@ async function init(session) {
 
         const scheduleId = schedule.id;
         const reloadedSubjects = await listStudySubjects(scheduleId);
+        const reloadedSubtasks = await listSubtasksForSubjectIds(reloadedSubjects.map((s) => s.id));
         if (token !== activeToken || !schedule || schedule.id !== scheduleId) return;
+        const reloadedSubtasksBySubjectId = new Map();
+        reloadedSubtasks.forEach((st) => {
+          const list = reloadedSubtasksBySubjectId.get(st.subject_id) || [];
+          list.push(st);
+          reloadedSubtasksBySubjectId.set(st.subject_id, list);
+        });
         studyList.innerHTML = '';
-        reloadedSubjects.forEach((s) => addStudyRow(s));
+        reloadedSubjects.forEach((s) => addStudyRow(s, reloadedSubtasksBySubjectId.get(s.id) || []));
         applyStudySortOrder();
         refreshHistoryList();
         flashSaved();
@@ -1352,6 +1693,10 @@ async function init(session) {
   });
 
   studyList.addEventListener('change', (e) => {
+    // handled by its own listener in addStudyRow — skip the generic
+    // name/minutes/priority/due/notes save below entirely for this target
+    if (e.target.classList.contains('task-subtask-toggle')) return;
+
     // purely visual: keeps the priority select's color-coded badge in sync —
     // does not affect what gets saved below
     if (e.target.classList.contains('study-priority')) {
@@ -1379,6 +1724,7 @@ async function init(session) {
         priority,
         due_date: dueDate || null,
         notes,
+        tags: readRowTags(row),
       };
       if (row.dataset.id) {
         await updateStudySubject(row.dataset.id, fields);
@@ -1386,6 +1732,10 @@ async function init(session) {
         const sortOrder = Array.from(studyList.children).indexOf(row);
         const created = await insertStudySubject(scheduleId, userId, fields, sortOrder);
         row.dataset.id = created.id;
+        const subtaskInput = row.querySelector('.task-subtask-input');
+        const subtaskAddBtn = row.querySelector('.task-subtask-add-btn');
+        if (subtaskInput) subtaskInput.disabled = false;
+        if (subtaskAddBtn) subtaskAddBtn.disabled = false;
         refreshHistoryList();
       }
       flashSaved();
@@ -2453,8 +2803,17 @@ async function init(session) {
     try {
       const [loadedClasses, loadedSubjects] = await Promise.all([listClasses(schedule.id), listStudySubjects(schedule.id)]);
       if (token !== activeToken) return;
+      const loadedSubtasks = await listSubtasksForSubjectIds(loadedSubjects.map((s) => s.id));
+      if (token !== activeToken) return;
+      const loadedSubtasksBySubjectId = new Map();
+      loadedSubtasks.forEach((st) => {
+        const list = loadedSubtasksBySubjectId.get(st.subject_id) || [];
+        list.push(st);
+        loadedSubtasksBySubjectId.set(st.subject_id, list);
+      });
       loadedClasses.forEach((c) => addClassRow(c));
-      loadedSubjects.forEach((s) => addStudyRow(s));
+      loadedSubjects.forEach((s) => addStudyRow(s, loadedSubtasksBySubjectId.get(s.id) || []));
+      applyStudySortOrder();
     } catch (e) {
       console.error(e);
     }

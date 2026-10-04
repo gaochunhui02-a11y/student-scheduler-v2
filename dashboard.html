@@ -199,6 +199,41 @@
               <option value="remaining" data-i18n="planner.sortRemaining">Remaining time</option>
             </select>
           </div>
+
+          <div class="task-filter-bar">
+            <div class="task-filter-modes" id="taskFilterModes" role="group" data-i18n-aria-label="taskFilter.filterGroupLabel" aria-label="Filter tasks">
+              <button type="button" class="task-filter-mode active" data-filter-mode="all" data-i18n="taskFilter.all">All</button>
+              <button type="button" class="task-filter-mode" data-filter-mode="today" data-i18n="taskFilter.today">Today</button>
+              <button type="button" class="task-filter-mode" data-filter-mode="upcoming" data-i18n="taskFilter.upcoming">Upcoming</button>
+              <button type="button" class="task-filter-mode" data-filter-mode="overdue" data-i18n="taskFilter.overdue">Overdue</button>
+              <button type="button" class="task-filter-mode" data-filter-mode="completed" data-i18n="taskFilter.completed">Completed</button>
+            </div>
+            <div class="task-filter-search">
+              <input type="search" id="taskSearchInput" class="task-search-input" data-i18n-placeholder="taskFilter.searchPlaceholder" placeholder="Search tasks" data-i18n-aria-label="taskFilter.searchPlaceholder" aria-label="Search tasks" autocomplete="off">
+            </div>
+            <details class="task-more-filters">
+              <summary data-i18n="taskFilter.moreFilters">More filters</summary>
+              <div class="task-more-filters-row">
+                <label for="taskFilterSubject" class="sr-only" data-i18n="taskFilter.subjectLabel">Subject</label>
+                <select id="taskFilterSubject" data-i18n-aria-label="taskFilter.subjectLabel" aria-label="Subject">
+                  <option value="" data-i18n="taskFilter.anySubject">Any subject</option>
+                </select>
+                <label for="taskFilterPriority" class="sr-only" data-i18n="taskFilter.priorityLabel">Priority</label>
+                <select id="taskFilterPriority" data-i18n-aria-label="taskFilter.priorityLabel" aria-label="Priority">
+                  <option value="" data-i18n="taskFilter.anyPriority">Any priority</option>
+                  <option value="high" data-i18n="taskFilter.priorityHigh">High</option>
+                  <option value="medium" data-i18n="taskFilter.priorityMedium">Medium</option>
+                  <option value="low" data-i18n="taskFilter.priorityLow">Low</option>
+                </select>
+                <label for="taskFilterTag" class="sr-only" data-i18n="taskFilter.tagLabel">Tag</label>
+                <select id="taskFilterTag" data-i18n-aria-label="taskFilter.tagLabel" aria-label="Tag">
+                  <option value="" data-i18n="taskFilter.anyTag">Any tag</option>
+                </select>
+              </div>
+            </details>
+          </div>
+          <p class="hint task-filter-empty" id="taskFilterEmpty" data-i18n="taskFilter.noResults" hidden>No tasks match these filters.</p>
+
           <div id="studyList"></div>
           <button class="add-btn" id="addStudyBtn" type="button">+ <span data-i18n="study.add">Add subject</span></button>
         </div>
