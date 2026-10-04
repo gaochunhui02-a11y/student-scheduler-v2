@@ -33,6 +33,10 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16.5h4"/></svg>
           <span data-i18n="nav.planner">Planner</span>
         </button>
+        <button type="button" class="nav-item" data-view-target="weekView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg>
+          <span data-i18n="nav.week">Week</span>
+        </button>
         <button type="button" class="nav-item" data-view-target="boardView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2.2"/><circle cx="18" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M7.6 8 10.7 15.7M16.4 8 13.3 15.7"/></svg>
           <span data-i18n="nav.board">Board</span>
@@ -400,6 +404,44 @@
       </div>
     </details>
   </div>
+
+      <section class="week-view" id="weekView" hidden>
+        <div class="board-header">
+          <div class="board-header-info">
+            <p class="page-eyebrow" data-i18n="week.eyebrow">Week</p>
+            <h1 class="page-heading" id="weekRangeHeading">&nbsp;</h1>
+            <p class="page-subtitle" data-i18n="week.subtitle">Classes, study blocks, and deadlines across the week.</p>
+          </div>
+          <div class="week-nav-row">
+            <button type="button" class="date-nav-btn" id="weekPrevBtn" data-i18n-title="week.previousWeek" title="Previous week" data-i18n-aria-label="week.previousWeek" aria-label="Previous week">←</button>
+            <button type="button" class="btn-secondary" id="weekTodayBtn" data-i18n="week.thisWeek">This Week</button>
+            <button type="button" class="date-nav-btn" id="weekNextBtn" data-i18n-title="week.nextWeek" title="Next week" data-i18n-aria-label="week.nextWeek" aria-label="Next week">→</button>
+          </div>
+        </div>
+
+        <div class="card week-summary-card" id="weekSummaryCard">
+          <div class="week-summary-stat">
+            <span class="week-summary-value" id="weekSummaryStudyTime">—</span>
+            <span class="week-summary-label" data-i18n="week.summaryStudyTime">Study time</span>
+          </div>
+          <div class="week-summary-stat">
+            <span class="week-summary-value" id="weekSummaryClasses">—</span>
+            <span class="week-summary-label" data-i18n="week.summaryClasses">Classes</span>
+          </div>
+          <div class="week-summary-stat">
+            <span class="week-summary-value" id="weekSummaryDeadlines">—</span>
+            <span class="week-summary-label" data-i18n="week.summaryDeadlines">Deadlines</span>
+          </div>
+          <div class="week-summary-stat" id="weekSummaryBusiestWrap" hidden>
+            <span class="week-summary-value" id="weekSummaryBusiest">—</span>
+            <span class="week-summary-label" data-i18n="week.busiestDay">Busiest day</span>
+          </div>
+        </div>
+
+        <p class="hint" id="weekStatus" hidden></p>
+
+        <div class="week-grid" id="weekGrid"></div>
+      </section>
 
       <section class="board-view" id="boardView" hidden>
         <div class="board-header">

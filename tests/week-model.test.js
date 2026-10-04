@@ -13,7 +13,7 @@ import {
   aggregateWeekView,
   computeWeekWorkloadBars,
   computeWeekSummary,
-} from '../src/dashboard/weekModel.js';
+} from '../src/week/weekModel.js';
 
 let totalFailures = 0;
 

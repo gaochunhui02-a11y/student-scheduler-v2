@@ -26,7 +26,9 @@ import {
   listSchedulesInRange,
   listScheduleItemsForScheduleIds,
   listStudySubjectsForScheduleIds,
+  listClassesForScheduleIds,
   listUpcomingStudySubjects,
+  listStudySubjectsDueInRange,
   setScheduleItemMissed,
   setScheduleItemPartialCompletion,
   getStudySubjectById,
@@ -58,6 +60,7 @@ import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../sh
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
+import { initWeekSection } from '../week/week.js';
 import { initNotificationsSection } from '../notifications/notifications.js';
 import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
 import { initCalendarSection } from '../calendar/calendar.js';
@@ -254,7 +257,12 @@ async function init(session) {
   // DOM/state lives in src/analytics/analytics.js — this file only owns
   // the show/hide toggle between #plannerForm and whichever alternate view
   // is active.
-  const altViewEls = [document.getElementById('boardView'), document.getElementById('analyticsView'), document.getElementById('settingsView')].filter(Boolean);
+  const altViewEls = [
+    document.getElementById('boardView'),
+    document.getElementById('weekView'),
+    document.getElementById('analyticsView'),
+    document.getElementById('settingsView'),
+  ].filter(Boolean);
   function showPlannerView() {
     altViewEls.forEach((el) => {
       el.hidden = true;
@@ -364,6 +372,41 @@ async function init(session) {
     planTask: goToPlannerStudyList,
   };
   const analyticsSection = initAnalyticsSection(userId, analyticsHostApi);
+
+  // ---------------- Week View -> existing Planner data (V2-A) ----------------
+  // week.js never imports data.js directly — it only calls these host
+  // functions. Entirely read-only: every number it shows comes from the
+  // exact same schedules/classes/schedule_items/study_subjects rows the
+  // Planner/Analytics already read, via the exact same
+  // listSchedulesInRange/listClassesForScheduleIds/
+  // listScheduleItemsForScheduleIds helpers Analytics' getWeekData already
+  // uses above, plus the new bounded listStudySubjectsDueInRange for
+  // deadlines. The only "write-shaped" action is openDateInPlanner, which
+  // is really just a navigation shortcut into the EXACT same
+  // loadScheduleForDate the date picker/Prev/Next buttons already call —
+  // never a second schedule loader.
+  function openPlannerForDate(dateStr) {
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+    const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
+    if (plannerNavBtn) plannerNavBtn.classList.add('active');
+    showPlannerView();
+    loadScheduleForDate(dateStr);
+  }
+  const weekHostApi = {
+    getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
+    getWeekRangeData: async (startDate, endDate) => {
+      const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
+      const scheduleIds = schedulesInRange.map((s) => s.id);
+      const [classes, items, dueSubjects] = await Promise.all([
+        listClassesForScheduleIds(scheduleIds),
+        listScheduleItemsForScheduleIds(scheduleIds),
+        listStudySubjectsDueInRange(userId, startDate, endDate),
+      ]);
+      return { schedules: schedulesInRange, classes, items, dueSubjects };
+    },
+    openDateInPlanner: openPlannerForDate,
+  };
+  const weekSection = initWeekSection(userId, weekHostApi);
 
   // ---------------- Notifications -> existing schedule + due dates (Phase 11) ----------------
   // notifications.js never imports data.js directly — it only calls these
@@ -526,6 +569,7 @@ async function init(session) {
 
   const altViewSections = {
     boardView: boardSection,
+    weekView: weekSection,
     analyticsView: analyticsSection,
     settingsView: settingsSection,
   };

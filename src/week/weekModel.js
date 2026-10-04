@@ -10,7 +10,7 @@
 // end_time}; schedule_items: {schedule_id, item_type, start_minutes,
 // end_minutes}; study_subjects due-date rows: {id, name, due_date, priority}).
 
-import { addDaysToDateStr } from './dateUtils.js';
+import { addDaysToDateStr } from '../dashboard/dateUtils.js';
 
 const DAYS_PER_WEEK = 7;
 
