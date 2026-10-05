@@ -253,8 +253,21 @@
         <div class="card">
           <h2 data-i18n="classes.title">Classes</h2>
           <div id="classList"></div>
-          <button class="add-btn" id="addClassBtn" type="button">+ <span data-i18n="classes.add">Add class</span></button>
+          <div class="class-add-row">
+            <button class="add-btn" id="addClassBtn" type="button">+ <span data-i18n="classes.add">Add class</span></button>
+            <button class="add-btn" id="manageRecurringBtn" type="button">+ <span data-i18n="classes.addRecurring">Recurring class</span></button>
+          </div>
         </div>
+
+        <details class="card planner-collapsible" id="recurringClassesCard">
+          <summary data-i18n="recurring.manageTitle">Recurring Classes</summary>
+          <div class="planner-collapsible-body">
+            <div id="recurringSeriesList"></div>
+            <div id="recurringSeriesFormSlot"></div>
+            <button type="button" class="add-btn" id="addRecurringSeriesBtn" data-i18n="recurring.addButton">+ Add recurring class</button>
+            <p class="hint" id="recurringStatus" hidden></p>
+          </div>
+        </details>
 
         <details class="card planner-collapsible" open>
           <summary data-i18n="day.title">Your Day</summary>

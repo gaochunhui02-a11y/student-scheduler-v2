@@ -847,6 +847,67 @@ button { font-family: inherit; }
 }
 .add-btn:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
 
+/* ---- V2-B: Recurring Classes ---- */
+.class-add-row { display: flex; gap: 8px; }
+.class-add-row .add-btn { margin-top: 4px; }
+
+.recurring-class-row .class-name, .recurring-class-row .class-start, .recurring-class-row .class-end { cursor: default; color: var(--text-soft); }
+.recurring-class-row { align-items: center; }
+
+.recurring-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-soft-strong);
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.recurring-badge-modified { background: var(--warning-soft); color: var(--warning); border-color: var(--warning-border); }
+
+.recurring-row-menu { flex: none; }
+.recurring-edit-today-panel-slot:empty { display: none; }
+
+.recurring-series-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.recurring-series-row:last-of-type { border-bottom: none; }
+.recurring-series-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recurring-series-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.recurring-series-meta { font-size: 11.5px; color: var(--muted); }
+.recurring-series-actions { display: flex; gap: 6px; flex: none; }
+
+.recurring-day-picker { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.recurring-day-btn {
+  height: 26px;
+  width: 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.recurring-day-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.recurring-day-btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+.recurring-series-form-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.recurring-series-form-row label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 500; flex: 1 1 140px; }
+.recurring-series-form-row input { height: 32px; padding: 0 8px; font-size: 12.5px; background: var(--surface-2); }
+
 .meal-row {
   display: grid;
   grid-template-columns: 18px 1fr 100px;

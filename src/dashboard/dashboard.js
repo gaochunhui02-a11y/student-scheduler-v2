@@ -14,6 +14,13 @@ import {
   insertClass,
   updateClass,
   deleteClass,
+  listClassSeries,
+  createClassSeries,
+  updateClassSeries,
+  deleteClassSeries,
+  listClassSeriesExceptions,
+  upsertClassSeriesException,
+  deleteClassSeriesException,
   listStudySubjects,
   insertStudySubject,
   updateStudySubject,
@@ -55,6 +62,15 @@ import { buildSmartTasks, computeAvailableStudyMinutes, sortTasksForDisplay } fr
 import { QUICK_TEMPLATES, getQuickTemplate, buildTemplatePreview, buildTemplatePrefsPatch } from './quickTemplates.js';
 import { isValidSubtaskTitle, buildSubtaskFields, nextSubtaskSortOrder, computeSubtaskProgress } from './subtasksModel.js';
 import { PRESET_TASK_TAGS, normalizeTagList, toggleTag, addCustomTag } from './tagsModel.js';
+import {
+  normalizeDaysOfWeek,
+  isValidTimeRange,
+  buildSeriesFields,
+  validateSeriesFields,
+  buildEffectiveClassesForDate,
+  buildSkipExceptionFields,
+  buildModifyExceptionFields,
+} from './recurringClasses.js';
 import { filterTasks, listDistinctSubjectNames, listDistinctTags } from './taskFilters.js';
 import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
@@ -1052,6 +1068,12 @@ async function init(session) {
   classList.addEventListener('change', (e) => {
     const row = e.target.closest('.entry-row');
     if (!row) return;
+    // A recurring occurrence's name/start/end inputs are readonly (never
+    // user-editable directly — "Edit just today" below is the only path
+    // that changes one), so this should never actually fire for one. The
+    // guard exists anyway so a recurring row can never be mistaken for an
+    // ad-hoc class and INSERTed as a duplicate `classes` row.
+    if (row.classList.contains('recurring-class-row')) return;
     const scheduleId = schedule.id;
     chainSave(row, async () => {
       const fields = {
@@ -1074,6 +1096,388 @@ async function init(session) {
   });
 
   document.getElementById('addClassBtn').addEventListener('click', () => addClassRow());
+
+  // ---------------- Recurring Classes (V2-B) ----------------
+  // class_series/class_series_exceptions are user-scoped, not tied to any
+  // one schedule_id (a series spans many dates) — loaded once here and
+  // kept as in-memory arrays, mutated directly after each CRUD success
+  // (push/splice/replace), same convention src/board/board.js already uses
+  // for its own nodes/edges arrays. buildEffectiveClassesForDate (pure,
+  // from recurringClasses.js) is the ONLY thing that decides which
+  // recurring occurrences show up on a given date — it never writes
+  // anything, so merely viewing/reloading a date can never create a
+  // duplicate `classes` row. The only writes here are: a class_series row
+  // (create/edit/delete the whole recurrence) or a
+  // class_series_exceptions row (skip/edit exactly one occurrence).
+  let classSeriesList = [];
+  let classSeriesExceptions = [];
+  let seriesFormEditingId = null; // null = closed, 'new' = creating, or an existing series id = editing it
+
+  const DAY_PICKER_ORDER = [
+    { value: 1, key: 'recurring.dayMon' },
+    { value: 2, key: 'recurring.dayTue' },
+    { value: 3, key: 'recurring.dayWed' },
+    { value: 4, key: 'recurring.dayThu' },
+    { value: 5, key: 'recurring.dayFri' },
+    { value: 6, key: 'recurring.daySat' },
+    { value: 0, key: 'recurring.daySun' },
+  ];
+
+  async function loadRecurringClassesData() {
+    try {
+      [classSeriesList, classSeriesExceptions] = await Promise.all([listClassSeries(userId), listClassSeriesExceptions(userId)]);
+    } catch (e) {
+      console.error(e);
+      classSeriesList = [];
+      classSeriesExceptions = [];
+    }
+    renderRecurringSeriesList();
+  }
+
+  function formatSeriesSummary(series) {
+    const days = normalizeDaysOfWeek(series.days_of_week);
+    const dayLabels = DAY_PICKER_ORDER.filter((d) => days.includes(d.value)).map((d) => t(d.key));
+    const timeLabel = `${formatClock(timeToMinutes(series.start_time))} – ${formatClock(timeToMinutes(series.end_time))}`;
+    const dateLabel = `${formatDateLabel(series.start_date)} – ${formatDateLabel(series.end_date)}`;
+    return `${dayLabels.join(', ')} · ${timeLabel} · ${dateLabel}`;
+  }
+
+  const recurringSeriesListEl = document.getElementById('recurringSeriesList');
+  const recurringStatusEl = document.getElementById('recurringStatus');
+
+  function setRecurringStatus(text) {
+    if (!recurringStatusEl) return;
+    recurringStatusEl.textContent = text || '';
+    recurringStatusEl.hidden = !text;
+  }
+
+  function renderRecurringSeriesList() {
+    if (!recurringSeriesListEl) return;
+    if (classSeriesList.length === 0) {
+      recurringSeriesListEl.innerHTML = `<p class="hint">${escapeAttr(t('recurring.emptyState'))}</p>`;
+      return;
+    }
+    recurringSeriesListEl.innerHTML = classSeriesList
+      .map(
+        (series) => `
+        <div class="recurring-series-row" data-series-id="${escapeAttr(series.id)}">
+          <div class="recurring-series-info">
+            <span class="recurring-series-name">${escapeAttr(series.name)}</span>
+            <span class="recurring-series-meta">${escapeAttr(formatSeriesSummary(series))}</span>
+          </div>
+          <div class="recurring-series-actions">
+            <button type="button" class="edit-btn recurring-series-edit-btn">${escapeAttr(t('recurring.editButton'))}</button>
+            <button type="button" class="edit-btn recurring-series-delete-btn">${escapeAttr(t('recurring.deleteButton'))}</button>
+          </div>
+        </div>`
+      )
+      .join('');
+  }
+
+  if (recurringSeriesListEl) {
+    recurringSeriesListEl.addEventListener('click', (e) => {
+      const row = e.target.closest('.recurring-series-row');
+      if (!row) return;
+      const series = classSeriesList.find((s) => s.id === row.dataset.seriesId);
+      if (!series) return;
+      if (e.target.closest('.recurring-series-edit-btn')) openSeriesForm(series);
+      else if (e.target.closest('.recurring-series-delete-btn')) handleDeleteSeries(series);
+    });
+  }
+
+  function renderSeriesForm() {
+    const slot = document.getElementById('recurringSeriesFormSlot');
+    if (!slot) return;
+    if (!seriesFormEditingId) {
+      slot.innerHTML = '';
+      return;
+    }
+    const editing = seriesFormEditingId !== 'new' ? classSeriesList.find((s) => s.id === seriesFormEditingId) : null;
+    const defaults = editing || { name: '', days_of_week: [], start_time: '', end_time: '', start_date: forDateEl.value || todayDateStr(), end_date: '' };
+    const selectedDays = normalizeDaysOfWeek(defaults.days_of_week);
+    const daysHtml = DAY_PICKER_ORDER.map(
+      (d) =>
+        `<button type="button" class="recurring-day-btn${selectedDays.includes(d.value) ? ' active' : ''}" data-day="${d.value}">${escapeAttr(t(d.key))}</button>`
+    ).join('');
+
+    slot.innerHTML = `
+      <div class="edit-panel recurring-series-form">
+        <p class="hint task-section-label">${escapeAttr(editing ? t('recurring.editTitle') : t('recurring.newTitle'))}</p>
+        <div class="recurring-series-form-row">
+          <label>${escapeAttr(t('recurring.nameLabel'))}
+            <input type="text" class="recurring-name-input" value="${escapeAttr(defaults.name)}">
+          </label>
+        </div>
+        <p class="hint task-section-label">${escapeAttr(t('recurring.daysLabel'))}</p>
+        <div class="recurring-day-picker">${daysHtml}</div>
+        <div class="recurring-series-form-row">
+          <label>${escapeAttr(t('recurring.startTimeLabel'))}
+            <input type="time" class="recurring-start-time-input" value="${toHHMM(defaults.start_time)}">
+          </label>
+          <label>${escapeAttr(t('recurring.endTimeLabel'))}
+            <input type="time" class="recurring-end-time-input" value="${toHHMM(defaults.end_time)}">
+          </label>
+        </div>
+        <div class="recurring-series-form-row">
+          <label>${escapeAttr(t('recurring.startDateLabel'))}
+            <input type="date" class="recurring-start-date-input" value="${escapeAttr(defaults.start_date || '')}">
+          </label>
+          <label>${escapeAttr(t('recurring.endDateLabel'))}
+            <input type="date" class="recurring-end-date-input" value="${escapeAttr(defaults.end_date || '')}">
+          </label>
+        </div>
+        <div class="edit-error" id="recurringSeriesFormError"></div>
+        <div class="edit-actions">
+          <button type="button" class="edit-save-btn" id="recurringSeriesSaveBtn">${escapeAttr(t('recurring.saveButton'))}</button>
+          <button type="button" id="recurringSeriesCancelBtn">${escapeAttr(t('recurring.cancelButton'))}</button>
+        </div>
+      </div>
+    `;
+
+    slot.querySelectorAll('.recurring-day-btn').forEach((btn) => {
+      btn.addEventListener('click', () => btn.classList.toggle('active'));
+    });
+    document.getElementById('recurringSeriesCancelBtn').addEventListener('click', closeSeriesForm);
+    document.getElementById('recurringSeriesSaveBtn').addEventListener('click', handleSaveSeries);
+  }
+
+  function openSeriesForm(series) {
+    seriesFormEditingId = series ? series.id : 'new';
+    if (recurringClassesCardEl) recurringClassesCardEl.open = true;
+    renderSeriesForm();
+  }
+  function closeSeriesForm() {
+    seriesFormEditingId = null;
+    renderSeriesForm();
+  }
+
+  async function handleSaveSeries() {
+    const slot = document.getElementById('recurringSeriesFormSlot');
+    const errorEl = document.getElementById('recurringSeriesFormError');
+    const saveBtn = document.getElementById('recurringSeriesSaveBtn');
+    const selectedDays = Array.from(slot.querySelectorAll('.recurring-day-btn.active')).map((b) => parseInt(b.dataset.day, 10));
+    const fields = buildSeriesFields({
+      name: slot.querySelector('.recurring-name-input').value,
+      daysOfWeek: selectedDays,
+      startTime: slot.querySelector('.recurring-start-time-input').value,
+      endTime: slot.querySelector('.recurring-end-time-input').value,
+      startDate: slot.querySelector('.recurring-start-date-input').value,
+      endDate: slot.querySelector('.recurring-end-date-input').value,
+    });
+    if (!validateSeriesFields(fields).valid) {
+      errorEl.textContent = t('recurring.invalidSeries');
+      return;
+    }
+    errorEl.textContent = '';
+    saveBtn.disabled = true;
+    try {
+      if (seriesFormEditingId && seriesFormEditingId !== 'new') {
+        const updated = await updateClassSeries(seriesFormEditingId, fields);
+        const idx = classSeriesList.findIndex((s) => s.id === seriesFormEditingId);
+        if (idx !== -1) classSeriesList[idx] = updated;
+      } else {
+        const created = await createClassSeries(userId, fields);
+        classSeriesList.push(created);
+      }
+      closeSeriesForm();
+      renderRecurringSeriesList();
+      await refreshClassListForCurrentDate();
+    } catch (e) {
+      console.error(e);
+      errorEl.textContent = t('recurring.saveError');
+      saveBtn.disabled = false;
+    }
+  }
+
+  async function handleDeleteSeries(series) {
+    if (!window.confirm(t('recurring.deleteConfirm'))) return;
+    setRecurringStatus('');
+    try {
+      await deleteClassSeries(series.id);
+      classSeriesList = classSeriesList.filter((s) => s.id !== series.id);
+      classSeriesExceptions = classSeriesExceptions.filter((e) => e.series_id !== series.id);
+      renderRecurringSeriesList();
+      await refreshClassListForCurrentDate();
+    } catch (e) {
+      console.error(e);
+      setRecurringStatus(t('recurring.deleteError'));
+    }
+  }
+
+  // Rebuilds the Classes list for whichever date is currently loaded,
+  // re-reading this date's ad-hoc `classes` rows fresh and re-merging them
+  // with the (already in-memory, just-changed) recurring series —
+  // the exact same buildEffectiveClassesForDate projection
+  // loadScheduleForDate uses on a normal date switch, called again here so
+  // a series/exception change is reflected immediately without requiring
+  // the student to leave and revisit the date.
+  function renderClassListRows(adHocClasses) {
+    const effective = buildEffectiveClassesForDate({
+      adHocClasses,
+      seriesList: classSeriesList,
+      exceptions: classSeriesExceptions,
+      dateStr: schedule.for_date,
+    });
+    effective.forEach((entry) => {
+      if (entry.source === 'recurring') addRecurringClassRow(entry);
+      else addClassRow(entry);
+    });
+  }
+
+  async function refreshClassListForCurrentDate() {
+    if (!schedule) return;
+    let adHocClasses;
+    try {
+      adHocClasses = await listClasses(schedule.id);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+    classList.innerHTML = '';
+    renderClassListRows(adHocClasses);
+  }
+
+  // A recurring occurrence's row: readonly name/start/end (editing means
+  // either "just today" — a class_series_exceptions row — or "the whole
+  // recurrence," which lives in the Recurring Classes card above, never an
+  // ad-hoc `classes` row). `.planner-more-menu`/`.planner-more-dropdown`/
+  // `.planner-more-item` are the exact same classes the Planner's own
+  // toolbar "More ▾" menu already uses — reused as-is rather than a second
+  // dropdown implementation.
+  function addRecurringClassRow(occurrence) {
+    const el = document.createElement('div');
+    el.className = 'entry-row recurring-class-row';
+    el.dataset.seriesId = occurrence.seriesId;
+    const badgeKey = occurrence.isModified ? 'recurring.editedBadge' : 'recurring.badge';
+    const badgeClass = occurrence.isModified ? ' recurring-badge-modified' : '';
+    el.innerHTML = `
+      <input type="text" class="class-name" readonly aria-label="Class name" value="${escapeAttr(occurrence.name)}">
+      <div class="cls-time-group">
+        <input type="time" class="class-start" readonly aria-label="Start time" value="${toHHMM(occurrence.start_time)}">
+        <span class="cls-time-sep">–</span>
+        <input type="time" class="class-end" readonly aria-label="End time" value="${toHHMM(occurrence.end_time)}">
+      </div>
+      <span class="recurring-badge${badgeClass}">${escapeAttr(t(badgeKey))}</span>
+      <details class="planner-more-menu recurring-row-menu">
+        <summary class="planner-more-btn" title="${escapeAttr(t('recurring.moreActions'))}">⋯</summary>
+        <div class="planner-more-dropdown">
+          <button type="button" class="planner-more-item recurring-edit-today-btn">${escapeAttr(t('recurring.editToday'))}</button>
+          <button type="button" class="planner-more-item recurring-skip-today-btn">${escapeAttr(t('recurring.skipToday'))}</button>
+          ${occurrence.isModified ? `<button type="button" class="planner-more-item recurring-revert-today-btn">${escapeAttr(t('recurring.revertToday'))}</button>` : ''}
+        </div>
+      </details>
+      <div class="recurring-edit-today-panel-slot"></div>
+    `;
+
+    const menu = el.querySelector('.recurring-row-menu');
+    el.querySelector('.recurring-edit-today-btn').addEventListener('click', () => {
+      menu.open = false;
+      openEditTodayPanel(el, occurrence);
+    });
+    el.querySelector('.recurring-skip-today-btn').addEventListener('click', () => {
+      menu.open = false;
+      handleSkipToday(occurrence);
+    });
+    const revertBtn = el.querySelector('.recurring-revert-today-btn');
+    if (revertBtn) {
+      revertBtn.addEventListener('click', () => {
+        menu.open = false;
+        handleRevertToday(occurrence);
+      });
+    }
+
+    classList.appendChild(el);
+    updatePlannerHeader();
+    return el;
+  }
+
+  function openEditTodayPanel(row, occurrence) {
+    const slot = row.querySelector('.recurring-edit-today-panel-slot');
+    slot.innerHTML = `
+      <div class="edit-panel">
+        <label>${escapeAttr(t('recurring.nameLabel'))}
+          <input type="text" class="edit-today-name-input" value="${escapeAttr(occurrence.name)}">
+        </label>
+        <div class="row-2" style="margin-top:6px;">
+          <label>${escapeAttr(t('recurring.startTimeLabel'))}
+            <input type="time" class="edit-today-start-input" value="${toHHMM(occurrence.start_time)}">
+          </label>
+          <label>${escapeAttr(t('recurring.endTimeLabel'))}
+            <input type="time" class="edit-today-end-input" value="${toHHMM(occurrence.end_time)}">
+          </label>
+        </div>
+        <div class="edit-error edit-today-error"></div>
+        <div class="edit-actions">
+          <button type="button" class="edit-save-btn edit-today-save-btn">${escapeAttr(t('recurring.saveButton'))}</button>
+          <button type="button" class="edit-today-cancel-btn">${escapeAttr(t('recurring.cancelButton'))}</button>
+        </div>
+      </div>
+    `;
+    slot.querySelector('.edit-today-cancel-btn').addEventListener('click', () => {
+      slot.innerHTML = '';
+    });
+    slot.querySelector('.edit-today-save-btn').addEventListener('click', async () => {
+      const series = classSeriesList.find((s) => s.id === occurrence.seriesId);
+      const errorEl = slot.querySelector('.edit-today-error');
+      if (!series) return;
+      const name = slot.querySelector('.edit-today-name-input').value.trim();
+      const startTime = slot.querySelector('.edit-today-start-input').value;
+      const endTime = slot.querySelector('.edit-today-end-input').value;
+      if (!name || !isValidTimeRange(startTime, endTime)) {
+        errorEl.textContent = t('recurring.invalidSeries');
+        return;
+      }
+      errorEl.textContent = '';
+      const fields = buildModifyExceptionFields(series, schedule.for_date, { name, startTime, endTime });
+      try {
+        const saved = await upsertClassSeriesException(userId, fields);
+        const idx = classSeriesExceptions.findIndex((e) => e.series_id === series.id && e.exception_date === schedule.for_date);
+        if (idx !== -1) classSeriesExceptions[idx] = saved;
+        else classSeriesExceptions.push(saved);
+        await refreshClassListForCurrentDate();
+      } catch (e) {
+        console.error(e);
+        errorEl.textContent = t('recurring.saveError');
+      }
+    });
+  }
+
+  async function handleSkipToday(occurrence) {
+    const fields = buildSkipExceptionFields(occurrence.seriesId, schedule.for_date);
+    try {
+      const saved = await upsertClassSeriesException(userId, fields);
+      const idx = classSeriesExceptions.findIndex((e) => e.series_id === occurrence.seriesId && e.exception_date === schedule.for_date);
+      if (idx !== -1) classSeriesExceptions[idx] = saved;
+      else classSeriesExceptions.push(saved);
+      await refreshClassListForCurrentDate();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleRevertToday(occurrence) {
+    const existing = classSeriesExceptions.find((e) => e.series_id === occurrence.seriesId && e.exception_date === schedule.for_date);
+    if (!existing) return;
+    try {
+      await deleteClassSeriesException(existing.id);
+      classSeriesExceptions = classSeriesExceptions.filter((e) => e.id !== existing.id);
+      await refreshClassListForCurrentDate();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  const recurringClassesCardEl = document.getElementById('recurringClassesCard');
+  const manageRecurringBtn = document.getElementById('manageRecurringBtn');
+  if (manageRecurringBtn && recurringClassesCardEl) {
+    manageRecurringBtn.addEventListener('click', () => {
+      recurringClassesCardEl.open = true;
+      openSeriesForm(null);
+      recurringClassesCardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  const addRecurringSeriesBtn = document.getElementById('addRecurringSeriesBtn');
+  if (addRecurringSeriesBtn) addRecurringSeriesBtn.addEventListener('click', () => openSeriesForm(null));
 
   // ---------------- study subjects ----------------
   const studyList = document.getElementById('studyList');
@@ -2855,7 +3259,7 @@ async function init(session) {
         list.push(st);
         loadedSubtasksBySubjectId.set(st.subject_id, list);
       });
-      loadedClasses.forEach((c) => addClassRow(c));
+      renderClassListRows(loadedClasses);
       loadedSubjects.forEach((s) => addStudyRow(s, loadedSubtasksBySubjectId.get(s.id) || []));
       applyStudySortOrder();
     } catch (e) {
@@ -2903,6 +3307,11 @@ async function init(session) {
   }
   if (!initialDate) initialDate = tomorrowDateStr();
 
+  // Loaded once, before the first date renders — class_series/exceptions
+  // are user-scoped (not per-date), so renderClassListRows above (called
+  // from inside loadScheduleForDate) needs them already populated the
+  // very first time a date's classList is built.
+  await loadRecurringClassesData();
   await loadScheduleForDate(initialDate);
 
   // Home (analyticsView) is the default landing view now, matching the
