@@ -314,7 +314,7 @@ export function validateManualStudyEdit({
  * @param {{name:string, start:string, end:string}[]} input.classes
  * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
  * @param {{id?:string|null, name:string, minutes:number, priority?:'low'|'medium'|'high', dueDate?:string|null}[]} input.subjects
- * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number, preferredPeriod?:'none'|'morning'|'afternoon'|'evening', earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
+ * @param {{sessionCap:number, staminaBreak:number, switchBreak:number, minNewBlock:number, preferredPeriod?:'none'|'morning'|'afternoon'|'evening', earliestStudyTime?:string|null, latestStudyTime?:string|null, maxDailyStudyMinutes?:number|null}} input.prefs `maxDailyStudyMinutes` (V2-B) is a hard ceiling on TOTAL study minutes placed today (locked blocks already count toward it) — null/omitted means "no cap," preserving every existing behavior exactly.
  * @param {{name:string, start:number, end:number, sourceSubjectId?:string|null}[]} [input.lockedBlocks] previously-locked study blocks (absolute minutes, same space as event start/end) to keep fixed during regeneration
  * @returns {{ events: {type:string,name:string,start:number,end:number,locked?:boolean,sourceSubjectId?:string|null}[], notes: string[], error?: string, lockConflicts?: string[] }}
  */
@@ -328,6 +328,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     preferredPeriod = 'none',
     earliestStudyTime = null,
     latestStudyTime = null,
+    maxDailyStudyMinutes = null,
   } = prefs;
 
   function spanNeeded(minutes) {
@@ -472,9 +473,30 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     return b.remaining - a.remaining;
   });
 
+  // V2-B: a hard ceiling on total study minutes placed today. Locked
+  // blocks are study time already committed for today, so they count
+  // toward the cap from the start — otherwise regenerating a day that
+  // already has locked study blocks could exceed a cap the student just
+  // set. null (the default) means Infinity, i.e. every line below
+  // computes exactly what it always did when this preference is unset.
+  let dailyStudyMinutesPlaced = lockedEvents.reduce((sum, b) => sum + (b.end - b.start), 0);
+  function dailyCapRemaining() {
+    return maxDailyStudyMinutes == null ? Infinity : Math.max(0, maxDailyStudyMinutes - dailyStudyMinutesPlaced);
+  }
+
   for (const subject of queue) {
     while (subject.remaining > 0) {
-      // 1) a single gap that fits the ENTIRE remaining amount. Among those, prefer
+      const capRemaining = dailyCapRemaining();
+      if (capRemaining <= 0) break; // today's study cap is already full — the rest is reported as a shortfall below, same as no physical room left
+
+      // How much of this subject we're actually allowed to try placing THIS
+      // iteration — subject.remaining when there's no cap (or room under
+      // it), otherwise whatever's left under the cap. Every search/place
+      // below uses this instead of subject.remaining directly, so with no
+      // cap set wantNow === subject.remaining always and nothing changes.
+      const wantNow = Math.min(subject.remaining, capRemaining);
+
+      // 1) a single gap that fits the ENTIRE wantNow amount. Among those, prefer
       //    whichever overlaps the preferred study period the most (a soft preference —
       //    when there's no preference, or none of them overlap it, this collapses to
       //    the old behavior of just preferring the LARGEST such gap).
@@ -487,9 +509,9 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
         const cap = g.end - g.start;
         if (cap <= 0) continue;
         const extra = g.lastSubject && g.lastSubject !== subject.name ? switchBreak : 0;
-        const needed = spanNeeded(subject.remaining) + extra;
+        const needed = spanNeeded(wantNow) + extra;
         if (cap < needed) continue;
-        const score = periodOverlapMinutes(preferredPeriod, g.start + extra, g.start + extra + subject.remaining);
+        const score = periodOverlapMinutes(preferredPeriod, g.start + extra, g.start + extra + wantNow);
         if (!target || score > targetScore || (score === targetScore && cap > targetSize)) {
           target = g;
           targetExtra = extra;
@@ -499,7 +521,8 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
       }
 
       if (target) {
-        placeInGap(target, subject, subject.remaining, targetExtra);
+        placeInGap(target, subject, wantNow, targetExtra);
+        dailyStudyMinutesPlaced += wantNow;
         continue;
       }
 
@@ -525,8 +548,9 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
       if (!best) break; // no block left worth starting a session in — reported as a shortfall below
 
       const usable = best.end - best.start - bestExtra;
-      const chunk = Math.min(subject.remaining, maxStudyForCapacity(usable, sessionCap, staminaBreak));
+      const chunk = Math.min(wantNow, maxStudyForCapacity(usable, sessionCap, staminaBreak));
       placeInGap(best, subject, chunk, bestExtra);
+      dailyStudyMinutesPlaced += chunk;
     }
   }
 
@@ -563,12 +587,12 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
  * @param {string} input.sleepTime
  * @param {{name:string, start:string, end:string}[]} input.classes
  * @param {{id:string, name:string, duration:number, on:boolean, time:string}[]} input.meals
- * @param {{sessionCap:number, staminaBreak:number, earliestStudyTime?:string|null, latestStudyTime?:string|null}} input.prefs
+ * @param {{sessionCap:number, staminaBreak:number, earliestStudyTime?:string|null, latestStudyTime?:string|null, maxDailyStudyMinutes?:number|null}} input.prefs `maxDailyStudyMinutes` (V2-B) mirrors generateSchedule's own cap — locked study minutes already count toward it, and null/omitted leaves this function's result exactly as it always was.
  * @param {{name:string, start:number, end:number}[]} [input.lockedBlocks]
  * @returns {{ capacityMinutes: number, dayStart?: number, dayEnd?: number, error?: string }}
  */
 export function computeDayCapacity({ wakeTime, sleepTime, classes, meals, prefs, lockedBlocks }) {
-  const { sessionCap, staminaBreak, earliestStudyTime = null, latestStudyTime = null } = prefs;
+  const { sessionCap, staminaBreak, earliestStudyTime = null, latestStudyTime = null, maxDailyStudyMinutes = null } = prefs;
 
   const bounds = resolveDayBounds(wakeTime, sleepTime);
   if (bounds.error) return { capacityMinutes: 0, error: bounds.error };
@@ -602,9 +626,13 @@ export function computeDayCapacity({ wakeTime, sleepTime, classes, meals, prefs,
   });
   if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
 
-  const capacityMinutes = splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd)
+  const rawCapacityMinutes = splitGapsForStudyWindow(gaps, studyWindowStart, studyWindowEnd)
     .filter((g) => g.studyAllowed)
     .reduce((total, g) => total + maxStudyForCapacity(g.end - g.start, sessionCap, staminaBreak), 0);
 
-  return { capacityMinutes, dayStart, dayEnd };
+  if (maxDailyStudyMinutes == null) return { capacityMinutes: rawCapacityMinutes, dayStart, dayEnd };
+
+  const lockedStudyMinutes = lockedEvents.reduce((sum, b) => sum + (b.end - b.start), 0);
+  const dailyCapRemaining = Math.max(0, maxDailyStudyMinutes - lockedStudyMinutes);
+  return { capacityMinutes: Math.min(rawCapacityMinutes, dailyCapRemaining), dayStart, dayEnd };
 }

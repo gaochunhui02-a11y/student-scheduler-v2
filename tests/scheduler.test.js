@@ -289,6 +289,75 @@ scenario('7. Earliest/latest study time confines study placement (window)', () =
 });
 
 // ---------------------------------------------------------------------------
+scenario('8. Max daily study minutes caps total study placement (V2-B)', () => {
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '23:00', // 16 hours awake — far more physical room than either subject needs
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [
+      { name: 'A', minutes: 120 },
+      { name: 'B', minutes: 120 },
+    ],
+    prefs: { ...DEFAULT_PREFS, maxDailyStudyMinutes: 150 },
+  });
+  printEvents(result.events);
+
+  check('the first subject in queue order is fully scheduled', () => assert.equal(studyMinutesFor(result.events, 'A'), 120));
+  check('the second subject only gets what fits under the remaining cap', () => assert.equal(studyMinutesFor(result.events, 'B'), 30));
+  check('total study minutes placed across every subject never exceeds the cap', () => {
+    const total = result.events.filter((e) => e.type === 'study').reduce((sum, e) => sum + (e.end - e.start), 0);
+    assert.equal(total, 150);
+  });
+  check('the capped-out remainder is reported as a shortfall, same as a physical shortfall', () => {
+    assert.ok(result.notes.some((n) => n.includes('B') && n.includes('90')), `notes: ${JSON.stringify(result.notes)}`);
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+
+  const withoutCap = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '23:00',
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [
+      { name: 'A', minutes: 120 },
+      { name: 'B', minutes: 120 },
+    ],
+    prefs: DEFAULT_PREFS, // maxDailyStudyMinutes omitted entirely
+  });
+  check('with no cap set at all, both subjects are scheduled in full exactly as before this feature existed', () => {
+    assert.equal(studyMinutesFor(withoutCap.events, 'A'), 120);
+    assert.equal(studyMinutesFor(withoutCap.events, 'B'), 120);
+  });
+});
+
+// ---------------------------------------------------------------------------
+scenario('9. Max daily study minutes counts already-locked study time toward the cap', () => {
+  const lockedStart = timeToMinutes('09:00');
+  const result = generateSchedule({
+    wakeTime: '07:00',
+    sleepTime: '23:00',
+    classes: [],
+    meals: OFF_MEALS,
+    subjects: [{ name: 'New Subject', minutes: 120 }],
+    prefs: { ...DEFAULT_PREFS, maxDailyStudyMinutes: 100 },
+    lockedBlocks: [{ name: 'Already Locked', start: lockedStart, end: lockedStart + 60, sourceSubjectId: null }],
+  });
+  printEvents(result.events);
+
+  check('the locked 60 minutes count toward the cap, leaving only 40 for the new subject', () => {
+    assert.equal(studyMinutesFor(result.events, 'New Subject'), 40);
+  });
+  check('the locked block itself is echoed back unchanged', () => {
+    const locked = result.events.find((e) => e.name === 'Already Locked');
+    assert.ok(locked, 'locked block missing from output');
+    assert.equal(locked.start, lockedStart);
+    assert.equal(locked.locked, true);
+  });
+  check('no overlaps anywhere', () => assertNoOverlaps(result.events));
+});
+
+// ---------------------------------------------------------------------------
 console.log('\n------------------------');
 if (totalFailures > 0) {
   console.log(`${totalFailures} check(s) FAILED`);

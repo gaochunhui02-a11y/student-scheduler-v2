@@ -110,6 +110,48 @@ await scenario('computeDayCapacity surfaces the same day-bounds error generateSc
   });
 });
 
+await scenario('computeDayCapacity respects a maxDailyStudyMinutes cap (V2-B)', async () => {
+  const uncapped = computeDayCapacity({
+    wakeTime: '08:00',
+    sleepTime: '10:00', // 120 min awake -> 105 min of packable study, same as the plain-day scenario above
+    classes: [],
+    meals: [],
+    prefs: { sessionCap: 60, staminaBreak: 15 },
+  });
+  const capped = computeDayCapacity({
+    wakeTime: '08:00',
+    sleepTime: '10:00',
+    classes: [],
+    meals: [],
+    prefs: { sessionCap: 60, staminaBreak: 15, maxDailyStudyMinutes: 40 },
+  });
+  await check('with no cap set, capacity is unchanged from the plain-day case', () => assert.equal(uncapped.capacityMinutes, 105));
+  await check('a cap tighter than the physical capacity wins', () => assert.equal(capped.capacityMinutes, 40));
+});
+
+await scenario('computeDayCapacity counts already-locked study minutes toward the cap', async () => {
+  const result = computeDayCapacity({
+    wakeTime: '08:00',
+    sleepTime: '10:00',
+    classes: [],
+    meals: [],
+    prefs: { sessionCap: 60, staminaBreak: 15, maxDailyStudyMinutes: 50 },
+    lockedBlocks: [{ name: 'Already locked', start: 8 * 60, end: 8 * 60 + 30 }], // 30 min already locked
+  });
+  await check('only 20 of the 50-minute cap remains after the 30 already locked', () => assert.equal(result.capacityMinutes, 20));
+});
+
+await scenario('computeDayCapacity never lets a cap grant MORE than physically fits', async () => {
+  const result = computeDayCapacity({
+    wakeTime: '08:00',
+    sleepTime: '09:00', // only 60 min awake at all (the shortest day resolveDayBounds allows)
+    classes: [],
+    meals: [],
+    prefs: { sessionCap: 60, staminaBreak: 15, maxDailyStudyMinutes: 500 },
+  });
+  await check('a generous cap does not manufacture capacity that is not physically there', () => assert.equal(result.capacityMinutes, 60));
+});
+
 // ---------------------------------------------------------------------------
 // Part 2: classifyGroupRows / buildCandidateDates / allocateAcrossDays
 // (multiDayPlanner.js) — deterministic day-by-day allocation
