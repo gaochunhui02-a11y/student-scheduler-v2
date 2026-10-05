@@ -20,15 +20,15 @@
 
     <nav class="sidebar-nav" id="sidebarNav">
       <div class="nav-section">
-        <span class="nav-section-label" data-i18n="nav.sectionOverview">Overview</span>
+        <span class="nav-section-label" data-i18n="nav.sectionHome">Home</span>
         <button type="button" class="nav-item active" data-view-target="analyticsView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/></svg>
-          <span data-i18n="nav.home">Home</span>
+          <span data-i18n="nav.home">Dashboard</span>
         </button>
       </div>
 
       <div class="nav-section">
-        <span class="nav-section-label" data-i18n="nav.sectionPlanning">Planning</span>
+        <span class="nav-section-label" data-i18n="nav.sectionPlan">Plan</span>
         <button type="button" class="nav-item" data-scroll-target="plannerForm">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16.5h4"/></svg>
           <span data-i18n="nav.planner">Planner</span>
@@ -37,21 +37,29 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg>
           <span data-i18n="nav.week">Week</span>
         </button>
-        <button type="button" class="nav-item" data-view-target="boardView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2.2"/><circle cx="18" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M7.6 8 10.7 15.7M16.4 8 13.3 15.7"/></svg>
-          <span data-i18n="nav.board">Board</span>
-        </button>
-        <button type="button" class="nav-item" data-scroll-target="historyCard">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12.5" r="7.5"/><path d="M12 8.2v4.6l3 2.2"/><path d="M8.6 3.6 5 5.6"/></svg>
-          <span data-i18n="nav.history">History</span>
+        <button type="button" class="nav-item" data-scroll-target="studyList">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.3" y="5.9" width="2.4" height="2.4" rx="0.5"/><rect x="4.3" y="10.4" width="2.4" height="2.4" rx="0.5"/><rect x="4.3" y="14.9" width="2.4" height="2.4" rx="0.5"/><path d="M9.5 7.1h9.5M9.5 11.6h9.5M9.5 16.1h9.5"/></svg>
+          <span data-i18n="nav.tasks">Tasks</span>
         </button>
       </div>
 
       <div class="nav-section">
-        <span class="nav-section-label" data-i18n="nav.sectionTools">Tools</span>
+        <span class="nav-section-label" data-i18n="nav.sectionOrganize">Organize</span>
+        <button type="button" class="nav-item" data-view-target="boardView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2.2"/><circle cx="18" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M7.6 8 10.7 15.7M16.4 8 13.3 15.7"/></svg>
+          <span data-i18n="nav.board">Board</span>
+        </button>
         <button type="button" class="nav-item" data-scroll-target="calendarExportCard">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14.5" rx="2"/><path d="M4.5 9.5h15M8.5 3v3.5M15.5 3v3.5"/></svg>
           <span data-i18n="nav.calendar">Calendar</span>
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-section-label" data-i18n="nav.sectionReview">Review</span>
+        <button type="button" class="nav-item" data-scroll-target="historyCard">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12.5" r="7.5"/><path d="M12 8.2v4.6l3 2.2"/><path d="M8.6 3.6 5 5.6"/></svg>
+          <span data-i18n="nav.history">History</span>
         </button>
       </div>
 
