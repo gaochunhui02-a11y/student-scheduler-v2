@@ -161,6 +161,56 @@ scenario('C. buildTemplatePrefsPatch — the exact, deterministic write payload'
 });
 
 // ---------------------------------------------------------------------------
+scenario('D. Planning Presets (V2-B): Balanced, Deep Work, Light Study Day\'s daily cap', () => {
+  check('"max_daily_study_minutes" is an allow-listed field', () => {
+    assert.equal(isSupportedPrefField('max_daily_study_minutes'), true);
+  });
+
+  check('Balanced resets every one of its fields to the stock schema defaults', () => {
+    const patch = buildTemplatePrefsPatch(getQuickTemplate('balanced'));
+    assert.deepEqual(patch, {
+      session_cap_minutes: 60,
+      switch_break_minutes: 10,
+      min_block_minutes: 30,
+      preferred_study_period: 'none',
+      earliest_study_time: null,
+      latest_study_time: null,
+      max_daily_study_minutes: null,
+    });
+  });
+  check('applying Balanced to a schedule already at those defaults previews as no changes', () => {
+    const preview = buildTemplatePreview(getQuickTemplate('balanced'), {
+      session_cap_minutes: 60,
+      switch_break_minutes: 10,
+      min_block_minutes: 30,
+      preferred_study_period: 'none',
+      earliest_study_time: null,
+      latest_study_time: null,
+      max_daily_study_minutes: null,
+    });
+    assert.deepEqual(preview, []);
+  });
+  check('applying Balanced after Deep Work clears every Deep Work field back down, including the daily cap preference slot', () => {
+    const deepWorkPatch = buildTemplatePrefsPatch(getQuickTemplate('deepWork'));
+    const preview = buildTemplatePreview(getQuickTemplate('balanced'), deepWorkPatch);
+    const sessionCap = preview.find((c) => c.field === 'session_cap_minutes');
+    assert.deepEqual(sessionCap, { field: 'session_cap_minutes', from: 100, to: 60 });
+  });
+
+  check('Deep Work lengthens sessions, raises the minimum block, and lengthens the break — distinct from Project Work', () => {
+    const deepWork = buildTemplatePrefsPatch(getQuickTemplate('deepWork'));
+    const projectWork = buildTemplatePrefsPatch(getQuickTemplate('projectWork'));
+    assert.deepEqual(deepWork, { session_cap_minutes: 100, switch_break_minutes: 20, min_block_minutes: 60 });
+    assert.equal('switch_break_minutes' in projectWork, false, 'Project Work should not touch break length — that is what distinguishes it from Deep Work');
+  });
+
+  check('Light Study Day now also caps the day\'s total study minutes', () => {
+    const patch = buildTemplatePrefsPatch(getQuickTemplate('lightStudyDay'));
+    assert.equal(patch.max_daily_study_minutes, 90);
+  });
+});
+
+// ---------------------------------------------------------------------------
 console.log('\n------------------------');
 if (totalFailures > 0) {
   console.log(`${totalFailures} check(s) FAILED`);

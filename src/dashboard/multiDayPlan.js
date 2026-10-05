@@ -107,6 +107,7 @@ async function computeCapacityByDate(userId, dates, excludeSubjectIds) {
         staminaBreak: settings.stamina_break_minutes,
         earliestStudyTime: toHHMM(settings.earliest_study_time),
         latestStudyTime: toHHMM(settings.latest_study_time),
+        maxDailyStudyMinutes: settings.max_daily_study_minutes,
       },
       lockedBlocks,
     });

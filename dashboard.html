@@ -334,8 +334,12 @@
                 <label for="minBlockMinutes" data-i18n="prefs.minBlock">Minimum study block (min)</label>
                 <input type="number" id="minBlockMinutes" min="5" step="5">
               </div>
-              <div></div>
+              <div>
+                <label for="maxDailyStudyMinutes" data-i18n="prefs.maxDailyStudy">Max daily study (min)</label>
+                <input type="number" id="maxDailyStudyMinutes" min="5" step="5" placeholder="—">
+              </div>
             </div>
+            <p class="hint" data-i18n="prefs.maxDailyStudyHint">Leave blank for no daily limit.</p>
             <div class="row-2">
               <div>
                 <label for="earliestStudyTime" data-i18n="prefs.earliestTime">Earliest study time</label>

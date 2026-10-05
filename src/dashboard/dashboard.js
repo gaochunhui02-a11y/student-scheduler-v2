@@ -722,6 +722,7 @@ async function init(session) {
   const minBlockEl = document.getElementById('minBlockMinutes');
   const earliestStudyEl = document.getElementById('earliestStudyTime');
   const latestStudyEl = document.getElementById('latestStudyTime');
+  const maxDailyStudyEl = document.getElementById('maxDailyStudyMinutes');
 
   function updateDayLengthHint() {
     const hintEl = document.getElementById('dayLengthHint');
@@ -756,6 +757,10 @@ async function init(session) {
     const breakMinutes = parseInt(breakMinutesEl.value, 10);
     const minBlock = parseInt(minBlockEl.value, 10);
     if (!sessionCap || !minBlock || !Number.isFinite(breakMinutes) || breakMinutes < 0) return null;
+    // Optional (V2-B) — unlike the three fields above, a blank value here is
+    // a valid, meaningful choice ("no daily limit"), not an incomplete row,
+    // so it never blocks the rest of this save.
+    const maxDailyStudyRaw = maxDailyStudyEl ? parseInt(maxDailyStudyEl.value, 10) : NaN;
     return {
       preferred_study_period: preferredPeriodEl.value,
       session_cap_minutes: sessionCap,
@@ -763,6 +768,7 @@ async function init(session) {
       min_block_minutes: minBlock,
       earliest_study_time: earliestStudyEl.value || null,
       latest_study_time: latestStudyEl.value || null,
+      max_daily_study_minutes: Number.isFinite(maxDailyStudyRaw) && maxDailyStudyRaw > 0 ? maxDailyStudyRaw : null,
     };
   }
 
@@ -847,6 +853,7 @@ async function init(session) {
     min_block_minutes: 'prefs.minBlock',
     earliest_study_time: 'prefs.earliestTime',
     latest_study_time: 'prefs.latestTime',
+    max_daily_study_minutes: 'prefs.maxDailyStudy',
   };
   const PERIOD_LABEL_KEYS = { none: 'prefs.periodNone', morning: 'prefs.periodMorning', afternoon: 'prefs.periodAfternoon', evening: 'prefs.periodEvening' };
 
@@ -858,6 +865,7 @@ async function init(session) {
       min_block_minutes: parseInt(minBlockEl.value, 10) || null,
       earliest_study_time: earliestStudyEl.value || null,
       latest_study_time: latestStudyEl.value || null,
+      max_daily_study_minutes: maxDailyStudyEl ? parseInt(maxDailyStudyEl.value, 10) || null : null,
     };
   }
 
@@ -900,6 +908,7 @@ async function init(session) {
       if ('min_block_minutes' in patch) minBlockEl.value = patch.min_block_minutes;
       if ('earliest_study_time' in patch) earliestStudyEl.value = toHHMM(patch.earliest_study_time) || '';
       if ('latest_study_time' in patch) latestStudyEl.value = toHHMM(patch.latest_study_time) || '';
+      if ('max_daily_study_minutes' in patch && maxDailyStudyEl) maxDailyStudyEl.value = patch.max_daily_study_minutes || '';
       updateDayLengthHint();
       closeQuickTemplatesModal();
       flashSaved();
@@ -3007,6 +3016,7 @@ async function init(session) {
         preferredPeriod: schedule.preferred_study_period,
         earliestStudyTime: toHHMM(schedule.earliest_study_time) || null,
         latestStudyTime: toHHMM(schedule.latest_study_time) || null,
+        maxDailyStudyMinutes: schedule.max_daily_study_minutes || null,
       },
       lockedBlocks,
     });
@@ -3246,6 +3256,7 @@ async function init(session) {
     minBlockEl.value = schedule.min_block_minutes;
     earliestStudyEl.value = toHHMM(schedule.earliest_study_time);
     latestStudyEl.value = toHHMM(schedule.latest_study_time);
+    if (maxDailyStudyEl) maxDailyStudyEl.value = schedule.max_daily_study_minutes || '';
     updateDayLengthHint();
 
     try {

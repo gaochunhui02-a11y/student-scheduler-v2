@@ -18,6 +18,7 @@ export const SCHEDULE_PREF_FIELDS = [
   'min_block_minutes',
   'earliest_study_time',
   'latest_study_time',
+  'max_daily_study_minutes', // V2-B — generateSchedule()/computeDayCapacity() now actually enforce this (scheduler.js)
 ];
 
 // Each template touches only the 1-2 fields its own description in the
@@ -25,6 +26,24 @@ export const SCHEDULE_PREF_FIELDS = [
 // narrower, more honest preview, and less chance of silently overwriting an
 // unrelated preference the student set on purpose.
 export const QUICK_TEMPLATES = [
+  {
+    key: 'balanced',
+    nameKey: 'quickTemplates.balanced',
+    descriptionKey: 'quickTemplates.balancedDesc',
+    focusKeys: ['quickTemplates.focusModerateSessions', 'quickTemplates.focusStandardBreaks', 'quickTemplates.focusNoDailyCap'],
+    // The stock schema.sql/migration-0001 defaults — this preset exists to
+    // get BACK to a sensible baseline after trying a more extreme one, not
+    // to introduce a new idea of its own.
+    prefs: {
+      session_cap_minutes: 60,
+      switch_break_minutes: 10,
+      min_block_minutes: 30,
+      preferred_study_period: 'none',
+      earliest_study_time: null,
+      latest_study_time: null,
+      max_daily_study_minutes: null,
+    },
+  },
   {
     key: 'examWeek',
     nameKey: 'quickTemplates.examWeek',
@@ -40,6 +59,17 @@ export const QUICK_TEMPLATES = [
     prefs: { earliest_study_time: null, latest_study_time: null },
   },
   {
+    key: 'deepWork',
+    nameKey: 'quickTemplates.deepWork',
+    descriptionKey: 'quickTemplates.deepWorkDesc',
+    focusKeys: ['quickTemplates.focusLongerBlocks', 'quickTemplates.focusFewerSwitches', 'quickTemplates.focusLongerBreaksDeep'],
+    // Longer sessions, a higher bar before a new session is worth starting
+    // (fewer fragmented switches), and a longer recovery break between
+    // sessions — distinct from Project Work below, which lengthens
+    // sessions/blocks but leaves break length at its default.
+    prefs: { session_cap_minutes: 100, switch_break_minutes: 20, min_block_minutes: 60 },
+  },
+  {
     key: 'busyDay',
     nameKey: 'quickTemplates.busyDay',
     descriptionKey: 'quickTemplates.busyDayDesc',
@@ -50,8 +80,10 @@ export const QUICK_TEMPLATES = [
     key: 'lightStudyDay',
     nameKey: 'quickTemplates.lightStudyDay',
     descriptionKey: 'quickTemplates.lightStudyDayDesc',
-    focusKeys: ['quickTemplates.focusModerateWorkload', 'quickTemplates.focusRelaxedBreaks'],
-    prefs: { session_cap_minutes: 40, switch_break_minutes: 15 },
+    focusKeys: ['quickTemplates.focusModerateWorkload', 'quickTemplates.focusRelaxedBreaks', 'quickTemplates.focusDailyCap'],
+    // V2-B: "light" now actually caps the day's total, not just session
+    // shape — generateSchedule() enforces max_daily_study_minutes directly.
+    prefs: { session_cap_minutes: 40, switch_break_minutes: 15, max_daily_study_minutes: 90 },
   },
   {
     key: 'projectWork',
