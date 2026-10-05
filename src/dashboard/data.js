@@ -181,6 +181,78 @@ export async function deleteClass(id) {
   if (error) throw error;
 }
 
+// ---------------- recurring classes (V2-B) ----------------
+// Thin reads/writes only — the actual "what does date X look like" logic
+// lives in src/dashboard/recurringClasses.js (buildEffectiveClassesForDate),
+// which is pure and never called from here. class_series/
+// class_series_exceptions are both user-scoped directly (not tied to any
+// one schedule_id), so loading EVERY series/exception for the user once is
+// the right shape here — a series spans many dates/schedules by design.
+
+export async function listClassSeries(userId) {
+  const { data, error } = await supabase.from('class_series').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function createClassSeries(userId, fields) {
+  const { data, error } = await supabase
+    .from('class_series')
+    .insert({ user_id: userId, ...fields })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateClassSeries(id, fields) {
+  const { data, error } = await supabase
+    .from('class_series')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Deletes the series; via the 0006 migration's ON DELETE CASCADE on
+// class_series_exceptions.series_id, every per-occurrence override for it
+// is deleted too — removing a whole recurrence never leaves orphaned
+// exception rows behind.
+export async function deleteClassSeries(id) {
+  const { error } = await supabase.from('class_series').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function listClassSeriesExceptions(userId) {
+  const { data, error } = await supabase.from('class_series_exceptions').select('*').eq('user_id', userId);
+  if (error) throw error;
+  return data;
+}
+
+// One row per (series_id, exception_date) — the 0006 migration's unique
+// constraint means a second call for the SAME series+date replaces the
+// first rather than creating a duplicate (e.g. editing an occurrence that
+// was already skipped turns the skip into a modify instead of stacking
+// two exceptions for the same day).
+export async function upsertClassSeriesException(userId, fields) {
+  const { data, error } = await supabase
+    .from('class_series_exceptions')
+    .upsert({ user_id: userId, ...fields }, { onConflict: 'series_id,exception_date' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Reverts one occurrence back to the series default (removes its skip/
+// modify override entirely) without touching the series or any other date.
+export async function deleteClassSeriesException(id) {
+  const { error } = await supabase.from('class_series_exceptions').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ---------------- study subjects ----------------
 
 export async function listStudySubjects(scheduleId) {
