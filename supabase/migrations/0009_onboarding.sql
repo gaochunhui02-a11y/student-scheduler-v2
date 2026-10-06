@@ -4,29 +4,30 @@
 -- whole file -> Run. Safe to run on a database that already has schema.sql
 -- and migrations 0001-0008 applied.
 --
+-- ADDITIVE ONLY. Adds one nullable column with no default. It does not
+-- write to any existing row, rename anything, drop anything, or change any
+-- existing column/constraint/policy. The production v1.x app never reads
+-- or writes this column (it only selects profiles.name), so it is
+-- unaffected.
+--
 -- What's new:
 --   profiles.onboarding_completed_at — when this user finished or skipped
---     the first-run setup. null = never shown/finished.
+--     the first-run setup. null = not recorded.
 --
--- !! READ BEFORE RUNNING: this file also contains a one-time BACKFILL that
--- writes to EVERY existing profiles row (sets onboarding_completed_at for
--- users who existed before this migration, so no current user is ever
--- sent through onboarding). It only fills a brand-new, previously-empty
--- column and touches nothing else, but it IS a data write across all
--- users — do not run it against production without a deliberate sign-off.
+-- Existing users are NOT backfilled. They don't need to be: the app only
+-- shows onboarding when (a) this column is null/unreadable AND (b) the
+-- account has no classes or study tasks at all AND (c) this browser hasn't
+-- recorded a finish/skip. Any existing user with planning data is skipped
+-- by (b) — the same fallback the app uses when this column doesn't exist.
+-- The only thing this column adds is remembering a finish/skip across
+-- devices for accounts that have no data yet.
 --
--- The app does not depend on this backfill for safety: it already skips
--- onboarding for anyone who has any classes or study tasks saved, and
--- remembers a finish/skip in the browser too. The backfill just makes the
--- server-side record match.
+-- An optional, separate backfill script lives at
+-- supabase/optional/0009b_onboarding_backfill_OPTIONAL.sql. It is not part
+-- of this migration and is not needed for correct behavior.
 
 alter table public.profiles
   add column if not exists onboarding_completed_at timestamptz;
-
--- One-time backfill for users who existed before this migration.
-update public.profiles
-  set onboarding_completed_at = coalesce(created_at, now())
-  where onboarding_completed_at is null;
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security — no changes needed. schema.sql's "profiles: read
