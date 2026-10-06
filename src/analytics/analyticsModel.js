@@ -64,7 +64,7 @@ export function attachDatesToItems(items, schedules) {
 // block's own duration and defaulting to 0 for a block never touched by
 // Partial Completion — the exact same 0 the old "only if completed" gate
 // produced, so this is a strict accuracy improvement, never a regression.
-function effectiveCompletedMinutes(item, duration) {
+export function effectiveCompletedMinutes(item, duration) {
   if (item.completed) return duration;
   const partial = Number.isFinite(item.completed_minutes) ? item.completed_minutes : 0;
   return Math.min(Math.max(0, partial), duration);

@@ -127,8 +127,11 @@ export async function listScheduleHistory(userId) {
   const [schedulesRes, classesRes, subjectsRes, itemsRes] = await Promise.all([
     supabase.from('schedules').select('id, for_date').eq('user_id', userId).order('for_date', { ascending: false }),
     supabase.from('classes').select('schedule_id').eq('user_id', userId),
-    supabase.from('study_subjects').select('schedule_id').eq('user_id', userId),
-    supabase.from('schedule_items').select('schedule_id, item_type, completed').eq('user_id', userId),
+    supabase.from('study_subjects').select('schedule_id, name').eq('user_id', userId),
+    supabase
+      .from('schedule_items')
+      .select('schedule_id, item_type, name, completed, start_minutes, end_minutes, completed_minutes, carried_over_minutes, missed')
+      .eq('user_id', userId),
   ]);
   if (schedulesRes.error) throw schedulesRes.error;
   if (classesRes.error) throw classesRes.error;

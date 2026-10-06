@@ -72,6 +72,7 @@ import {
   canStartFocus,
 } from './focusMode.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
+import { filterHistory, collectHistorySubjects, countActiveHistoryFilters } from './history.js';
 import { validateCopyDestination } from './copySchedule.js';
 import { buildSmartTasks, computeAvailableStudyMinutes, sortTasksForDisplay } from './smartPriority.js';
 import { QUICK_TEMPLATES, getQuickTemplate, buildTemplatePreview, buildTemplatePrefsPatch } from './quickTemplates.js';
@@ -3408,9 +3409,64 @@ async function init(session) {
   // ---------------- history ----------------
   const historyListEl = document.getElementById('historyList');
 
-  function renderHistoryList(history, activeDate) {
+  // ---------------- History filters (V2-E) ----------------
+  // Client-side over the already-loaded history rows (filterHistory in
+  // history.js) — filtering never refetches or changes anything stored.
+  const historyFilterFromEl = document.getElementById('historyFilterFrom');
+  const historyFilterToEl = document.getElementById('historyFilterTo');
+  const historyFilterSubjectEl = document.getElementById('historyFilterSubject');
+  const historyFilterStatusEl = document.getElementById('historyFilterStatus');
+  const historyFiltersCountEl = document.getElementById('historyFiltersCount');
+  const historyFiltersClearBtn = document.getElementById('historyFiltersClear');
+  let historyRows = [];
+
+  function readHistoryFilters() {
+    return {
+      from: historyFilterFromEl ? historyFilterFromEl.value : '',
+      to: historyFilterToEl ? historyFilterToEl.value : '',
+      subject: historyFilterSubjectEl ? historyFilterSubjectEl.value : '',
+      status: historyFilterStatusEl ? historyFilterStatusEl.value : 'all',
+    };
+  }
+
+  function refreshHistorySubjectOptions() {
+    if (!historyFilterSubjectEl) return;
+    const current = historyFilterSubjectEl.value;
+    const names = collectHistorySubjects(historyRows);
+    historyFilterSubjectEl.innerHTML = `<option value="">${escapeAttr(t('history.allSubjects'))}</option>${names
+      .map((n) => `<option value="${escapeAttr(n)}">${escapeAttr(n)}</option>`)
+      .join('')}`;
+    historyFilterSubjectEl.value = names.includes(current) ? current : '';
+  }
+
+  function applyHistoryFilters() {
+    const filters = readHistoryFilters();
+    const active = countActiveHistoryFilters(filters);
+    if (historyFiltersCountEl) {
+      historyFiltersCountEl.hidden = active === 0;
+      historyFiltersCountEl.textContent = `(${active})`;
+    }
+    const filtered = filterHistory(historyRows, filters);
+    renderHistoryList(filtered, schedule ? schedule.for_date : null, historyRows.length > 0 && active > 0);
+  }
+
+  [historyFilterFromEl, historyFilterToEl, historyFilterSubjectEl, historyFilterStatusEl].forEach((filterEl) => {
+    if (filterEl) filterEl.addEventListener('change', applyHistoryFilters);
+  });
+  if (historyFiltersClearBtn) {
+    historyFiltersClearBtn.addEventListener('click', () => {
+      if (historyFilterFromEl) historyFilterFromEl.value = '';
+      if (historyFilterToEl) historyFilterToEl.value = '';
+      if (historyFilterSubjectEl) historyFilterSubjectEl.value = '';
+      if (historyFilterStatusEl) historyFilterStatusEl.value = 'all';
+      applyHistoryFilters();
+    });
+  }
+
+  function renderHistoryList(history, activeDate, filtered = false) {
     if (!history || history.length === 0) {
-      historyListEl.innerHTML = `<div class="placeholder">${escapeAttr(t('history.noSavedDates'))}</div>`;
+      const key = filtered ? 'history.noMatches' : 'history.noSavedDates';
+      historyListEl.innerHTML = `<div class="placeholder">${escapeAttr(t(key))}</div>`;
       return;
     }
     historyListEl.innerHTML = history
@@ -3418,11 +3474,23 @@ async function init(session) {
         const dateLabel = formatDateLabel(h.forDate);
         const bits = [t('history.classCount').replace('{count}', h.classCount), t('history.subjectCount').replace('{count}', h.subjectCount)];
         if (h.studyBlockCount > 0) bits.push(t('history.completionPercent').replace('{percent}', h.completionPercent));
+        // V2-E: the minutes behind the percentage, plus carried-over and
+        // missed work only when there is some.
+        const minuteBits = [];
+        if (h.plannedMinutes > 0) {
+          minuteBits.push(`${t('analytics.planned')} ${formatDuration(h.plannedMinutes)}`);
+          minuteBits.push(`${t('analytics.completed')} ${formatDuration(h.completedMinutes)}`);
+        }
+        if (h.carriedOverMinutes > 0) minuteBits.push(`${t('history.carriedOver')} ${formatDuration(h.carriedOverMinutes)}`);
+        const missedBadge = h.missedBlockCount > 0
+          ? `<span class="tl-badge tl-badge-missed">${escapeAttr(t('history.missedCount').replace('{count}', h.missedBlockCount))}</span>`
+          : '';
         return `
           <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}" tabindex="0" role="button">
             <div class="history-main">
-              <span class="history-date">${escapeAttr(dateLabel)}</span>
+              <span class="history-date">${escapeAttr(dateLabel)} ${missedBadge}</span>
               <span class="history-stats">${escapeAttr(bits.join(' · '))}</span>
+              ${minuteBits.length > 0 ? `<span class="history-stats history-minutes">${escapeAttr(minuteBits.join(' · '))}</span>` : ''}
             </div>
             <span class="history-arrow" aria-hidden="true">→</span>
           </div>
@@ -3436,8 +3504,9 @@ async function init(session) {
       const history = await listScheduleHistory(userId);
       // only dates the user actually put something into — an empty row from
       // just browsing through with Prev/Next isn't a "saved schedule" worth listing
-      const visible = history.filter((h) => h.classCount > 0 || h.subjectCount > 0 || h.studyBlockCount > 0);
-      renderHistoryList(visible, schedule ? schedule.for_date : null);
+      historyRows = history.filter((h) => h.classCount > 0 || h.subjectCount > 0 || h.studyBlockCount > 0);
+      refreshHistorySubjectOptions();
+      applyHistoryFilters();
     } catch (e) {
       console.error('Could not load history:', e);
     }

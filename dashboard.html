@@ -365,6 +365,24 @@
       <div class="planner-tools-grid">
         <div class="card" id="historyCard">
           <h2 data-i18n="history.title">History</h2>
+          <details class="history-filters" id="historyFilters">
+            <summary class="history-filters-summary"><span data-i18n="history.filters">Filters</span> <span class="history-filters-count" id="historyFiltersCount" hidden></span></summary>
+            <div class="history-filters-grid">
+              <label><span data-i18n="history.filterFrom">From</span><input type="date" id="historyFilterFrom"></label>
+              <label><span data-i18n="history.filterTo">To</span><input type="date" id="historyFilterTo"></label>
+              <label><span data-i18n="taskFilter.subjectLabel">Subject</span><select id="historyFilterSubject"></select></label>
+              <label><span data-i18n="history.filterStatus">Status</span>
+                <select id="historyFilterStatus">
+                  <option value="all" data-i18n="history.statusAll">All days</option>
+                  <option value="completed" data-i18n="history.statusCompleted">Fully completed</option>
+                  <option value="incomplete" data-i18n="history.statusIncomplete">Not finished</option>
+                  <option value="missed" data-i18n="history.statusMissed">Has missed sessions</option>
+                  <option value="carried" data-i18n="history.statusCarried">Has carried-over work</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" class="btn-secondary history-filters-clear" id="historyFiltersClear" data-i18n="history.clearFilters">Clear filters</button>
+          </details>
           <div id="historyList"><div class="placeholder" data-i18n="history.noSavedDates">No saved dates yet.</div></div>
         </div>
 
