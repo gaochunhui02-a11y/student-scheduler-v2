@@ -221,7 +221,16 @@ scenario('G. Duplicate notification prevention (shouldNotify / markNotified)', (
 // ---------------------------------------------------------------------------
 scenario('H. Settings defaults (normalizeNotificationSettings)', () => {
   check('both reminder kinds default OFF and the lead time defaults to 10 — opt-in, never assumed', () => {
-    assert.deepEqual(DEFAULT_NOTIFICATION_SETTINGS, { studyRemindersEnabled: false, deadlineRemindersEnabled: false, leadMinutes: 10 });
+    // V2-F grew the shape: deadline sub-options default on, the new missed
+    // reminder defaults off — every reminder KIND is still opt-in.
+    assert.deepEqual(DEFAULT_NOTIFICATION_SETTINGS, {
+      studyRemindersEnabled: false,
+      deadlineRemindersEnabled: false,
+      leadMinutes: 10,
+      deadlineDueToday: true,
+      deadlineDueTomorrow: true,
+      missedRemindersEnabled: false,
+    });
   });
   check('null/undefined/garbage stored settings normalize to the full default object', () => {
     assert.deepEqual(normalizeNotificationSettings(null), DEFAULT_NOTIFICATION_SETTINGS);

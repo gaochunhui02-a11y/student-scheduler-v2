@@ -37,6 +37,10 @@ import {
   buildDeadlineReminderKey,
   shouldNotify,
   markNotified,
+  isDeadlineReminderTypeEnabled,
+  isMissedReminderDue,
+  buildMissedReminderKey,
+  formatMissedReminderText,
 } from './notificationsModel.js';
 
 const SETTINGS_STORAGE_KEY = 'student-scheduler-notification-settings';
@@ -72,6 +76,11 @@ export function initNotificationsSection(userId, hostApi = {}) {
   const studyToggle = document.getElementById('studyReminderToggle');
   const deadlineToggle = document.getElementById('deadlineReminderToggle');
   const leadSelect = document.getElementById('reminderLeadSelect');
+  const dueTodayToggle = document.getElementById('deadlineDueTodayToggle');
+  const dueTomorrowToggle = document.getElementById('deadlineDueTomorrowToggle');
+  const missedToggle = document.getElementById('missedReminderToggle');
+  const deadlineSubOptions = document.getElementById('deadlineSubOptions');
+  const leadRow = document.getElementById('reminderLeadRow');
 
   // The settings card isn't on every page (only dashboard.html) — nothing
   // to wire up elsewhere, but the caller can still exist harmlessly.
@@ -128,12 +137,45 @@ export function initNotificationsSection(userId, hostApi = {}) {
     studyToggle.addEventListener('change', () => {
       settings = { ...settings, studyRemindersEnabled: studyToggle.checked };
       persist();
+      refreshDependentControls();
     });
   }
+  // Sub-options only matter while their parent is on — dimmed otherwise.
+  function refreshDependentControls() {
+    if (deadlineSubOptions) deadlineSubOptions.classList.toggle('is-disabled', !settings.deadlineRemindersEnabled);
+    [dueTodayToggle, dueTomorrowToggle].forEach((el) => {
+      if (el) el.disabled = !settings.deadlineRemindersEnabled;
+    });
+    if (leadRow) leadRow.classList.toggle('is-disabled', !settings.studyRemindersEnabled);
+    if (leadSelect) leadSelect.disabled = !settings.studyRemindersEnabled;
+  }
+
   if (deadlineToggle) {
     deadlineToggle.checked = settings.deadlineRemindersEnabled;
     deadlineToggle.addEventListener('change', () => {
       settings = { ...settings, deadlineRemindersEnabled: deadlineToggle.checked };
+      persist();
+      refreshDependentControls();
+    });
+  }
+  if (dueTodayToggle) {
+    dueTodayToggle.checked = settings.deadlineDueToday;
+    dueTodayToggle.addEventListener('change', () => {
+      settings = { ...settings, deadlineDueToday: dueTodayToggle.checked };
+      persist();
+    });
+  }
+  if (dueTomorrowToggle) {
+    dueTomorrowToggle.checked = settings.deadlineDueTomorrow;
+    dueTomorrowToggle.addEventListener('change', () => {
+      settings = { ...settings, deadlineDueTomorrow: dueTomorrowToggle.checked };
+      persist();
+    });
+  }
+  if (missedToggle) {
+    missedToggle.checked = settings.missedRemindersEnabled;
+    missedToggle.addEventListener('change', () => {
+      settings = { ...settings, missedRemindersEnabled: missedToggle.checked };
       persist();
     });
   }
@@ -146,6 +188,7 @@ export function initNotificationsSection(userId, hostApi = {}) {
   }
 
   refreshPermissionUI();
+  refreshDependentControls();
 
   function canFireNotifications() {
     return isNotificationApiSupported() && Notification.permission === 'granted';
@@ -207,7 +250,7 @@ export function initNotificationsSection(userId, hostApi = {}) {
 
     (subjects || []).forEach((s) => {
       const type = classifyDeadlineReminderType(s.due_date, today);
-      if (!type) return;
+      if (!type || !isDeadlineReminderTypeEnabled(settings, type)) return;
       const key = buildDeadlineReminderKey(s.id, type);
       if (!shouldNotify(key, notifiedKeys)) return;
       notifiedKeys = markNotified(notifiedKeys, key);
@@ -219,7 +262,27 @@ export function initNotificationsSection(userId, hostApi = {}) {
     });
   }
 
+  // V2-F: "this session ended without being logged" — same in-memory,
+  // today-only read as study reminders, at most once per block per session.
+  function checkMissedReminders() {
+    if (!settings.missedRemindersEnabled || !canFireNotifications()) return;
+    if (typeof hostApi.getCurrentScheduleDate !== 'function' || typeof hostApi.getTodayDateStr !== 'function') return;
+    if (hostApi.getCurrentScheduleDate() !== hostApi.getTodayDateStr()) return;
+    const items = typeof hostApi.getScheduleItemsForReminders === 'function' ? hostApi.getScheduleItemsForReminders() : [];
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    (items || []).forEach((item) => {
+      if (!isMissedReminderDue(item, nowMinutes)) return;
+      const key = buildMissedReminderKey(item.id);
+      if (!shouldNotify(key, notifiedKeys)) return;
+      notifiedKeys = markNotified(notifiedKeys, key);
+      fireNotification(t('notifications.missedReminderTitle'), formatMissedReminderText(item.name, { endedNotDone: t('notifications.missedEndedNotDone') }));
+    });
+  }
+
   setInterval(checkStudyReminders, STUDY_POLL_MS);
+  setInterval(checkMissedReminders, STUDY_POLL_MS);
+  setTimeout(checkMissedReminders, FIRST_STUDY_CHECK_DELAY_MS + 1000);
   setInterval(checkDeadlineReminders, DEADLINE_POLL_MS);
   setTimeout(checkStudyReminders, FIRST_STUDY_CHECK_DELAY_MS);
   setTimeout(checkDeadlineReminders, FIRST_DEADLINE_CHECK_DELAY_MS);

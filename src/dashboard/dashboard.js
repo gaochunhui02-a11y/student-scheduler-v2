@@ -33,6 +33,7 @@ import {
   listSchedulesInRange,
   listScheduleItemsForScheduleIds,
   listScheduleItemsForSourceSubjectIds,
+  fetchAllUserDataForExport,
   listStudySubjectsForScheduleIds,
   listClassesForScheduleIds,
   listUpcomingStudySubjects,
@@ -99,6 +100,7 @@ import { initCalendarSection } from '../calendar/calendar.js';
 import { initAgendaSection } from '../calendar/agenda.js';
 import { initCommandPalette } from '../shared/commandPaletteView.js';
 import { isPaletteShortcut } from '../shared/commandPalette.js';
+import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -644,6 +646,111 @@ async function init(session) {
   const settingsOpenCalendarBtn = document.getElementById('settingsOpenCalendarBtn');
   if (settingsOpenCalendarBtn) {
     settingsOpenCalendarBtn.addEventListener('click', () => openCalendarCard('calendarExportCard'));
+  }
+
+  // ---------------- Settings tabs, Planner summary, Data export (V2-F) ----------------
+  // One panel visible at a time (progressive disclosure, not one long page).
+  // Arrow keys move between tabs per the WAI-ARIA tabs pattern.
+  const settingsTabButtons = Array.from(document.querySelectorAll('.settings-tab'));
+  function selectSettingsTab(key, { focus = false } = {}) {
+    settingsTabButtons.forEach((tab) => {
+      const on = tab.dataset.settingsTab === key;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      tab.tabIndex = on ? 0 : -1;
+      if (on && focus) tab.focus();
+      const panel = document.getElementById(`settingsPanel-${tab.dataset.settingsTab}`);
+      if (panel) panel.hidden = !on;
+    });
+    if (key === 'planner') renderSettingsPrefsSummary();
+  }
+  settingsTabButtons.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectSettingsTab(tab.dataset.settingsTab));
+    tab.addEventListener('keydown', (e) => {
+      const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        const target = settingsTabButtons[e.key === 'Home' ? 0 : settingsTabButtons.length - 1];
+        selectSettingsTab(target.dataset.settingsTab, { focus: true });
+        return;
+      }
+      if (!delta) return;
+      e.preventDefault();
+      const next = settingsTabButtons[(index + delta + settingsTabButtons.length) % settingsTabButtons.length];
+      selectSettingsTab(next.dataset.settingsTab, { focus: true });
+    });
+  });
+
+  // Read-only summary of the Planner's current day preferences — the same
+  // fields and formatting Planning presets already preview, never a second
+  // set of "global defaults" that wouldn't actually be used.
+  const settingsPrefsSummaryEl = document.getElementById('settingsPrefsSummary');
+  function renderSettingsPrefsSummary() {
+    if (!settingsPrefsSummaryEl) return;
+    const prefs = currentSchedulePrefs();
+    settingsPrefsSummaryEl.innerHTML = '';
+    ['preferred_study_period', 'session_cap_minutes', 'switch_break_minutes', 'min_block_minutes', 'max_daily_study_minutes'].forEach((field) => {
+      const dt = document.createElement('dt');
+      dt.textContent = t(PREF_LABEL_KEYS[field]);
+      const dd = document.createElement('dd');
+      dd.textContent = formatPrefValue(field, prefs[field]);
+      settingsPrefsSummaryEl.appendChild(dt);
+      settingsPrefsSummaryEl.appendChild(dd);
+    });
+    if (schedule) {
+      const dt = document.createElement('dt');
+      dt.textContent = t('settings.prefsForDate');
+      const dd = document.createElement('dd');
+      dd.textContent = formatDateLabel(schedule.for_date);
+      settingsPrefsSummaryEl.prepend(dd);
+      settingsPrefsSummaryEl.prepend(dt);
+    }
+  }
+  const settingsOpenTemplatesBtn = document.getElementById('settingsOpenTemplatesBtn');
+  if (settingsOpenTemplatesBtn) {
+    settingsOpenTemplatesBtn.addEventListener('click', () => {
+      jumpFromSettingsToPlanner('plannerForm');
+      openQuickTemplatesModal();
+    });
+  }
+
+  const settingsExportBtn = document.getElementById('settingsExportDataBtn');
+  const settingsExportStatusEl = document.getElementById('settingsExportStatus');
+  if (settingsExportBtn) {
+    settingsExportBtn.addEventListener('click', async () => {
+      settingsExportBtn.disabled = true;
+      if (settingsExportStatusEl) {
+        settingsExportStatusEl.hidden = false;
+        settingsExportStatusEl.classList.remove('hint-error');
+        settingsExportStatusEl.textContent = t('settings.exportPreparing');
+      }
+      try {
+        const { tables, errors } = await fetchAllUserDataForExport(userId, EXPORT_TABLES);
+        const payload = buildExportPayload({ tables, errors, exportedAt: new Date().toISOString() });
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = buildExportFilename(addDaysToDateStr(tomorrowDateStr(), -1));
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        if (settingsExportStatusEl) {
+          let msg = t('settings.exportDone').replace('{count}', String(totalExportedRows(payload)));
+          if (payload.skipped.length > 0) msg += ` ${t('settings.exportSkipped').replace('{tables}', payload.skipped.map((x) => x.table).join(', '))}`;
+          settingsExportStatusEl.textContent = msg;
+        }
+      } catch (err) {
+        console.error('Could not export data:', err);
+        if (settingsExportStatusEl) {
+          settingsExportStatusEl.classList.add('hint-error');
+          settingsExportStatusEl.textContent = t('settings.exportFailed');
+        }
+      } finally {
+        settingsExportBtn.disabled = false;
+      }
+    });
   }
 
   const settingsSection = { onShow: () => syncSettingsControls() };

@@ -16,11 +16,25 @@ import { daysBetween } from '../analytics/analyticsModel.js';
 export const VALID_LEAD_MINUTES = [5, 10, 15, 30];
 export const DEFAULT_LEAD_MINUTES = 10;
 
+// V2-F adds finer control without changing what existing users get:
+//   - deadline reminders split into "due today" / "due tomorrow" (both on
+//     by default, so a user who had deadline reminders on keeps both)
+//   - a new "missed session" reminder, off by default like every kind
 export const DEFAULT_NOTIFICATION_SETTINGS = {
   studyRemindersEnabled: false,
   deadlineRemindersEnabled: false,
   leadMinutes: DEFAULT_LEAD_MINUTES,
+  deadlineDueToday: true,
+  deadlineDueTomorrow: true,
+  missedRemindersEnabled: false,
 };
+
+// How long after a block ends before it counts as missed (some slack for
+// finishing a little late), and how long after that the reminder is still
+// worth sending — past that, opening the app in the evening must not dump
+// a reminder for every morning block at once.
+export const MISSED_GRACE_MINUTES = 15;
+export const MISSED_WINDOW_MINUTES = 180;
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -44,7 +58,21 @@ export function normalizeNotificationSettings(raw) {
     studyRemindersEnabled: source.studyRemindersEnabled === true,
     deadlineRemindersEnabled: source.deadlineRemindersEnabled === true,
     leadMinutes: normalizeLeadMinutes(source.leadMinutes),
+    // Sub-options default ON (only `false` turns them off), so settings
+    // saved before V2-F keep firing both kinds of deadline reminder.
+    deadlineDueToday: source.deadlineDueToday !== false,
+    deadlineDueTomorrow: source.deadlineDueTomorrow !== false,
+    missedRemindersEnabled: source.missedRemindersEnabled === true,
   };
+}
+
+// Whether a classified deadline reminder ('due_today' / 'due_tomorrow') is
+// switched on, given the master toggle and its sub-option.
+export function isDeadlineReminderTypeEnabled(settings, reminderType) {
+  if (!settings || !settings.deadlineRemindersEnabled) return false;
+  if (reminderType === 'due_today') return settings.deadlineDueToday !== false;
+  if (reminderType === 'due_tomorrow') return settings.deadlineDueTomorrow !== false;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +150,36 @@ export function classifyDeadlineReminderType(dueDate, todayDateStr) {
 export function formatDeadlineReminderText(subjectName, reminderType, labels = {}) {
   const name = typeof subjectName === 'string' && subjectName.trim() ? subjectName.trim() : (labels.untitled || 'Task');
   const suffix = reminderType === 'due_today' ? labels.dueToday || 'is due today' : labels.dueTomorrow || 'is due tomorrow';
+  return `${name} ${suffix}`;
+}
+
+// ---------------------------------------------------------------------------
+// Missed-session reminders (V2-F)
+// ---------------------------------------------------------------------------
+
+// A study block that has ended (plus a grace period) with nothing logged
+// as done: not completed, not already flagged Missed by the student, and
+// its logged minutes short of the full block. Only fires inside a window
+// after the block ends, so reopening the app hours later doesn't produce
+// a burst of stale reminders. Same absolute-minutes space as above.
+export function isMissedReminderDue(item, nowMinutes, { graceMinutes = MISSED_GRACE_MINUTES, windowMinutes = MISSED_WINDOW_MINUTES } = {}) {
+  if (!item || item.type !== 'study' || !item.id) return false;
+  if (item.completed === true || item.missed === true) return false;
+  if (!Number.isFinite(item.start) || !Number.isFinite(item.end) || !Number.isFinite(nowMinutes)) return false;
+  const duration = item.end - item.start;
+  const logged = Number.isFinite(item.completedMinutes) ? item.completedMinutes : 0;
+  if (duration <= 0 || logged >= duration) return false;
+  const dueAt = item.end + graceMinutes;
+  return nowMinutes >= dueAt && nowMinutes < dueAt + windowMinutes;
+}
+
+export function buildMissedReminderKey(scheduleItemId) {
+  return `missed:${scheduleItemId}`;
+}
+
+export function formatMissedReminderText(itemName, labels = {}) {
+  const name = typeof itemName === 'string' && itemName.trim() ? itemName.trim() : (labels.untitled || 'Study session');
+  const suffix = labels.endedNotDone || "ended — mark it done, log partial time, or carry it over";
   return `${name} ${suffix}`;
 }
 

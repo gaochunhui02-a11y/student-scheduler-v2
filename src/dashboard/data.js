@@ -448,6 +448,23 @@ export async function listScheduleItemsForSourceSubjectIds(subjectIds) {
   return data;
 }
 
+// V2-F: Settings -> Data -> Export. Reads every user-owned table (read-only,
+// RLS-scoped). A table that can't be read (e.g. its migration isn't applied
+// yet) is reported in `errors` instead of failing the whole export.
+export async function fetchAllUserDataForExport(userId, tableNames) {
+  const tables = {};
+  const errors = {};
+  await Promise.all(
+    tableNames.map(async (name) => {
+      const column = name === 'profiles' ? 'id' : 'user_id';
+      const { data, error } = await supabase.from(name).select('*').eq(column, userId);
+      if (error) errors[name] = error.message || 'unavailable';
+      else tables[name] = data || [];
+    })
+  );
+  return { tables, errors };
+}
+
 export async function listStudySubjectsForScheduleIds(scheduleIds) {
   if (!scheduleIds || scheduleIds.length === 0) return [];
   const { data, error } = await supabase.from('study_subjects').select('*').in('schedule_id', scheduleIds);
