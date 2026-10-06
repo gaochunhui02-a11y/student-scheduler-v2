@@ -11,6 +11,7 @@
 // deterministic and testable with plain input/output pairs.
 
 import { addDaysToDateStr } from '../dashboard/dateUtils.js';
+import { computeRemainingMinutes } from '../dashboard/carryOverModel.js';
 
 const RISK_LEVELS = ['on_track', 'needs_attention', 'at_risk'];
 
@@ -260,6 +261,121 @@ export function computeActualVsPlanned(studySubjects, items) {
     { estimated: 0, planned: 0, actual: 0 }
   );
   return { subjects, totals };
+}
+
+// ---------------------------------------------------------------------------
+// Insights metrics (V2-E). Every number below is computed from stored rows
+// only, and each returns insufficientData instead of a confident number
+// when there's too little to say anything honest — the same convention
+// computeProductivityPeriod already follows.
+// ---------------------------------------------------------------------------
+
+// Average length of the study blocks the scheduler actually placed.
+export function computeAverageBlockLength(items, { minBlocks = 3 } = {}) {
+  const durations = (items || [])
+    .filter((i) => i && i.item_type === 'study')
+    .map((i) => Math.max(0, i.end_minutes - i.start_minutes))
+    .filter((d) => d > 0);
+  if (durations.length < minBlocks) return { averageMinutes: null, blockCount: durations.length, insufficientData: true };
+  const total = durations.reduce((s, d) => s + d, 0);
+  return { averageMinutes: Math.round(total / durations.length), blockCount: durations.length, insufficientData: false };
+}
+
+// How the time actually spent on FINISHED tasks compares to what was
+// estimated for them. A task (one study_subjects row) counts as finished
+// when it has study blocks, every block is completed, and the blocks cover
+// its whole estimate (a task whose day ran out of room isn't "finished" just
+// because its smaller scheduled part was done). ratioPercent = actual /
+// estimated: under 100 means finished in less time than estimated. Actual
+// is capped at each block's own length, so a real overrun beyond the
+// scheduled time can't show up here — the reading is "you used X% of your
+// estimates on finished work", never a claim about time spent off-plan.
+export function computeEstimateAccuracy(studySubjects, items, { minTasks = 3 } = {}) {
+  const blocksBySubject = new Map();
+  (items || []).forEach((i) => {
+    if (!i || i.item_type !== 'study' || !i.source_subject_id) return;
+    const list = blocksBySubject.get(i.source_subject_id) || [];
+    list.push(i);
+    blocksBySubject.set(i.source_subject_id, list);
+  });
+
+  let estimated = 0;
+  let actual = 0;
+  let taskCount = 0;
+  (studySubjects || []).forEach((s) => {
+    const est = Number.isFinite(s.minutes_requested) ? s.minutes_requested : 0;
+    if (est <= 0) return;
+    const blocks = blocksBySubject.get(s.id) || [];
+    if (blocks.length === 0 || !blocks.every((b) => b.completed)) return;
+    const planned = blocks.reduce((sum, b) => sum + Math.max(0, b.end_minutes - b.start_minutes), 0);
+    if (planned < est) return;
+    estimated += est;
+    actual += blocks.reduce((sum, b) => sum + effectiveActualMinutes(b, Math.max(0, b.end_minutes - b.start_minutes)), 0);
+    taskCount += 1;
+  });
+
+  if (taskCount < minTasks || estimated <= 0) {
+    return { ratioPercent: null, taskCount, estimatedMinutes: estimated, actualMinutes: actual, insufficientData: true };
+  }
+  return {
+    ratioPercent: Math.round((actual / estimated) * 100),
+    taskCount,
+    estimatedMinutes: estimated,
+    actualMinutes: actual,
+    insufficientData: false,
+  };
+}
+
+// Work that's past its due date and still unfinished. `studySubjects` is
+// expected to be rows already filtered to due_date < today by the caller's
+// query, but this re-checks so it's safe either way. Remaining minutes use
+// carryOverModel's own rule (completed/partial/carried-over aware); a task
+// with no blocks at all is fully remaining.
+export function computeOverdueWorkload(studySubjects, items, todayDateStr, limit = 5) {
+  const blocksBySubject = new Map();
+  (items || []).forEach((i) => {
+    if (!i || i.item_type !== 'study' || !i.source_subject_id) return;
+    const list = blocksBySubject.get(i.source_subject_id) || [];
+    list.push(i);
+    blocksBySubject.set(i.source_subject_id, list);
+  });
+
+  const overdue = (studySubjects || [])
+    .filter((s) => s && s.due_date && todayDateStr && s.due_date < todayDateStr)
+    .map((s) => {
+      const blocks = blocksBySubject.get(s.id) || [];
+      const requested = Number.isFinite(s.minutes_requested) ? s.minutes_requested : 0;
+      const remainingMinutes = blocks.length === 0
+        ? requested
+        : blocks.reduce((sum, b) => sum + computeRemainingMinutes({
+          start: b.start_minutes,
+          end: b.end_minutes,
+          completed: b.completed,
+          completedMinutes: b.completed_minutes,
+          carriedOverMinutes: b.carried_over_minutes,
+        }), 0);
+      return { id: s.id, title: s.name, dueDate: s.due_date, daysOverdue: daysBetween(s.due_date, todayDateStr), remainingMinutes };
+    })
+    .filter((o) => o.remainingMinutes > 0)
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
+
+  return {
+    count: overdue.length,
+    totalMinutes: overdue.reduce((sum, o) => sum + o.remainingMinutes, 0),
+    items: overdue.slice(0, limit),
+  };
+}
+
+// Bar widths (0..100) for the subject workload chart, scaled to the
+// biggest subject so the longest bar is full width — the same "relative to
+// what actually happened" scale Week View's workload bars use.
+export function computeSubjectWorkloadBars(subjectTotals) {
+  const max = (subjectTotals || []).reduce((m, s) => Math.max(m, s.planned || 0), 0);
+  return (subjectTotals || []).map((s) => ({
+    ...s,
+    plannedPercent: max > 0 ? Math.round(((s.planned || 0) / max) * 100) : 0,
+    completedPercent: max > 0 ? Math.round((Math.min(s.completed || 0, s.planned || 0) / max) * 100) : 0,
+  }));
 }
 
 // ---------------------------------------------------------------------------

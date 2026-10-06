@@ -270,6 +270,43 @@ export function buildExplanation(task, breakdown, labels) {
   return (labels.explanationTwo || '{clause1} {clause2}').replace('{clause1}', clauses[0]).replace('{clause2}', clauses[1]);
 }
 
+// V2-E: the "Why:" list under Home's top recommendation — concrete facts
+// with their real numbers ("Due in 2 days", "120 min remaining"), rather
+// than the generic clauses above. Same rule as the clauses: every fact is
+// backed directly by a score input or stored value, never inferred.
+//
+// `context.tomorrowStudyMinutes` (optional): study minutes already planned
+// for tomorrow. When that's a heavy day (>= heavyDayMinutes) and the task
+// isn't due today/overdue, "Tomorrow is heavily scheduled" is a real reason
+// to start today.
+//
+// Returns [{ key, value? }] strongest first, capped at `limit`. Keys:
+//   overdue{value:days} dueToday dueTomorrow dueIn{value:days}
+//   highPriority missed carriedOver{value:minutes} remaining{value:minutes}
+//   inProgress fitsToday tomorrowHeavy{value:minutes}
+export function buildReasonFacts(task, breakdown, context = {}, limit = 4) {
+  if (!task || !breakdown) return [];
+  const facts = [];
+  const days = daysUntilDue(task.dueDate, context.todayDateStr);
+  if (days !== null) {
+    if (days < 0) facts.push({ key: 'overdue', value: -days });
+    else if (days === 0) facts.push({ key: 'dueToday' });
+    else if (days === 1) facts.push({ key: 'dueTomorrow' });
+    else if (days <= 7) facts.push({ key: 'dueIn', value: days });
+  }
+  if (task.priority === 'high') facts.push({ key: 'highPriority' });
+  if (task.missed) facts.push({ key: 'missed' });
+  facts.push({ key: 'remaining', value: task.remainingMinutes });
+  const heavy = context.heavyDayMinutes ?? 240;
+  if (Number.isFinite(context.tomorrowStudyMinutes) && context.tomorrowStudyMinutes >= heavy && (days === null || days >= 1)) {
+    facts.push({ key: 'tomorrowHeavy', value: context.tomorrowStudyMinutes });
+  }
+  if (task.carriedOverMinutes > 0) facts.push({ key: 'carriedOver', value: task.carriedOverMinutes });
+  if (breakdown.progressScore > 0) facts.push({ key: 'inProgress' });
+  if (breakdown.fits === true) facts.push({ key: 'fitsToday' });
+  return facts.slice(0, limit);
+}
+
 // ---------------------------------------------------------------------------
 // Ranking (Home's "Recommended Next" + Planner's "Sort: Recommended")
 // ---------------------------------------------------------------------------
