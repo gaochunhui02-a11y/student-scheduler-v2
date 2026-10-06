@@ -8,7 +8,15 @@
 // trigger for it).
 
 import { supabase } from '../lib/supabaseClient.js';
-import { isValidNodeType, normalizeNodePosition, normalizeNodeTitle, validateNewEdge } from './boardModel.js';
+import {
+  isValidNodeType,
+  normalizeNodePosition,
+  normalizeNodeTitle,
+  validateNewEdge,
+  isValidNodeStatus,
+  normalizeNodeDueDate,
+  normalizeNodeEstimate,
+} from './boardModel.js';
 
 // ---------------------------------------------------------------------------
 // boards
@@ -121,6 +129,14 @@ export async function updateNode(userId, nodeId, fields) {
   }
   if (fields.color !== undefined) patch.color = fields.color;
   if (fields.linkedStudySubjectId !== undefined) patch.linked_study_subject_id = fields.linkedStudySubjectId;
+  // V2-D: student-set fields only. A linked node's Planner-derived status
+  // is display-only and is never passed here.
+  if (fields.status !== undefined) {
+    if (!isValidNodeStatus(fields.status)) throw new Error(`Invalid status: ${fields.status}`);
+    patch.status = fields.status;
+  }
+  if (fields.dueDate !== undefined) patch.due_date = normalizeNodeDueDate(fields.dueDate);
+  if (fields.estimatedMinutes !== undefined) patch.estimated_minutes = normalizeNodeEstimate(fields.estimatedMinutes);
 
   const { data, error } = await supabase
     .from('board_nodes')

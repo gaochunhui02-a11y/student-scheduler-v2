@@ -5,7 +5,7 @@
 // functions operate on plain node/edge-shaped objects only, so they're
 // testable with plain Node the same way scheduler.js is.
 
-export const NODE_TYPES = ['goal', 'subject', 'task', 'note'];
+export const NODE_TYPES = ['goal', 'subject', 'task', 'note', 'milestone'];
 
 export function isValidNodeType(nodeType) {
   return NODE_TYPES.includes(nodeType);
@@ -228,16 +228,16 @@ export function screenToCanvasPoint({ canvasLeft, canvasTop, clientX, clientY, z
 
 const STUDY_PRIORITIES = ['low', 'medium', 'high'];
 
-// Pre-fills the conversion form from a Board node. Only `name` has a
-// meaningful source (the node's title) — study_subjects has no board-node
-// equivalent for minutes/priority/due date/notes, so those start at the
-// same defaults a manually-created study task row would have.
+// Pre-fills the conversion form from a Board node: name from its title,
+// and (V2-D) minutes/due date from its optional estimate/due date when set.
+// Anything unset starts at the same defaults a manually-created study task
+// row would have.
 export function studyTaskDefaultsFromNode(node) {
   return {
     name: normalizeNodeTitle(node?.title),
-    minutes_requested: null,
+    minutes_requested: normalizeNodeEstimate(node?.estimated_minutes),
     priority: 'medium',
-    due_date: null,
+    due_date: normalizeNodeDueDate(node?.due_date),
     notes: '',
   };
 }
@@ -608,3 +608,113 @@ export function buildTemplateStructure(template) {
     edges: template.children.map((_, i) => ({ fromIndex: 0, toIndex: i + 1, relationship: 'parent' })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Node status, due date, estimate + Planner reflection + progress (V2-D)
+//
+// Two kinds of status, kept strictly apart so there's no sync loop:
+//   - stored status (board_nodes.status) — only ever set by the student.
+//   - Planner status — derived on every Board load from the linked study
+//     task's schedule_items, and only ever DISPLAYED. Nothing in this file
+//     (or board.js) writes a derived status back to board_nodes, and
+//     nothing on the Board writes to schedule_items.
+// ---------------------------------------------------------------------------
+
+export const NODE_STATUSES = ['planned', 'in_progress', 'done'];
+
+// Node types that count as a unit of work toward progress. Goals/subjects
+// are containers, notes are not work.
+export const PROGRESS_NODE_TYPES = ['task', 'milestone'];
+
+export function isValidNodeStatus(status) {
+  return NODE_STATUSES.includes(status);
+}
+
+export function normalizeNodeStatus(status) {
+  return isValidNodeStatus(status) ? status : 'planned';
+}
+
+// '' / null / anything not a real YYYY-MM-DD calendar date -> null.
+export function normalizeNodeDueDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? value : null;
+}
+
+// Positive whole minutes, capped at a week of solid work; else null.
+export function normalizeNodeEstimate(value) {
+  const n = typeof value === 'string' ? Number(value.trim() || NaN) : value;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.round(n), 10080);
+}
+
+// What a linked study task's schedule_items say about it. Reads the raw
+// schedule_items shape (item_type/source_subject_id/start_minutes/
+// end_minutes/completed/completed_minutes):
+//   'not_scheduled' — no study blocks placed for it yet
+//   'scheduled'     — blocks exist, nothing logged
+//   'in_progress'   — some time logged or some blocks done
+//   'done'          — every block fully completed
+export function derivePlannerStatus(studySubjectId, scheduleItems) {
+  if (!studySubjectId) return null;
+  const blocks = (scheduleItems || []).filter((i) => i && i.item_type === 'study' && i.source_subject_id === studySubjectId);
+  if (blocks.length === 0) return 'not_scheduled';
+  const isFull = (b) => b.completed || (Number.isFinite(b.completed_minutes) && b.completed_minutes >= b.end_minutes - b.start_minutes);
+  if (blocks.every(isFull)) return 'done';
+  if (blocks.some((b) => isFull(b) || (Number.isFinite(b.completed_minutes) && b.completed_minutes > 0))) return 'in_progress';
+  return 'scheduled';
+}
+
+// Builds studySubjectId -> Planner status for every linked node at once.
+export function buildPlannerStatusMap(nodes, scheduleItems) {
+  const map = new Map();
+  (nodes || []).forEach((n) => {
+    if (n && n.linked_study_subject_id && !map.has(n.linked_study_subject_id)) {
+      map.set(n.linked_study_subject_id, derivePlannerStatus(n.linked_study_subject_id, scheduleItems));
+    }
+  });
+  return map;
+}
+
+// The status a node is shown with. A linked node follows its Planner task
+// (not_scheduled/scheduled read as 'planned'); an unlinked node shows what
+// the student set. If the Planner status is unknown (not loaded, or the
+// fetch failed), fall back to the stored status rather than guessing.
+export function effectiveNodeStatus(node, plannerStatusMap) {
+  if (node && node.linked_study_subject_id && plannerStatusMap && plannerStatusMap.has(node.linked_study_subject_id)) {
+    const ps = plannerStatusMap.get(node.linked_study_subject_id);
+    if (ps === 'done') return 'done';
+    if (ps === 'in_progress') return 'in_progress';
+    if (ps) return 'planned';
+  }
+  return normalizeNodeStatus(node?.status);
+}
+
+// { done, total, percent } over the given nodes' task/milestone nodes.
+// percent is null when there's nothing to count (no fake 0%).
+export function computeProgress(nodes, plannerStatusMap) {
+  const work = (nodes || []).filter((n) => n && PROGRESS_NODE_TYPES.includes(n.node_type));
+  const done = work.filter((n) => effectiveNodeStatus(n, plannerStatusMap) === 'done').length;
+  const total = work.length;
+  return { done, total, percent: total > 0 ? Math.round((done / total) * 100) : null };
+}
+
+// Progress for one goal/subject node: its descendant task/milestone nodes
+// along the board's edges (same traversal Collapse uses).
+export function computeNodeProgress(nodes, edges, nodeId, plannerStatusMap) {
+  const ids = new Set(getDescendantNodeIds(edges || [], nodeId));
+  return computeProgress((nodes || []).filter((n) => ids.has(n.id)), plannerStatusMap);
+}
+
+// Due-date state relative to today, for the card's due chip. A done node is
+// never "overdue".
+export function classifyNodeDue(node, todayDateStr, plannerStatusMap) {
+  const due = normalizeNodeDueDate(node?.due_date);
+  if (!due || !todayDateStr) return null;
+  if (effectiveNodeStatus(node, plannerStatusMap) === 'done') return 'done';
+  if (due < todayDateStr) return 'overdue';
+  if (due === todayDateStr) return 'today';
+  return 'upcoming';
+}
+

@@ -432,6 +432,19 @@ export async function listScheduleItemsForScheduleIds(scheduleIds) {
   return data;
 }
 
+// V2-D: read-only — the study blocks placed for specific study tasks, used
+// by the Board to show a linked node's Planner status. Never paired with a
+// write: the Board reflects Planner state, it doesn't change it.
+export async function listScheduleItemsForSourceSubjectIds(subjectIds) {
+  if (!subjectIds || subjectIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('schedule_items')
+    .select('id, item_type, source_subject_id, start_minutes, end_minutes, completed, completed_minutes')
+    .in('source_subject_id', subjectIds);
+  if (error) throw error;
+  return data;
+}
+
 export async function listStudySubjectsForScheduleIds(scheduleIds) {
   if (!scheduleIds || scheduleIds.length === 0) return [];
   const { data, error } = await supabase.from('study_subjects').select('*').in('schedule_id', scheduleIds);

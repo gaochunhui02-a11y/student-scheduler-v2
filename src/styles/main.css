@@ -2955,3 +2955,86 @@ body.focus-open { overflow: hidden; }
 .avp-table tfoot td { font-weight: 650; color: var(--text); }
 .avp-delta { display: block; font-size: 11px; color: var(--muted); }
 .avp-delta.is-under { color: var(--warning); }
+
+/* ---------------- V2-D: Board status, due/estimate, progress ---------------- */
+.board-node[data-node-type="milestone"] { border-left-color: var(--warning); }
+.board-node[data-node-type="milestone"] .board-node-type-icon { color: var(--warning); }
+.board-node[data-status="done"] .board-node-title { color: var(--muted); }
+
+.board-node-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.board-status-chip,
+.board-node-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+button.board-status-chip { cursor: pointer; }
+button.board-status-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.board-status-in_progress { background: var(--accent-soft); border-color: var(--accent-soft-strong); color: var(--accent-strong); }
+.board-status-done { background: var(--success-soft); border-color: var(--success-soft); color: var(--success); }
+.board-status-chip.is-linked::before { content: "↔"; margin-right: 4px; opacity: 0.7; }
+.board-due-overdue { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+.board-due-today { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning); }
+.board-due-done { text-decoration: line-through; color: var(--muted); }
+
+.board-node-progress { margin-top: 6px; }
+.board-node-progress-text { font-size: 10.5px; font-weight: 600; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.board-node-progress-bar,
+.board-progress-bar {
+  height: 4px;
+  margin-top: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.board-node-progress-bar span,
+.board-progress-bar span { display: block; height: 100%; width: 0; background: var(--success); transition: width var(--dur) var(--ease); }
+
+.board-progress { margin-top: 10px; max-width: 280px; }
+.board-progress-text { font-size: 12.5px; font-weight: 600; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+
+.board-node-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+}
+.board-node-details-field { display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.board-node-details-field select,
+.board-node-details-field input {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.board-node-details-note { margin: -2px 0 0; font-size: 10.5px; color: var(--muted); line-height: 1.35; }
+.board-node-details-close {
+  align-self: flex-end;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.board-node-details-close:hover { background: var(--surface-2); color: var(--text); }

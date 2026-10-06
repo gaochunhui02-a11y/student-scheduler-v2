@@ -67,6 +67,15 @@ import {
   BOARD_TEMPLATES,
   getBoardTemplate,
   buildTemplateStructure,
+  NODE_STATUSES,
+  normalizeNodeStatus,
+  normalizeNodeDueDate,
+  normalizeNodeEstimate,
+  buildPlannerStatusMap,
+  effectiveNodeStatus,
+  computeProgress,
+  computeNodeProgress,
+  classifyNodeDue,
 } from './boardModel.js';
 import {
   listBoards,
@@ -167,6 +176,14 @@ export function initBoardSection(userId, hostApi = {}) {
   let panning = false;
   let collapsedNodeIds = new Set(); // view-only state, never persisted — see collapse/expand below
   let highlightTimeout = null;
+  // V2-D: studySubjectId -> Planner status for linked nodes. Display-only,
+  // rebuilt from the Planner's own rows on every Board load/show; never
+  // written anywhere.
+  let plannerStatusMap = new Map();
+  let detailsOpenNodeId = null; // which card has its Details panel open (view-only)
+  const progressEl = document.getElementById('boardProgress');
+  const progressTextEl = document.getElementById('boardProgressText');
+  const progressFillEl = document.getElementById('boardProgressFill');
 
   // A single reusable dashed preview line shown while dragging from a
   // node's connection handle — created once, toggled hidden/visible rather
@@ -349,6 +366,7 @@ export function initBoardSection(userId, hostApi = {}) {
         closeConversionModal();
         renderNodes();
         showBoardStatus(t('board.taskCreated'));
+        refreshPlannerStatuses();
       } catch (err) {
         console.error('Could not convert node to study task:', err);
         errorMsg.textContent = t('board.conversionFailed');
@@ -372,9 +390,9 @@ export function initBoardSection(userId, hostApi = {}) {
     conversionTargetNode = node;
     const defaults = studyTaskDefaultsFromNode(node);
     conversionModal.nameInput.value = defaults.name;
-    conversionModal.minutesInput.value = '';
+    conversionModal.minutesInput.value = defaults.minutes_requested ?? '';
     conversionModal.prioritySelect.value = defaults.priority;
-    conversionModal.dueInput.value = '';
+    conversionModal.dueInput.value = defaults.due_date || '';
     conversionModal.notesInput.value = '';
     conversionModal.errorMsg.hidden = true;
     conversionModal.overlay.hidden = false;
@@ -442,6 +460,19 @@ export function initBoardSection(userId, hostApi = {}) {
       });
       dropdown.appendChild(sendBtn);
     }
+
+    const detailsBtn = document.createElement('button');
+    detailsBtn.type = 'button';
+    detailsBtn.className = 'board-node-menu-item';
+    detailsBtn.dataset.i18n = 'board.details';
+    detailsBtn.textContent = t('board.details');
+    detailsBtn.addEventListener('click', () => {
+      details.open = false;
+      detailsOpenNodeId = detailsOpenNodeId === node.id ? null : node.id;
+      renderNodes();
+      renderEdges();
+    });
+    dropdown.appendChild(detailsBtn);
 
     const duplicateBtn = document.createElement('button');
     duplicateBtn.type = 'button';
@@ -520,6 +551,227 @@ export function initBoardSection(userId, hostApi = {}) {
     return details;
   }
 
+  // ---------------- V2-D: status, due date, estimate, progress ----------------
+  // Stored status/due/estimate are the student's own, edited from the card.
+  // A linked node's status comes from its Planner task and is display-only:
+  // refreshPlannerStatuses only READS (via hostApi.getLinkedScheduleItems)
+  // and only re-renders — it never calls updateNode, so a Planner change can
+  // never write back into board_nodes, and nothing here writes to the
+  // Planner. That one-way shape is what rules out a sync loop.
+
+  async function refreshPlannerStatuses() {
+    const token = switchToken;
+    const linkedIds = Array.from(new Set(nodes.map((n) => n.linked_study_subject_id).filter(Boolean)));
+    if (linkedIds.length === 0 || typeof hostApi.getLinkedScheduleItems !== 'function') {
+      if (plannerStatusMap.size > 0) {
+        plannerStatusMap = new Map();
+        renderNodes();
+      }
+      return;
+    }
+    try {
+      const items = await hostApi.getLinkedScheduleItems(linkedIds);
+      if (token !== switchToken) return; // board switched while loading
+      plannerStatusMap = buildPlannerStatusMap(nodes, items);
+      renderNodes();
+      renderEdges();
+    } catch (err) {
+      // Fall back to stored statuses (effectiveNodeStatus does this when a
+      // node has no map entry) rather than showing a guessed Planner state.
+      console.error('Could not load Planner status for linked nodes:', err);
+    }
+  }
+
+  function localTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function formatMinutesShort(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m}m`;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  }
+
+  function formatDueShort(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function progressText(p) {
+    return t('board.progressText').replace('{done}', String(p.done)).replace('{total}', String(p.total)).replace('{percent}', String(p.percent));
+  }
+
+  function renderBoardProgress() {
+    if (!progressEl) return;
+    const p = computeProgress(nodes, plannerStatusMap);
+    progressEl.hidden = !currentBoard || p.total === 0;
+    if (progressEl.hidden) return;
+    progressTextEl.textContent = progressText(p);
+    progressFillEl.style.width = `${p.percent}%`;
+  }
+
+  // Goal/subject nodes: progress of the task/milestone nodes beneath them.
+  function buildNodeProgressRow(node) {
+    if (node.node_type !== 'goal' && node.node_type !== 'subject') return null;
+    const p = computeNodeProgress(nodes, edges, node.id, plannerStatusMap);
+    if (p.total === 0) return null;
+    const row = document.createElement('div');
+    row.className = 'board-node-progress';
+    const text = document.createElement('div');
+    text.className = 'board-node-progress-text';
+    text.textContent = progressText(p);
+    const bar = document.createElement('div');
+    bar.className = 'board-node-progress-bar';
+    bar.setAttribute('aria-hidden', 'true');
+    const fill = document.createElement('span');
+    fill.style.width = `${p.percent}%`;
+    bar.appendChild(fill);
+    row.appendChild(text);
+    row.appendChild(bar);
+    return row;
+  }
+
+  async function saveNodeFields(node, fields) {
+    try {
+      const updated = await updateNode(userId, node.id, fields);
+      const index = nodes.findIndex((n) => n.id === node.id);
+      if (index !== -1) nodes[index] = { ...nodes[index], ...updated };
+    } catch (err) {
+      console.error('Could not save node details:', err);
+      showBoardStatus(t('board.detailsSaveFailed'));
+    }
+    renderNodes();
+    renderEdges();
+  }
+
+  // Status chip + due chip + estimate chip. Only task/milestone nodes and
+  // linked nodes show a status chip (a note has no "done"); due/estimate
+  // show on any node once set. An unlinked node's status chip cycles
+  // planned -> in progress -> done on click; a linked one is read-only.
+  function buildNodeMetaRow(node) {
+    const linked = isNodeConverted(node);
+    const showStatus = linked || node.node_type === 'task' || node.node_type === 'milestone';
+    const dueState = classifyNodeDue(node, localTodayStr(), plannerStatusMap);
+    const estimate = normalizeNodeEstimate(node.estimated_minutes);
+    if (!showStatus && !dueState && !estimate) return null;
+
+    const row = document.createElement('div');
+    row.className = 'board-node-meta';
+
+    if (showStatus) {
+      const status = effectiveNodeStatus(node, plannerStatusMap);
+      const chip = document.createElement(linked ? 'span' : 'button');
+      chip.className = `board-status-chip board-status-${status}`;
+      chip.textContent = t(`board.status.${status}`);
+      if (linked) {
+        const ps = plannerStatusMap.get(node.linked_study_subject_id);
+        chip.title = ps ? t(`board.plannerStatus.${ps}`) : t('board.alreadyAdded');
+        chip.classList.add('is-linked');
+      } else {
+        chip.type = 'button';
+        chip.title = t('board.statusCycleHint');
+        chip.setAttribute('aria-label', `${t('board.statusLabel')}: ${t(`board.status.${status}`)}. ${t('board.statusCycleHint')}`);
+        stopDragStart(chip);
+        chip.addEventListener('click', () => {
+          const current = normalizeNodeStatus(node.status);
+          const next = NODE_STATUSES[(NODE_STATUSES.indexOf(current) + 1) % NODE_STATUSES.length];
+          saveNodeFields(node, { status: next });
+        });
+      }
+      row.appendChild(chip);
+    }
+
+    if (dueState) {
+      const due = document.createElement('span');
+      due.className = `board-node-chip board-due-${dueState}`;
+      due.textContent = dueState === 'overdue'
+        ? `${t('board.overdue')} · ${formatDueShort(node.due_date)}`
+        : dueState === 'today'
+          ? t('board.dueToday')
+          : `${t('board.due')} ${formatDueShort(node.due_date)}`;
+      row.appendChild(due);
+    }
+
+    if (estimate) {
+      const est = document.createElement('span');
+      est.className = 'board-node-chip';
+      est.textContent = `~${formatMinutesShort(estimate)}`;
+      est.title = t('board.estimateLabel');
+      row.appendChild(est);
+    }
+    return row;
+  }
+
+  // Inline Details panel (opened from the "⋯" menu): status, due date,
+  // estimate. Kept off the card by default so the canvas stays clean.
+  function buildNodeDetailsPanel(node) {
+    const panel = document.createElement('div');
+    panel.className = 'board-node-details';
+    stopDragStart(panel);
+    const linked = isNodeConverted(node);
+
+    function labeled(labelKey, control) {
+      const label = document.createElement('label');
+      label.className = 'board-node-details-field';
+      const span = document.createElement('span');
+      span.textContent = t(labelKey);
+      label.appendChild(span);
+      label.appendChild(control);
+      return label;
+    }
+
+    const statusSelect = document.createElement('select');
+    NODE_STATUSES.forEach((st) => {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = t(`board.status.${st}`);
+      statusSelect.appendChild(opt);
+    });
+    statusSelect.value = normalizeNodeStatus(node.status);
+    if (linked) {
+      statusSelect.disabled = true;
+      statusSelect.value = effectiveNodeStatus(node, plannerStatusMap);
+    }
+    statusSelect.addEventListener('change', () => saveNodeFields(node, { status: statusSelect.value }));
+    panel.appendChild(labeled('board.statusLabel', statusSelect));
+    if (linked) {
+      const note = document.createElement('p');
+      note.className = 'board-node-details-note';
+      note.textContent = t('board.statusFromPlanner');
+      panel.appendChild(note);
+    }
+
+    const dueInput = document.createElement('input');
+    dueInput.type = 'date';
+    dueInput.value = normalizeNodeDueDate(node.due_date) || '';
+    dueInput.addEventListener('change', () => saveNodeFields(node, { dueDate: dueInput.value || null }));
+    panel.appendChild(labeled('board.dueDateLabel', dueInput));
+
+    const estInput = document.createElement('input');
+    estInput.type = 'number';
+    estInput.min = '5';
+    estInput.step = '5';
+    estInput.inputMode = 'numeric';
+    estInput.placeholder = t('board.estimatePlaceholder');
+    estInput.value = normalizeNodeEstimate(node.estimated_minutes) ?? '';
+    estInput.addEventListener('change', () => saveNodeFields(node, { estimatedMinutes: estInput.value === '' ? null : estInput.value }));
+    panel.appendChild(labeled('board.estimateLabel', estInput));
+
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'board-node-details-close';
+    doneBtn.textContent = t('board.detailsDone');
+    doneBtn.addEventListener('click', () => {
+      detailsOpenNodeId = null;
+      renderNodes();
+      renderEdges();
+    });
+    panel.appendChild(doneBtn);
+    return panel;
+  }
+
   // Small monochrome per-type glyphs (same stroke style as the sidebar nav
   // icons) — purely presentational, always paired with the real <select>
   // next to it, which stays the actual node_type control (Checkpoint D
@@ -529,6 +781,7 @@ export function initBoardSection(userId, hostApi = {}) {
     subject: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h8a3 3 0 0 1 3 3V19a2.5 2.5 0 0 0-2.5-2.5h-8.5z"/><path d="M12.5 8.5h7a3 3 0 0 1 0 6h-.01"/></svg>',
     task: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.5 11 15l4.5-5.5"/></svg>',
     note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5h9L18.5 8v11a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1z"/><path d="M8.5 10.5h7M8.5 14h5"/></svg>',
+    milestone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20.5V4.5"/><path d="M6 5h11l-2.5 4L17 13H6"/></svg>',
   };
   function nodeTypeIconMarkup(nodeType) {
     return NODE_TYPE_ICONS[nodeType] || NODE_TYPE_ICONS.note;
@@ -1013,6 +1266,7 @@ export function initBoardSection(userId, hostApi = {}) {
     el.className = 'board-node';
     el.dataset.nodeId = node.id;
     el.dataset.nodeType = node.node_type;
+    el.dataset.status = effectiveNodeStatus(node, plannerStatusMap);
     el.style.left = `${node.x_position}px`;
     el.style.top = `${node.y_position}px`;
 
@@ -1076,6 +1330,12 @@ export function initBoardSection(userId, hostApi = {}) {
     el.appendChild(head);
     el.appendChild(textarea);
 
+    const progressRow = buildNodeProgressRow(node);
+    if (progressRow) el.appendChild(progressRow);
+    const metaRow = buildNodeMetaRow(node);
+    if (metaRow) el.appendChild(metaRow);
+    if (detailsOpenNodeId === node.id) el.appendChild(buildNodeDetailsPanel(node));
+
     const linkFooter = buildLinkFooter(node);
     if (linkFooter) el.appendChild(linkFooter);
 
@@ -1112,6 +1372,7 @@ export function initBoardSection(userId, hostApi = {}) {
     const hiddenNodeIds = computeHiddenNodeIds(edges, Array.from(collapsedNodeIds));
     nodes.filter((node) => !hiddenNodeIds.has(node.id)).forEach((node) => canvas.appendChild(buildNodeEl(node)));
     if (emptyState) emptyState.hidden = nodes.length > 0;
+    renderBoardProgress();
   }
 
   function showNoBoardState() {
@@ -1176,6 +1437,8 @@ export function initBoardSection(userId, hostApi = {}) {
     nodes = cleared.nodes;
     edges = cleared.edges;
     collapsedNodeIds = cleared.collapsedNodeIds;
+    plannerStatusMap = new Map();
+    detailsOpenNodeId = null;
     selectedEdgeId = cleared.selectedEdgeId;
     connectingFromNodeId = cleared.connectingFromNodeId;
     if (edgeDeleteBtn) edgeDeleteBtn.hidden = true;
@@ -1209,6 +1472,7 @@ export function initBoardSection(userId, hostApi = {}) {
       renderNodes();
       renderEdges();
       rememberLastBoardId(currentBoard.id);
+      refreshPlannerStatuses();
     } catch (err) {
       if (token !== switchToken) return;
       console.error('Could not load board:', err);
@@ -1499,7 +1763,13 @@ export function initBoardSection(userId, hostApi = {}) {
   // Lazy-loaded the first time the Board nav item is clicked, so a user who
   // never opens the Board never pays for a boards/nodes/edges round trip.
   async function onShow() {
-    if (loaded || loading) return;
+    // Already loaded: just re-read linked tasks' Planner status, so work
+    // finished in the Planner since the last visit shows here.
+    if (loaded && !loading) {
+      refreshPlannerStatuses();
+      return;
+    }
+    if (loading) return;
     loading = true;
     try {
       allBoards = await listBoards(userId);

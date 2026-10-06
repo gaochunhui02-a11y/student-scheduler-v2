@@ -32,6 +32,7 @@ import {
   updateScheduleItemTime,
   listSchedulesInRange,
   listScheduleItemsForScheduleIds,
+  listScheduleItemsForSourceSubjectIds,
   listStudySubjectsForScheduleIds,
   listClassesForScheduleIds,
   listUpcomingStudySubjects,
@@ -361,6 +362,9 @@ async function init(session) {
       return created;
     },
     viewInPlanner: goToPlannerStudyList,
+    // V2-D: read-only. Lets the Board show each linked node's Planner
+    // status; nothing on this path writes to either side.
+    getLinkedScheduleItems: (subjectIds) => listScheduleItemsForSourceSubjectIds(subjectIds),
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 

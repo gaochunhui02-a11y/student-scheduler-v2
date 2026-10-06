@@ -126,6 +126,52 @@ scenario('C. The template apply path specifically references only imported names
 });
 
 // ---------------------------------------------------------------------------
+// V2-D: Planner -> Board is a read-only reflection. These source checks pin
+// the "no sync loop" design: the Planner-status refresh path reads and
+// re-renders only, and nothing on the Board can write a Planner-derived
+// status into board_nodes or touch schedule_items.
+scenario('D. Planner status reflection never writes', () => {
+  const refreshMatch = boardSrc.match(/async function refreshPlannerStatuses\([\s\S]*?\n  \}/);
+  check('refreshPlannerStatuses() exists as a single, extractable function', () => {
+    assert.ok(refreshMatch, 'could not locate refreshPlannerStatuses() in board.js');
+  });
+  const body = refreshMatch ? refreshMatch[0] : '';
+  ['updateNode', 'createNode', 'deleteNode', 'createEdge', 'deleteEdge', 'saveNodeFields', 'createStudyTaskFromBoard'].forEach((name) => {
+    check(`refreshPlannerStatuses() never calls ${name}`, () => {
+      assert.doesNotMatch(body, new RegExp(`\\b${name}\\(`));
+    });
+  });
+  check('it only reads through hostApi.getLinkedScheduleItems', () => {
+    assert.match(body, /hostApi\.getLinkedScheduleItems\(/);
+  });
+
+  check('no updateNode/saveNodeFields call ever passes a Planner-derived status', () => {
+    const writes = [...boardSrc.matchAll(/\b(?:updateNode|saveNodeFields)\(([^;]*?)\);/g)].map((m) => m[1]);
+    assert.ok(writes.length > 0);
+    writes.forEach((args) => assert.doesNotMatch(args, /effectiveNodeStatus|plannerStatusMap/, args));
+  });
+
+  check('board.js never imports the Planner data layer', () => {
+    assert.doesNotMatch(boardSrc, /from '\.\.\/dashboard\/data\.js'/);
+  });
+
+  const dashboardSrc = readFileSync(join(__dirname, '../src/dashboard/dashboard.js'), 'utf8');
+  check("dashboard.js's getLinkedScheduleItems bridge is a pure read", () => {
+    const line = dashboardSrc.match(/getLinkedScheduleItems:.*$/m);
+    assert.ok(line, 'getLinkedScheduleItems not found in boardHostApi');
+    assert.match(line[0], /listScheduleItemsForSourceSubjectIds\(/);
+  });
+
+  const dataSrc = readFileSync(join(__dirname, '../src/dashboard/data.js'), 'utf8');
+  check('listScheduleItemsForSourceSubjectIds only selects (no insert/update/delete)', () => {
+    const fn = dataSrc.match(/export async function listScheduleItemsForSourceSubjectIds\([\s\S]*?\n\}/);
+    assert.ok(fn);
+    assert.match(fn[0], /\.select\(/);
+    assert.doesNotMatch(fn[0], /\.(insert|update|upsert|delete)\(/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 console.log('\n------------------------');
 if (totalFailures > 0) {
   console.log(`${totalFailures} check(s) FAILED`);
