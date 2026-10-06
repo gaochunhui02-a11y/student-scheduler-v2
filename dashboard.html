@@ -172,9 +172,9 @@
 
     <div class="planner-layout">
       <div class="planner-primary">
-        <div class="card warning-card" id="lockConflictWarning" hidden>
-          <h2 data-i18n="lockConflict.title">Locked block conflict</h2>
-          <div id="lockConflictBody"></div>
+        <div class="card conflict-card" id="conflictPanel" hidden role="region" aria-labelledby="conflictPanelTitle">
+          <h2 id="conflictPanelTitle"><span class="conflict-title-icon" aria-hidden="true">!</span> <span data-i18n="conflicts.title">Schedule conflicts</span></h2>
+          <ul class="conflict-list" id="conflictPanelBody"></ul>
         </div>
 
         <div class="card planner-nextup-card" id="nextUpCard" hidden>
@@ -263,7 +263,7 @@
           <button class="add-btn" id="addStudyBtn" type="button">+ <span data-i18n="study.add">Add subject</span></button>
         </div>
 
-        <div class="card">
+        <div class="card" id="classesCard">
           <h2 data-i18n="classes.title">Classes</h2>
           <div id="classList"></div>
           <div class="class-add-row">
@@ -282,7 +282,7 @@
           </div>
         </details>
 
-        <details class="card planner-collapsible" open>
+        <details class="card planner-collapsible" id="dayCard" open>
           <summary data-i18n="day.title">Your Day</summary>
           <div class="planner-collapsible-body" id="daySettingsForm">
             <div class="row-2">

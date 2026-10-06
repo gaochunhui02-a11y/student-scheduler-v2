@@ -109,6 +109,8 @@ import { initOnboarding } from './onboarding.js';
 import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { displayBlockName, mealLabel } from '../shared/blockLabels.js';
 import { scrollBehavior } from '../shared/motion.js';
+import { validateBlockDuration, nudgeClock, NUDGE_MINUTES } from './manualEditModel.js';
+import { detectScheduleConflicts, classesToMinutes } from './conflictModel.js';
 import { shouldShowOnboarding } from './onboardingModel.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
@@ -1109,6 +1111,7 @@ async function init(session) {
     });
   }
   daySettingsForm.addEventListener('change', saveScheduleSettings);
+  daySettingsForm.addEventListener('change', () => refreshConflictPanel());
   studyPrefsForm.addEventListener('change', saveScheduleSettings);
 
   // forDate is a navigation control, not a "rename this schedule" field — it
@@ -1376,6 +1379,7 @@ async function init(session) {
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
       updatePlannerHeader();
+      refreshConflictPanel();
       chainSave(el, async () => {
         if (el.dataset.id) {
           await deleteClass(el.dataset.id);
@@ -1388,6 +1392,7 @@ async function init(session) {
     return el;
   }
 
+  classList.addEventListener('change', () => refreshConflictPanel());
   classList.addEventListener('change', (e) => {
     const row = e.target.closest('.entry-row');
     if (!row) return;
@@ -3030,8 +3035,20 @@ async function init(session) {
             if (e.id === editingItemId) {
               editControl = `
                 <div class="edit-panel">
-                  <label>${escapeAttr(t('schedule.startTimeLabel'))}</label>
-                  <input type="time" class="edit-start-input" value="${minutesToInputTime(e.start)}">
+                  <div class="edit-fields">
+                    <div class="edit-field">
+                      <label for="editStart-${e.id}">${escapeAttr(t('schedule.startTimeLabel'))}</label>
+                      <div class="edit-start-row">
+                        <button type="button" class="edit-nudge-btn" data-nudge="-${NUDGE_MINUTES}" aria-label="${escapeAttr(t('manualEdit.earlier'))}" title="${escapeAttr(t('manualEdit.earlier'))}">−${NUDGE_MINUTES}</button>
+                        <input type="time" class="edit-start-input" id="editStart-${e.id}" value="${minutesToInputTime(e.start)}">
+                        <button type="button" class="edit-nudge-btn" data-nudge="${NUDGE_MINUTES}" aria-label="${escapeAttr(t('manualEdit.later'))}" title="${escapeAttr(t('manualEdit.later'))}">+${NUDGE_MINUTES}</button>
+                      </div>
+                    </div>
+                    <div class="edit-field">
+                      <label for="editDuration-${e.id}">${escapeAttr(t('manualEdit.durationLabel'))}</label>
+                      <input type="number" class="edit-duration-input" id="editDuration-${e.id}" min="5" max="600" step="5" inputmode="numeric" value="${e.end - e.start}">
+                    </div>
+                  </div>
                   <div class="edit-actions">
                     <button type="button" class="edit-save-btn" data-id="${e.id}">${escapeAttr(t('carryOver.save'))}</button>
                     <button type="button" class="edit-cancel-btn" data-id="${e.id}">${escapeAttr(t('multiday.cancel'))}</button>
@@ -3105,6 +3122,7 @@ async function init(session) {
       .join('');
     output.innerHTML = `<div class="timeline">${html}</div>`;
     renderNextUp(events);
+    refreshConflictPanel();
     maybeRestoreFocusSession();
     // Checkpoint E: whatever just changed the schedule (generate, lock,
     // done, edit, partial completion, missed, carry-over) may have changed
@@ -3227,6 +3245,14 @@ async function init(session) {
       return;
     }
 
+    const nudgeBtn = e.target.closest('.edit-nudge-btn');
+    if (nudgeBtn) {
+      const startInput = nudgeBtn.closest('.edit-panel').querySelector('.edit-start-input');
+      const next = nudgeClock(startInput.value, Number(nudgeBtn.dataset.nudge));
+      if (next) startInput.value = next;
+      return;
+    }
+
     const saveBtn = e.target.closest('.edit-save-btn');
     if (saveBtn) {
       const id = saveBtn.dataset.id;
@@ -3253,12 +3279,23 @@ async function init(session) {
         bounds.dayStart,
         bounds.dayEnd
       );
+      // V2: the duration is editable too; it goes through the same
+      // placement check (validateManualStudyEdit) as a start-time move.
+      const durationInput = panel.querySelector('.edit-duration-input');
+      const durationCheck = durationInput
+        ? validateBlockDuration(durationInput.value, { completedMinutes: item.completed ? 0 : item.completedMinutes })
+        : { ok: true, value: item.end - item.start };
+      if (!durationCheck.ok) {
+        errorEl.textContent = tMessage(durationCheck);
+        return;
+      }
+
       const fixedEvents = currentScheduleItems.filter((i) => i.type === 'class' || i.type === 'meal');
       const otherStudyBlocks = currentScheduleItems.filter((i) => i.type === 'study' && i.id !== id);
 
       const result = validateManualStudyEdit({
         newStart,
-        duration: item.end - item.start,
+        duration: durationCheck.value,
         dayStart: bounds.dayStart,
         dayEnd: bounds.dayEnd,
         studyWindowStart,
@@ -3495,17 +3532,103 @@ async function init(session) {
     notesEl.innerHTML = '';
   }
 
-  const lockConflictEl = document.getElementById('lockConflictWarning');
-  const lockConflictBody = document.getElementById('lockConflictBody');
+  // ---------------- Schedule conflicts panel (V2 item 11) ----------------
+  // One place for every conflict: overlapping classes, classes outside the
+  // wake/sleep window, study blocks that now clash, locked blocks that
+  // stopped regeneration, and not enough time — each with one clear action.
+  // Detection is pure (conflictModel.js); this only gathers current state
+  // and renders it.
+  const conflictPanelEl = document.getElementById('conflictPanel');
+  const conflictPanelBody = document.getElementById('conflictPanelBody');
+  let lastLockConflictDetails = [];
+  let lastShortfall = null;
 
-  function renderLockConflicts(conflicts) {
-    if (!conflicts || conflicts.length === 0) {
-      lockConflictEl.hidden = true;
-      lockConflictBody.innerHTML = '';
+  const CONFLICT_ACTION_KEYS = {
+    edit_classes: 'conflicts.actionEditClasses',
+    edit_day: 'conflicts.actionEditDay',
+    edit_block: 'conflicts.actionEditBlock',
+    regenerate: 'conflicts.actionRegenerate',
+    unlock_block: 'conflicts.actionReviewLocked',
+    shortfall_details: 'conflicts.actionShowDetails',
+  };
+
+  function renderLockConflicts(conflicts, details = []) {
+    lastLockConflictDetails = conflicts && conflicts.length > 0
+      ? conflicts.map((text, i) => details[i] || { error: text })
+      : [];
+    refreshConflictPanel();
+  }
+
+  function refreshConflictPanel() {
+    if (!conflictPanelEl || !conflictPanelBody) return;
+    if (!schedule) {
+      conflictPanelEl.hidden = true;
       return;
     }
-    lockConflictBody.innerHTML = conflicts.map((c) => `<div class="item plain">${escapeAttr(c)}</div>`).join('');
-    lockConflictEl.hidden = false;
+    const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
+    const classRows = Array.from(classList.querySelectorAll('.entry-row')).map((row) => ({
+      name: row.querySelector('.class-name')?.value || '',
+      start: row.querySelector('.class-start')?.value || '',
+      end: row.querySelector('.class-end')?.value || '',
+    }));
+    const conflicts = detectScheduleConflicts({
+      classes: classesToMinutes(classRows, timeToMinutes),
+      items: currentScheduleItems,
+      dayStart: bounds.error ? null : bounds.dayStart,
+      dayEnd: bounds.error ? null : bounds.dayEnd,
+      lockConflictDetails: lastLockConflictDetails,
+      shortfall: lastShortfall,
+      formatRange: (start, end) => `${formatClock(start)} – ${formatClock(end)}`,
+    });
+    conflictPanelEl.hidden = conflicts.length === 0;
+    conflictPanelBody.innerHTML = conflicts
+      .map((c) => {
+        const params = c.params.minutes !== undefined ? { ...c.params, minutes: minText(c.params.minutes) } : c.params;
+        const text = c.key ? tMessage({ key: c.key, params }) : tMessage({ error: c.error });
+        const actionKey = CONFLICT_ACTION_KEYS[c.action];
+        const button = actionKey
+          ? `<button type="button" class="conflict-action-btn" data-conflict-action="${escapeAttr(c.action)}"${c.itemId ? ` data-item-id="${escapeAttr(c.itemId)}"` : ''}>${escapeAttr(t(actionKey))}</button>`
+          : '';
+        return `<li class="conflict-item conflict-${escapeAttr(c.kind)}"><span class="conflict-text">${escapeAttr(text)}</span>${button}</li>`;
+      })
+      .join('');
+  }
+
+  if (conflictPanelBody) {
+    conflictPanelBody.addEventListener('click', (e) => {
+      const btn = e.target.closest('.conflict-action-btn');
+      if (!btn) return;
+      const action = btn.dataset.conflictAction;
+      if (action === 'edit_classes') {
+        const card = document.getElementById('classesCard');
+        if (card) card.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+        const firstInput = classList.querySelector('.class-start:not([readonly])');
+        if (firstInput) firstInput.focus({ preventScroll: true });
+      } else if (action === 'edit_day') {
+        const day = document.getElementById('dayCard');
+        if (day) {
+          day.open = true;
+          day.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+          if (wakeTimeEl) wakeTimeEl.focus({ preventScroll: true });
+        }
+      } else if (action === 'edit_block' && btn.dataset.itemId) {
+        closeSecondaryPanels();
+        editingItemId = btn.dataset.itemId;
+        renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+        const input = output.querySelector('.edit-start-input');
+        if (input) {
+          input.closest('.tl-row').scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+          input.focus({ preventScroll: true });
+        }
+      } else if (action === 'regenerate') {
+        (generateBtn.hidden ? regenerateBtn : generateBtn).click();
+      } else if (action === 'unlock_block') {
+        output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      } else if (action === 'shortfall_details') {
+        const card = document.getElementById('shortfallWarning');
+        if (card) card.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      }
+    });
   }
 
   // ---------------- daily summary + insufficient-time warning ----------------
@@ -3515,6 +3638,8 @@ async function init(session) {
   const dailySummaryBody = document.getElementById('dailySummaryBody');
 
   function renderShortfallWarning(progress) {
+    lastShortfall = progress && progress.unscheduledTotal > 0 ? progress : null;
+    refreshConflictPanel();
     if (!progress || progress.unscheduledTotal <= 0) {
       shortfallWarningEl.hidden = true;
       shortfallWarningBody.innerHTML = '';
@@ -3634,14 +3759,16 @@ async function init(session) {
     if (result.lockConflicts && result.lockConflicts.length > 0) {
       // don't touch the saved schedule or currentScheduleItems — leave things exactly
       // as they were and tell the user what needs to be unlocked/adjusted first
-      renderLockConflicts(result.lockConflicts);
+      renderLockConflicts(result.lockConflicts, result.lockConflictDetails);
       return;
     }
     renderLockConflicts(null);
 
     renderScheduleEvents(result.events, subjectsInput);
     renderNotes(result.noteDetails
-      ? result.noteDetails.map((d) => tMessage(d.params && d.params.meal ? { ...d, params: { ...d.params, meal: mealLabel(d.params.meal, t) } } : d))
+      ? result.noteDetails
+        .filter((d) => d.key !== 'schedulerMsg.classOverlap') // shown in the Schedule conflicts panel instead
+        .map((d) => tMessage(d.params && d.params.meal ? { ...d, params: { ...d.params, meal: mealLabel(d.params.meal, t) } } : d))
       : result.notes);
 
     const progress = computeSubjectProgress(result.events, subjectsInput);

@@ -3603,3 +3603,84 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------- V2 item 10: manual edit — start nudges + duration ---------------- */
+.edit-fields { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+.edit-field { display: flex; flex-direction: column; }
+.edit-start-row { display: flex; align-items: center; gap: 4px; }
+.edit-nudge-btn {
+  height: 32px;
+  min-width: 40px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.edit-nudge-btn:hover { background: var(--card); border-color: var(--border-strong); color: var(--text); }
+.edit-panel input.edit-duration-input {
+  width: 84px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+  margin-bottom: 0;
+}
+
+/* ---------------- V2 item 11: Schedule conflicts panel ---------------- */
+.conflict-card { border-color: var(--danger-border); background: color-mix(in srgb, var(--danger-soft) 55%, var(--card)); }
+.conflict-card h2 { display: flex; align-items: center; gap: 8px; color: var(--status-missed-fg); }
+.conflict-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--status-missed-fg);
+  color: var(--card);
+  font-size: 12px;
+  font-weight: 800;
+}
+.conflict-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.conflict-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: 13px;
+  color: var(--text);
+}
+.conflict-insufficient_time { border-color: var(--warning-border); }
+.conflict-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.45; }
+.conflict-action-btn {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.conflict-action-btn:hover { background: var(--card); border-color: var(--accent); color: var(--accent-strong); }
+@media (max-width: 600px) {
+  .conflict-item { flex-direction: column; align-items: stretch; }
+  .conflict-action-btn { align-self: flex-start; }
+}
+
+/* The inline edit / partial-completion panels take their own full row. */
+.tl-actions > .edit-panel { flex-basis: 100%; }

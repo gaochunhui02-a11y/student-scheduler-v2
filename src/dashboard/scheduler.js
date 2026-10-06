@@ -225,19 +225,29 @@ function subjectKey(id, name) {
  * to unlock or adjust the block, rather than silently relocating it.
  * @returns {string[]} human-readable conflict messages, empty when all locked blocks are valid
  */
-function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd) {
+function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd, details = []) {
   const conflicts = [];
+  // V2: `details` receives the same conflicts as { key, params } so the UI
+  // can translate them; the returned strings are unchanged.
+  const add = (text, key, params) => {
+    conflicts.push(text);
+    details.push({ key, params });
+  };
 
   for (const b of lockedEvents) {
     if (b.start < dayStart || b.end > dayEnd) {
-      conflicts.push(
-        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your wake-up/bedtime window. Unlock or adjust the block before regenerating.`
+      add(
+        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your wake-up/bedtime window. Unlock or adjust the block before regenerating.`,
+        'schedulerMsg.lockOutsideDay',
+        { name: b.name, range: clockRange(b.start, b.end) }
       );
       continue; // outside the day entirely — skip the narrower window/overlap checks for this one
     }
     if (b.start < studyWindowStart || b.end > studyWindowEnd) {
-      conflicts.push(
-        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your earliest/latest study time window. Unlock or adjust the block before regenerating.`
+      add(
+        `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that falls outside your earliest/latest study time window. Unlock or adjust the block before regenerating.`,
+        'schedulerMsg.lockOutsideWindow',
+        { name: b.name, range: clockRange(b.start, b.end) }
       );
     }
   }
@@ -245,8 +255,10 @@ function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, study
   for (const b of lockedEvents) {
     for (const f of fixedEvents) {
       if (b.start < f.end && b.end > f.start) {
-        conflicts.push(
-          `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that time now conflicts with ${f.type} "${f.name}". Unlock or adjust the block before regenerating.`
+        add(
+          `"${b.name}" is locked at ${clockRange(b.start, b.end)}, but that time now conflicts with ${f.type} "${f.name}". Unlock or adjust the block before regenerating.`,
+          'schedulerMsg.lockConflictsWith',
+          { name: b.name, range: clockRange(b.start, b.end), other: f.name }
         );
       }
     }
@@ -257,8 +269,10 @@ function validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, study
       const a = lockedEvents[i];
       const b = lockedEvents[j];
       if (a.start < b.end && a.end > b.start) {
-        conflicts.push(
-          `"${a.name}" (${clockRange(a.start, a.end)}) and "${b.name}" (${clockRange(b.start, b.end)}) are both locked and overlap each other. Unlock one of them before regenerating.`
+        add(
+          `"${a.name}" (${clockRange(a.start, a.end)}) and "${b.name}" (${clockRange(b.start, b.end)}) are both locked and overlap each other. Unlock one of them before regenerating.`,
+          'schedulerMsg.lockOverlap',
+          { a: a.name, rangeA: clockRange(a.start, a.end), b: b.name, rangeB: clockRange(b.start, b.end) }
         );
       }
     }
@@ -438,12 +452,13 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     .map((b) => ({ type: 'study', name: b.name, start: b.start, end: b.end, locked: true, sourceSubjectId: b.sourceSubjectId ?? null }))
     .sort((a, b) => a.start - b.start);
 
-  const lockConflicts = validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd);
+  const lockConflictDetails = [];
+  const lockConflicts = validateLockedBlocks(lockedEvents, fixedEvents, dayStart, dayEnd, studyWindowStart, studyWindowEnd, lockConflictDetails);
   if (lockConflicts.length > 0) {
     // a locked block is no longer valid (settings changed underneath it) — stop rather
     // than silently move it or let something else overlap it; caller must ask the user
     // to unlock or adjust it first
-    return { events: [], notes: [], lockConflicts };
+    return { events: [], notes: [], lockConflicts, lockConflictDetails };
   }
 
   // ----- free gaps between wake and sleep (locked blocks are occupied too) -----

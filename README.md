@@ -25,6 +25,60 @@ all of that, a transparent scoring engine tells you what to work on next —
 using ordinary arithmetic on data you already entered, not a hosted AI
 model.
 
+## What's new in V2
+
+V2 keeps every v1 feature and adds more control without turning the app
+into a settings page — the main actions stay visible, advanced options sit
+behind tabs, menus, and expandable panels.
+
+- **Navigation** grouped as Home / Plan / Organize / Review / Account, plus
+  a **command palette** (Ctrl K / ⌘K) and a **Quick add** button.
+- **Week View** — Mon–Sun with classes, study time, deadlines, a workload
+  summary, and per-day statuses; click a day to open it in the Planner.
+- **Recurring classes** — days of week, time, date range; edit or skip a
+  single occurrence. Occurrences are computed, never duplicated.
+- **Advanced tasks** — tags (built-in + custom), subtasks, notes, compact
+  cards that expand, and filters (All / Today / Upcoming / Overdue /
+  Completed + subject / priority / tag + search).
+- **Planning options & presets** — daily study cap and presets (Balanced,
+  Exam Week, Catch-up, Deep Work, Busy Day, Light Day) with a preview of
+  each one's effect before applying.
+- **Manual control** — edit a block's start time (with ±15 min nudges) and
+  its duration, lock blocks; every edit is checked against your day,
+  classes, and other blocks.
+- **Schedule conflicts panel** — overlapping classes, classes outside your
+  day, study blocks that clash, locked-block conflicts, and not enough time,
+  each with one clear action.
+- **Focus Mode** — full-screen countdown with pause/resume, complete,
+  finish early; logs real time through the existing completion model.
+- **Planned vs Actual** — estimated vs planned vs actual time per subject.
+- **Home** — Today, Recommended next (with a "Why:" list), Upcoming,
+  Weekly Progress, a workload chart that flags heavy days, Quick Actions.
+- **Insights** — completion rate, average block length, estimate accuracy,
+  overdue work, sessions by status, study time by subject, strongest study
+  period. Metrics with too little data say so instead of guessing.
+- **Board** — node status, due date, estimate, Milestone type, goal and
+  board progress; a node linked to a Planner task shows that task's real
+  status (read-only — no sync loops).
+- **Calendar page** — a week agenda of classes, recurring classes, imported
+  `.ics` events, and study blocks, with All / Classes / Study / External
+  filters; import/export live here.
+- **History filters** — date range, subject, status; each day shows planned,
+  completed, and carried-over minutes.
+- **One status system** — Planned / In Progress / Done / Partial / Missed /
+  Carried Over, with the same label, icon, and color everywhere.
+- **Settings** in tabs (General / Appearance / Planner / Notifications /
+  Calendar / Data), granular reminders (starts soon, due today / tomorrow,
+  missed session), and **Export my data** (JSON).
+- **First-run onboarding** — four short, skippable steps, then "Build my
+  first plan". Never shown to existing users.
+- **Accessibility & languages** — visible keyboard focus, reduced-motion
+  support, labeled icon buttons, WCAG AA contrast; full English, Simplified
+  Chinese, and Japanese, including dates and times.
+
+V2 needs migrations 0005–0009 — see
+[V2 migrations](#v2-migrations-0005-0009).
+
 ## Core Features
 
 **Daily smart scheduling**
@@ -367,7 +421,7 @@ records whether a class was typed (`manual`) or imported from `.ics`
 Every table has `user_id` and RLS policies scoped to
 `auth.uid() = user_id` — enforced by Postgres itself, not just the app.
 
-### V2 migrations (0005–0009)
+### V2 migrations 0005-0009
 
 All five are **additive only**: they add tables or nullable/defaulted
 columns and never drop, rename, retype, or delete anything. They are safe
