@@ -69,6 +69,20 @@ function effectiveCompletedMinutes(item, duration) {
   return Math.min(Math.max(0, partial), duration);
 }
 
+// A block's actual time spent (V2-C), as opposed to its completion credit
+// above. They differ only for a block completed with fewer logged minutes
+// than planned — e.g. Focus Mode's Complete after 72 of 90 minutes stores
+// completed = true, completed_minutes = 72: it counts as 90 completed (the
+// work is done) but 72 actual. A block marked Done with no logged minutes
+// has no timing data, so its actual is its full duration. Known limit: a
+// block logged as partial and later marked Done via the plain Done button
+// keeps its earlier partial number as its actual time.
+export function effectiveActualMinutes(item, duration) {
+  const logged = Number.isFinite(item.completed_minutes) ? Math.min(Math.max(0, item.completed_minutes), duration) : 0;
+  if (logged > 0) return logged;
+  return item.completed ? duration : 0;
+}
+
 // A block's still-missing minutes that the student explicitly flagged
 // Missed (Phase 14) — 0 for anything not flagged missed, and 0 once its
 // completed minutes already cover the full duration (a block can't be
@@ -197,6 +211,55 @@ export function computeSubjectTotals(studySubjects, items) {
   });
 
   return Array.from(totals.values()).sort((a, b) => b.planned - a.planned);
+}
+
+// ---------------------------------------------------------------------------
+// Estimated vs Planned vs Actual (V2-C)
+// ---------------------------------------------------------------------------
+
+// Per subject name over the same window as computeSubjectTotals:
+//   estimated — what the student asked for (study_subjects.minutes_requested)
+//   planned   — what the scheduler actually placed (study block durations)
+//   actual    — time actually spent (effectiveActualMinutes)
+// Estimated and planned differ when a day ran out of room; planned and
+// actual differ when sessions ran short or were skipped. Subjects with
+// nothing estimated or planned are omitted. Sorted by planned, largest
+// first, with window totals alongside.
+export function computeActualVsPlanned(studySubjects, items) {
+  const nameById = new Map((studySubjects || []).map((s) => [s.id, s.name]));
+  const rows = new Map();
+
+  function entryFor(name) {
+    let entry = rows.get(name);
+    if (!entry) {
+      entry = { subject: name, estimated: 0, planned: 0, actual: 0 };
+      rows.set(name, entry);
+    }
+    return entry;
+  }
+
+  (studySubjects || []).forEach((s) => {
+    if (!s.name) return;
+    entryFor(s.name).estimated += Number.isFinite(s.minutes_requested) ? s.minutes_requested : 0;
+  });
+
+  (items || []).forEach((item) => {
+    if (item.item_type !== 'study' || !item.source_subject_id) return;
+    const name = nameById.get(item.source_subject_id);
+    if (!name) return;
+    const duration = Math.max(0, item.end_minutes - item.start_minutes);
+    entryFor(name).planned += duration;
+    entryFor(name).actual += effectiveActualMinutes(item, duration);
+  });
+
+  const subjects = Array.from(rows.values())
+    .filter((r) => r.estimated > 0 || r.planned > 0)
+    .sort((a, b) => b.planned - a.planned);
+  const totals = subjects.reduce(
+    (acc, r) => ({ estimated: acc.estimated + r.estimated, planned: acc.planned + r.planned, actual: acc.actual + r.actual }),
+    { estimated: 0, planned: 0, actual: 0 }
+  );
+  return { subjects, totals };
 }
 
 // ---------------------------------------------------------------------------
