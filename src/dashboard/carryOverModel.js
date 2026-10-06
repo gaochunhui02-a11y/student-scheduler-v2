@@ -43,9 +43,9 @@ export function isFullyCompletedByMinutes(completedMinutes, duration) {
 // hits the database.
 export function validateCompletedMinutesInput(rawValue, duration) {
   const value = typeof rawValue === 'string' ? Number(rawValue) : rawValue;
-  if (!Number.isFinite(value) || value < 0) return { ok: false, error: 'Enter 0 or more minutes.' };
-  if (!Number.isFinite(duration) || duration <= 0) return { ok: false, error: 'Invalid block duration.' };
-  if (value > duration) return { ok: false, error: `Completed minutes can't exceed the planned ${duration} minutes.` };
+  if (!Number.isFinite(value) || value < 0) return { ok: false, error: 'Enter 0 or more minutes.', errorKey: 'schedulerMsg.minutesNonNegative' };
+  if (!Number.isFinite(duration) || duration <= 0) return { ok: false, error: 'Invalid block duration.', errorKey: 'schedulerMsg.invalidDuration' };
+  if (value > duration) return { ok: false, error: `Completed minutes can't exceed the planned ${duration} minutes.`, errorKey: 'schedulerMsg.minutesOverPlanned', errorParams: { minutes: duration } };
   return { ok: true, value: Math.round(value) };
 }
 

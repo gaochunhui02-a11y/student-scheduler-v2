@@ -24,6 +24,7 @@
 // `new Notification(...)`.
 
 import { t } from '../shared/i18n.js';
+import { dedupeDeadlineRows } from '../analytics/analyticsModel.js';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   normalizeNotificationSettings,
@@ -248,7 +249,8 @@ export function initNotificationsSection(userId, hostApi = {}) {
       return;
     }
 
-    (subjects || []).forEach((s) => {
+    // One reminder per task, not one per per-day copy of it (V2-G).
+    dedupeDeadlineRows(subjects).forEach((s) => {
       const type = classifyDeadlineReminderType(s.due_date, today);
       if (!type || !isDeadlineReminderTypeEnabled(settings, type)) return;
       const key = buildDeadlineReminderKey(s.id, type);

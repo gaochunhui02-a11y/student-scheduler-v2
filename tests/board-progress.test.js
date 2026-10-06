@@ -92,12 +92,25 @@ scenario('B. Planner status derived from schedule_items', () => {
     assert.equal(derivePlannerStatus(null, []), null);
     assert.equal(derivePlannerStatus('s1', [block('other', 0, 60)]), 'not_scheduled');
   });
-  check('blocks, nothing logged -> scheduled', () => {
-    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60), block('s1', 100, 160)]), 'scheduled');
+  // V2-G: the Board now uses the shared status model (statusModel.js), so a
+  // linked node reads exactly like the same task in the Planner/Tasks list.
+  check('blocks, nothing logged -> planned', () => {
+    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60), block('s1', 100, 160)]), 'planned');
   });
-  check('partial minutes or one block done -> in_progress', () => {
-    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { completed_minutes: 20 }), block('s1', 100, 160)]), 'in_progress');
-    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { completed: true }), block('s1', 100, 160)]), 'in_progress');
+  check('partial minutes or one block done -> partial', () => {
+    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { completed_minutes: 20 }), block('s1', 100, 160)]), 'partial');
+    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { completed: true }), block('s1', 100, 160)]), 'partial');
+  });
+  check("a block of today's happening now -> in_progress (same as the Planner)", () => {
+    const blocks = [block('s1', 600, 660, { isToday: true }), block('s1', 900, 960)];
+    assert.equal(derivePlannerStatus('s1', blocks, { nowMinutes: 630 }), 'in_progress');
+    assert.equal(derivePlannerStatus('s1', blocks, { nowMinutes: 700 }), 'planned');
+    // the same clock time on a NON-today block never counts as in progress
+    assert.equal(derivePlannerStatus('s1', [block('s1', 600, 660)], { nowMinutes: 630 }), 'planned');
+  });
+  check('missed and carried-over blocks surface on the Board too', () => {
+    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { missed: true }), block('s1', 100, 160, { completed: true })]), 'missed');
+    assert.equal(derivePlannerStatus('s1', [block('s1', 0, 60, { missed: true, carried_over_minutes: 60 })]), 'carried_over');
   });
   check('every block fully completed -> done (by flag or by minutes)', () => {
     assert.equal(
@@ -123,7 +136,7 @@ scenario('B. Planner status derived from schedule_items', () => {
 
 // ---------------------------------------------------------------------------
 scenario('C. Effective status: linked follows Planner, unlinked follows student', () => {
-  const map = new Map([['s1', 'done'], ['s2', 'in_progress'], ['s3', 'scheduled'], ['s4', 'not_scheduled']]);
+  const map = new Map([['s1', 'done'], ['s2', 'in_progress'], ['s3', 'planned'], ['s4', 'not_scheduled'], ['s5', 'missed'], ['s6', 'bogus']]);
   check('unlinked node shows its stored status', () => {
     assert.equal(effectiveNodeStatus({ status: 'in_progress' }, map), 'in_progress');
     assert.equal(effectiveNodeStatus({}, map), 'planned');
@@ -133,6 +146,10 @@ scenario('C. Effective status: linked follows Planner, unlinked follows student'
     assert.equal(effectiveNodeStatus({ status: 'done', linked_study_subject_id: 's2' }, map), 'in_progress');
     assert.equal(effectiveNodeStatus({ status: 'done', linked_study_subject_id: 's3' }, map), 'planned');
     assert.equal(effectiveNodeStatus({ status: 'done', linked_study_subject_id: 's4' }, map), 'planned');
+    assert.equal(effectiveNodeStatus({ status: 'planned', linked_study_subject_id: 's5' }, map), 'missed');
+  });
+  check('an unrecognized Planner status falls back to the stored one', () => {
+    assert.equal(effectiveNodeStatus({ status: 'in_progress', linked_study_subject_id: 's6' }, map), 'in_progress');
   });
   check('linked node with unknown Planner status falls back to stored (no guessing)', () => {
     assert.equal(effectiveNodeStatus({ status: 'in_progress', linked_study_subject_id: 'missing' }, map), 'in_progress');
@@ -154,7 +171,7 @@ scenario('D. Progress', () => {
     { id: 't2', node_type: 'task', status: 'done' },
     { id: 't3', node_type: 'task', status: 'in_progress' },
     { id: 't4', node_type: 'task', linked_study_subject_id: 's1' }, // Planner says done
-    { id: 't5', node_type: 'task', linked_study_subject_id: 's2', status: 'done' }, // Planner says scheduled
+    { id: 't5', node_type: 'task', linked_study_subject_id: 's2', status: 'done' }, // Planner says planned
     { id: 'm1', node_type: 'milestone', status: 'done' },
     { id: 'm2', node_type: 'milestone' },
     { id: 'n', node_type: 'note', status: 'done' },
@@ -170,7 +187,7 @@ scenario('D. Progress', () => {
     { source_node_id: 'm1', target_node_id: 'm2' }, // nested — still counted
     { source_node_id: 'g', target_node_id: 'n' },
   ];
-  const map = new Map([['s1', 'done'], ['s2', 'scheduled']]);
+  const map = new Map([['s1', 'done'], ['s2', 'planned']]);
 
   check('goal progress: 4 / 7, 57% (notes and outside nodes excluded)', () => {
     assert.deepEqual(computeNodeProgress(nodes, edges, 'g', map), { done: 4, total: 7, percent: 57 });

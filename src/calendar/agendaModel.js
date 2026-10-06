@@ -14,6 +14,7 @@
 
 import { resolveOccurrenceForDate } from '../dashboard/recurringClasses.js';
 import { timeToMinutes } from '../dashboard/scheduler.js';
+import { deriveBlockStatus } from '../shared/statusModel.js';
 
 export const AGENDA_FILTERS = ['all', 'classes', 'study', 'external'];
 
@@ -80,6 +81,8 @@ export function buildAgenda({ dates, schedules, classes, items, seriesList = [],
       start: Number.isFinite(i.start_minutes) ? i.start_minutes : null,
       end: Number.isFinite(i.end_minutes) ? i.end_minutes : null,
       completed: Boolean(i.completed),
+      // V2-G: the shared status (no clock here, so never In Progress).
+      status: deriveBlockStatus(i),
     });
   });
 

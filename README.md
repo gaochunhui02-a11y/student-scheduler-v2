@@ -182,8 +182,9 @@ factor.
   writes rather than keeping a second copy of anything.
 - **Database / Migrations** — `supabase/schema.sql` first (creates
   `profiles`, `schedules`, `classes`, `study_subjects`, `schedule_items`),
-  then `supabase/migrations/0001` through `0004` in order (see
-  [Database structure](#database-structure)). Every file is idempotent, so
+  then `supabase/migrations/0001` through `0009` in order (see
+  [Database structure](#database-structure) and
+  [V2 migrations](#v2-migrations-0005-0009)). Every file is idempotent, so
   re-running one that's already applied is safe.
 
 ## Local Development
@@ -232,8 +233,15 @@ Run each of these once, **in order**, in the Supabase dashboard's
 3. [`supabase/migrations/0002_boards.sql`](./supabase/migrations/0002_boards.sql)
 4. [`supabase/migrations/0003_multi_day_planning.sql`](./supabase/migrations/0003_multi_day_planning.sql)
 5. [`supabase/migrations/0004_missed_carry_over.sql`](./supabase/migrations/0004_missed_carry_over.sql)
+6. [`supabase/migrations/0005_task_tags_subtasks.sql`](./supabase/migrations/0005_task_tags_subtasks.sql)
+7. [`supabase/migrations/0006_recurring_classes.sql`](./supabase/migrations/0006_recurring_classes.sql)
+8. [`supabase/migrations/0007_max_daily_study_minutes.sql`](./supabase/migrations/0007_max_daily_study_minutes.sql)
+9. [`supabase/migrations/0008_board_node_status.sql`](./supabase/migrations/0008_board_node_status.sql)
+10. [`supabase/migrations/0009_onboarding.sql`](./supabase/migrations/0009_onboarding.sql)
 
-See [Database structure](#database-structure) for what each one adds.
+See [Database structure](#database-structure) for what each one adds, and
+[V2 migrations](#v2-migrations-0005-0009) for the safety notes on 0005–0009.
+`supabase/optional/` is **not** part of setup — see the 0009 notes below.
 
 ### 6. Configure Auth email links
 
@@ -346,8 +354,51 @@ fully independent of the scheduler. `board_nodes.linked_study_subject_id`
 is the one intentional bridge: a nullable link set when a node is
 converted into a Planner study task.
 
+**`study_subject_subtasks`** (0005) — checklist items under a study task.
+`study_subjects.tags` (0005) holds a task's tags as a JSON array.
+
+**`class_series`** and **`class_series_exceptions`** (0006) — recurring
+classes (days of week, time, date range) and per-date skip/edit overrides.
+Occurrences are computed on the fly and never written into `classes`, so
+loading a date can't create duplicate class rows. `classes.source` (0006)
+records whether a class was typed (`manual`) or imported from `.ics`
+(`imported`).
+
 Every table has `user_id` and RLS policies scoped to
 `auth.uid() = user_id` — enforced by Postgres itself, not just the app.
+
+### V2 migrations (0005–0009)
+
+All five are **additive only**: they add tables or nullable/defaulted
+columns and never drop, rename, retype, or delete anything. They are safe
+to apply while the v1.x app is still deployed — v1 never reads the new
+columns, and every new `NOT NULL` column has a default, so v1's inserts
+keep working. `tests/migrations-safety.test.js` enforces these rules on
+every file.
+
+| File | Adds | Used by |
+|---|---|---|
+| `0005_task_tags_subtasks.sql` | `study_subjects.tags` (jsonb, default `[]`), table `study_subject_subtasks` | Task tags, subtasks, filters |
+| `0006_recurring_classes.sql` | tables `class_series`, `class_series_exceptions`; `classes.source` (default `manual`) | Recurring classes, Calendar's External filter, `.ics` import tagging |
+| `0007_max_daily_study_minutes.sql` | `schedules.max_daily_study_minutes` (nullable = no cap) | Planning Options daily study cap |
+| `0008_board_node_status.sql` | `board_nodes.status` (default `planned`), `due_date`, `estimated_minutes`; widens the node-type check to allow `milestone` | Board status/due/estimate, Milestone nodes |
+| `0009_onboarding.sql` | `profiles.onboarding_completed_at` (nullable, no default) | First-run onboarding remembers finish/skip across devices |
+
+**Deploy order:** apply 0005 → 0009 *before* deploying the V2 frontend.
+The V2 app degrades gracefully where it can (recurring-class reads and the
+onboarding flag fall back if their columns/tables are missing), but saving
+tags/subtasks, recurring classes, the daily cap, Board node details, and
+`.ics` imports need their migrations.
+
+**0009 and onboarding.** `0009` only adds the column — it writes to no
+existing row. Existing users never see onboarding regardless: it is only
+shown when the account has **no** classes or study tasks, the column is
+empty, and this browser hasn't recorded a finish/skip. An optional one-time
+backfill that marks every pre-existing profile as onboarded lives in
+[`supabase/optional/0009b_onboarding_backfill_OPTIONAL.sql`](./supabase/optional/0009b_onboarding_backfill_OPTIONAL.sql).
+It is **not required**, is not part of the migration sequence, and writes
+to every profile row — only run it after an explicit decision that even
+empty pre-existing accounts should skip onboarding.
 
 ## Deployment
 

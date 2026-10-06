@@ -5,6 +5,8 @@
 // functions operate on plain node/edge-shaped objects only, so they're
 // testable with plain Node the same way scheduler.js is.
 
+import { deriveBlockStatus, combineTaskStatuses, isValidStatus } from '../shared/statusModel.js';
+
 export const NODE_TYPES = ['goal', 'subject', 'task', 'note', 'milestone'];
 
 export function isValidNodeType(nodeType) {
@@ -656,37 +658,41 @@ export function normalizeNodeEstimate(value) {
 //   'scheduled'     — blocks exist, nothing logged
 //   'in_progress'   — some time logged or some blocks done
 //   'done'          — every block fully completed
-export function derivePlannerStatus(studySubjectId, scheduleItems) {
+// V2-G: the linked task's status, derived with the SAME rules the Planner,
+// Tasks list, Week and History use (src/shared/statusModel.js), so the
+// Board can never disagree with them. Each block may carry `isToday`
+// (set by the host from the block's schedule date) so a block happening
+// right now reads as In Progress here too.
+//   'not_scheduled' when the task has no study blocks yet; otherwise one of
+//   planned / in_progress / done / partial / missed / carried_over.
+export function derivePlannerStatus(studySubjectId, scheduleItems, { nowMinutes = null } = {}) {
   if (!studySubjectId) return null;
   const blocks = (scheduleItems || []).filter((i) => i && i.item_type === 'study' && i.source_subject_id === studySubjectId);
   if (blocks.length === 0) return 'not_scheduled';
-  const isFull = (b) => b.completed || (Number.isFinite(b.completed_minutes) && b.completed_minutes >= b.end_minutes - b.start_minutes);
-  if (blocks.every(isFull)) return 'done';
-  if (blocks.some((b) => isFull(b) || (Number.isFinite(b.completed_minutes) && b.completed_minutes > 0))) return 'in_progress';
-  return 'scheduled';
+  return combineTaskStatuses(blocks.map((b) => deriveBlockStatus(b, { isToday: Boolean(b.isToday), nowMinutes })));
 }
 
 // Builds studySubjectId -> Planner status for every linked node at once.
-export function buildPlannerStatusMap(nodes, scheduleItems) {
+export function buildPlannerStatusMap(nodes, scheduleItems, context = {}) {
   const map = new Map();
   (nodes || []).forEach((n) => {
     if (n && n.linked_study_subject_id && !map.has(n.linked_study_subject_id)) {
-      map.set(n.linked_study_subject_id, derivePlannerStatus(n.linked_study_subject_id, scheduleItems));
+      map.set(n.linked_study_subject_id, derivePlannerStatus(n.linked_study_subject_id, scheduleItems, context));
     }
   });
   return map;
 }
 
-// The status a node is shown with. A linked node follows its Planner task
-// (not_scheduled/scheduled read as 'planned'); an unlinked node shows what
-// the student set. If the Planner status is unknown (not loaded, or the
-// fetch failed), fall back to the stored status rather than guessing.
+// The status a node is shown with. A linked node shows its Planner task's
+// status (any of the six; not yet scheduled reads as Planned); an unlinked
+// node shows what the student set (planned / in_progress / done). If the
+// Planner status is unknown (not loaded, or the fetch failed), fall back
+// to the stored status rather than guessing.
 export function effectiveNodeStatus(node, plannerStatusMap) {
   if (node && node.linked_study_subject_id && plannerStatusMap && plannerStatusMap.has(node.linked_study_subject_id)) {
     const ps = plannerStatusMap.get(node.linked_study_subject_id);
-    if (ps === 'done') return 'done';
-    if (ps === 'in_progress') return 'in_progress';
-    if (ps) return 'planned';
+    if (ps === 'not_scheduled') return 'planned';
+    if (isValidStatus(ps)) return ps;
   }
   return normalizeNodeStatus(node?.status);
 }

@@ -12,6 +12,7 @@
 
 import { addDaysToDateStr } from '../dashboard/dateUtils.js';
 import { resolveOccurrenceForDate } from '../dashboard/recurringClasses.js';
+import { countBlockStatuses } from '../shared/statusModel.js';
 
 const DAYS_PER_WEEK = 7;
 
@@ -99,9 +100,19 @@ export function aggregateWeekView({ weekDates, schedules, classes, items, dueSub
     if (day) day.studyMinutes += Math.max(0, (item.end_minutes ?? 0) - (item.start_minutes ?? 0));
   });
 
+  // One chip per task per day — per-day copies of the same task (same name,
+  // same due date) are a single deadline (V2-G).
   (dueSubjects || []).forEach((s) => {
     const day = byDate.get(s.due_date);
-    if (day) day.deadlines.push({ id: s.id, name: s.name, priority: s.priority || 'medium' });
+    if (!day) return;
+    const key = String(s.name || '').trim().toLowerCase();
+    const existing = day.deadlines.find((d) => String(d.name || '').trim().toLowerCase() === key);
+    const rank = { high: 3, medium: 2, low: 1 };
+    if (existing) {
+      if ((rank[s.priority] || 2) > (rank[existing.priority] || 2)) existing.priority = s.priority;
+      return;
+    }
+    day.deadlines.push({ id: s.id, name: s.name, priority: s.priority || 'medium' });
   });
 
   (seriesList || []).forEach((series) => {
@@ -117,6 +128,23 @@ export function aggregateWeekView({ weekDates, schedules, classes, items, dueSub
   });
 
   return (weekDates || []).map((d) => byDate.get(d));
+}
+
+// V2-G: per-day study-block status counts (statusModel.js), keyed by
+// date — kept separate from aggregateWeekView so its day shape is
+// unchanged. "In Progress" only applies to today's date.
+export function computeDayStatusCounts({ weekDates, schedules, items, todayDateStr = null, nowMinutes = null }) {
+  const dateById = new Map((schedules || []).map((s) => [s.id, s.for_date]));
+  const blocksByDate = new Map((weekDates || []).map((d) => [d, []]));
+  (items || []).forEach((item) => {
+    const list = blocksByDate.get(dateById.get(item.schedule_id));
+    if (list) list.push(item);
+  });
+  const out = new Map();
+  blocksByDate.forEach((blocks, date) => {
+    out.set(date, countBlockStatuses(blocks, { isToday: date === todayDateStr, nowMinutes }));
+  });
+  return out;
 }
 
 // Per-day workload-bar fractions (0..1), scaled against the week's own

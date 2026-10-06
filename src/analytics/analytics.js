@@ -18,7 +18,7 @@
 // Checkpoint A) — analyticsModel.js's buildAdvisorPromptForTask is kept,
 // unimported, alongside the rest of the optional/future AI code.
 
-import { t, getLocale } from '../shared/i18n.js';
+import { t, tCount, getLocale } from '../shared/i18n.js';
 import {
   lastNDates,
   attachDatesToItems,
@@ -38,6 +38,8 @@ import {
 } from './analyticsModel.js';
 import { getWeekStart, getWeekDates, aggregateWeekView, isOverloadedDay, OVERLOAD_THRESHOLD_MINUTES } from '../week/weekModel.js';
 import { addDaysToDateStr } from '../dashboard/dateUtils.js';
+import { displayBlockName } from '../shared/blockLabels.js';
+import { deriveBlockStatus, countBlockStatuses, statusBadgeHtml, statusBadgeEl, statusLabelKey, SUMMARY_ORDER } from '../shared/statusModel.js';
 import { formatDuration } from '../dashboard/summary.js';
 import { formatClock } from '../dashboard/scheduler.js';
 import { buildSmartTasks, computeAvailableStudyMinutes, rankTasks, buildReasonTags, buildExplanation, buildReasonFacts } from '../dashboard/smartPriority.js';
@@ -115,7 +117,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     greetingEl.textContent = t(key).replace('{name}', name || '');
     if (dateLineEl) {
       try {
-        dateLineEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+        dateLineEl.textContent = new Date().toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
       } catch {
         dateLineEl.textContent = '';
       }
@@ -129,8 +131,8 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     if (deadlinesValueEl) deadlinesValueEl.textContent = String(upcomingCount);
     if (atRiskValueEl) atRiskValueEl.textContent = String(atRiskCount);
 
-    if (plannedSecondaryEl) plannedSecondaryEl.textContent = `${todayStudyCounts.planned} ${t('home.sessionsPlannedLabel')}`;
-    if (completedSecondaryEl) completedSecondaryEl.textContent = `${todayStudyCounts.completed} ${t('home.sessionsCompletedLabel')}`;
+    if (plannedSecondaryEl) plannedSecondaryEl.textContent = `${todayStudyCounts.planned} ${tCount('home.sessionsPlannedLabel', todayStudyCounts.planned)}`;
+    if (completedSecondaryEl) completedSecondaryEl.textContent = `${todayStudyCounts.completed} ${tCount('home.sessionsCompletedLabel', todayStudyCounts.completed)}`;
     if (atRiskSecondaryEl) atRiskSecondaryEl.hidden = atRiskCount <= 0;
   }
 
@@ -156,7 +158,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     container.appendChild(btn);
   }
 
-  function renderToday(status) {
+  function renderToday(status, todayItems = [], nowMinutes = null) {
     if (!todayBodyEl) return;
     todayBodyEl.innerHTML = '';
     const block = status.current || status.next;
@@ -184,15 +186,24 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       return;
     }
 
-    const badge = document.createElement('span');
-    const badgeKey = status.current ? 'home.nowLabel' : 'home.nextLabel';
-    badge.className = `home-today-badge${status.current ? ' home-today-badge-now' : ''}`;
-    badge.dataset.i18n = badgeKey;
-    badge.textContent = t(badgeKey);
+    // V2-G: a study block happening now shows the shared "In Progress"
+    // status badge; classes/meals keep the plain NOW label, and an upcoming
+    // block keeps NEXT (that's a time, not a status).
+    const blockStatus = status.current ? deriveBlockStatus(block, { isToday: true, nowMinutes }) : null;
+    let badge;
+    if (blockStatus) {
+      badge = statusBadgeEl(blockStatus, t(statusLabelKey(blockStatus)));
+    } else {
+      badge = document.createElement('span');
+      const badgeKey = status.current ? 'home.nowLabel' : 'home.nextLabel';
+      badge.className = `home-today-badge${status.current ? ' home-today-badge-now' : ''}`;
+      badge.dataset.i18n = badgeKey;
+      badge.textContent = t(badgeKey);
+    }
 
     const name = document.createElement('div');
     name.className = 'home-today-name';
-    name.textContent = block.name; // user-created content — never translated
+    name.textContent = displayBlockName(block, t); // user-created names untouched; generated Break/Free/meal labels translated
 
     const meta = document.createElement('div');
     meta.className = 'home-today-meta';
@@ -209,7 +220,21 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       todayBodyEl.appendChild(remaining);
     }
 
+    const summary = renderStatusSummary(countBlockStatuses(todayItems, { isToday: true, nowMinutes }));
+    if (summary) todayBodyEl.appendChild(summary);
+
     appendOpenPlannerButton(todayBodyEl, false);
+  }
+
+  // A row of "2 Done · 1 Partial · 1 Missed" badges; null when there's
+  // nothing beyond plain Planned to report.
+  function renderStatusSummary(counts) {
+    const keys = SUMMARY_ORDER.filter((k) => counts[k] > 0);
+    if (keys.length === 0) return null;
+    const row = document.createElement('div');
+    row.className = 'status-summary';
+    row.innerHTML = keys.map((k) => statusBadgeHtml(k, t(statusLabelKey(k)), { count: counts[k], compact: true })).join('');
+    return row;
   }
 
   // ---------------- Smart Suggestions: Recommended Next (Checkpoint E) ----------------
@@ -355,7 +380,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
 
   function shortDayLabel(dateStr) {
     try {
-      return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+      return new Date(`${dateStr}T00:00:00`).toLocaleDateString(getLocale(), { weekday: 'short' });
     } catch {
       return dateStr.slice(5);
     }
@@ -603,19 +628,19 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     insightsMetricsEl.appendChild(metricCard(
       t('insights.avgBlock'),
       avgBlock.insufficientData ? '—' : formatDuration(avgBlock.averageMinutes),
-      avgBlock.insufficientData ? notEnough : t('insights.acrossBlocks').replace('{n}', avgBlock.blockCount),
+      avgBlock.insufficientData ? notEnough : tCount('insights.acrossBlocks', avgBlock.blockCount),
       avgBlock.insufficientData
     ));
     insightsMetricsEl.appendChild(metricCard(
       t('insights.estimateAccuracy'),
       accuracy.insufficientData ? '—' : `${accuracy.ratioPercent}%`,
-      accuracy.insufficientData ? t('insights.accuracyNeedsData') : t('insights.accuracyDetail').replace('{n}', accuracy.taskCount),
+      accuracy.insufficientData ? t('insights.accuracyNeedsData') : tCount('insights.accuracyDetail', accuracy.taskCount),
       accuracy.insufficientData
     ));
     insightsMetricsEl.appendChild(metricCard(
       t('insights.overdueTitle'),
       overdue.count > 0 ? formatDuration(overdue.totalMinutes) : '0',
-      overdue.count > 0 ? t('insights.overdueTasks').replace('{n}', overdue.count) : t('insights.nothingOverdue'),
+      overdue.count > 0 ? tCount('insights.overdueTasks', overdue.count) : t('insights.nothingOverdue'),
       overdue.count === 0
     ));
   }
@@ -713,7 +738,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       return;
     }
     boardsCardEl.hidden = false;
-    const parts = [`${summary.count} ${t('analytics.activeBoards')}`];
+    const parts = [`${summary.count} ${tCount('analytics.activeBoards', summary.count)}`];
     if (summary.mostRecentTitle) parts.push(`${t('analytics.mostRecentBoard')}: ${summary.mostRecentTitle}`);
     if (boardsSummaryEl) boardsSummaryEl.textContent = parts.join(' · ');
   }
@@ -831,12 +856,19 @@ export function initAnalyticsSection(userId, hostApi = {}) {
         const accuracy = computeEstimateAccuracy(longData ? longData.subjects || [] : [], longItems);
         const overdue = dueData ? computeOverdueWorkload(dueData.subjects, dueData.items, today) : { count: 0, totalMinutes: 0, items: [] };
         renderInsightMetrics({ weekly, completionRate, avgBlock, accuracy, overdue });
+        const statusBadgesEl = document.getElementById('insightsStatusBadges');
+        if (statusBadgesEl) {
+          statusBadgesEl.innerHTML = '';
+          const summary = renderStatusSummary(countBlockStatuses(itemsWithDate.filter((i) => i.date !== today)));
+          if (summary) statusBadgesEl.appendChild(summary);
+          else statusBadgesEl.textContent = t('analytics.noDataYet');
+        }
         renderOverdue(overdue);
         return;
       }
 
       renderCards({ todayTotals, todayStudyCounts, weekly, completionRate, upcomingCount: upcoming.length, atRiskCount });
-      renderToday(todayStatus);
+      renderToday(todayStatus, todayItems, now.getHours() * 60 + now.getMinutes());
       let tomorrowStudyMinutes = null;
       if (workloadData) {
         const weekDays = aggregateWeekView({ weekDates, ...workloadData });

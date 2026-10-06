@@ -57,7 +57,8 @@ import {
   validateManualStudyEdit,
   formatClock,
   timeToMinutes,
-  minutesToClock,
+  setNextDayLabel,
+  setClockLocale,
 } from './scheduler.js';
 import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan, buildCarryOverPreview, recomputeCarryOverSegments, acceptCarryOver } from './multiDayPlan.js';
 import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMinutesInput, canCarryOverBlock, canMarkMissed } from './carryOverModel.js';
@@ -92,7 +93,7 @@ import {
   buildModifyExceptionFields,
 } from './recurringClasses.js';
 import { filterTasks, listDistinctSubjectNames, listDistinctTags } from './taskFilters.js';
-import { t, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
+import { t, tCount, tMessage, applyTranslations, getLanguage, getLocale, setLanguage } from '../shared/i18n.js';
 import { initBoardSection } from '../board/board.js';
 import { listBoards } from '../board/boardData.js';
 import { initAnalyticsSection } from '../analytics/analytics.js';
@@ -105,6 +106,9 @@ import { initCommandPalette } from '../shared/commandPaletteView.js';
 import { isPaletteShortcut } from '../shared/commandPalette.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 import { initOnboarding } from './onboarding.js';
+import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
+import { displayBlockName, mealLabel } from '../shared/blockLabels.js';
+import { scrollBehavior } from '../shared/motion.js';
 import { shouldShowOnboarding } from './onboardingModel.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
@@ -280,6 +284,8 @@ async function init(session) {
     langSelect.addEventListener('change', () => {
       setLanguage(langSelect.value);
       applyTranslations();
+      setNextDayLabel(t('scheduler.nextDay'));
+      setClockLocale(getLocale());
       refreshThemeToggleLabel();
       // Home's greeting/labels are rendered via t(), not [data-i18n] alone
       // (the greeting also splices in the display name) — re-run its
@@ -349,12 +355,12 @@ async function init(session) {
 
     const targetRow = taskId ? findStudyRow(taskId) : null;
     if (targetRow) {
-      targetRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      targetRow.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
       targetRow.classList.add('study-row-highlight');
       setTimeout(() => targetRow.classList.remove('study-row-highlight'), 1800);
       return;
     }
-    if (studyList) studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (studyList) studyList.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 
   // ---------------- Board -> existing study-task system (Phase 5) ----------------
@@ -368,6 +374,17 @@ async function init(session) {
   // further down this function, but that's fine here: these closures are
   // only ever invoked later, after a user opens the Board's conversion
   // modal — well after every one of them has been assigned.
+  // V2-G: the blocks behind linked Board nodes, each tagged with whether it
+  // falls on today, so the Board derives In Progress exactly like the
+  // Planner. Read-only: two selects, no writes.
+  async function loadLinkedScheduleItems(subjectIds) {
+    const [items, todaySchedule] = await Promise.all([
+      listScheduleItemsForSourceSubjectIds(subjectIds),
+      getScheduleForDateIfExists(userId, addDaysToDateStr(tomorrowDateStr(), -1)),
+    ]);
+    return items.map((i) => ({ ...i, isToday: Boolean(todaySchedule) && i.schedule_id === todaySchedule.id }));
+  }
+
   const boardHostApi = {
     getActiveScheduleId: () => (schedule ? schedule.id : null),
     createStudyTaskFromBoard: async (fields) => {
@@ -381,7 +398,7 @@ async function init(session) {
     viewInPlanner: goToPlannerStudyList,
     // V2-D: read-only. Lets the Board show each linked node's Planner
     // status; nothing on this path writes to either side.
-    getLinkedScheduleItems: (subjectIds) => listScheduleItemsForSourceSubjectIds(subjectIds),
+    getLinkedScheduleItems: (subjectIds) => loadLinkedScheduleItems(subjectIds),
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 
@@ -561,7 +578,7 @@ async function init(session) {
       // before scrolling, or the nav link would land on a hidden section.
       const collapsible = target.closest('details');
       if (collapsible && !collapsible.open) collapsible.open = true;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     }
   }
   document.querySelectorAll('.nav-item[data-scroll-target]').forEach((btn) => {
@@ -636,7 +653,7 @@ async function init(session) {
   async function openCalendarCard(cardId) {
     await activateView('calendarView');
     const card = document.getElementById(cardId);
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (card) card.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 
   function jumpFromSettingsToPlanner(targetId) {
@@ -742,7 +759,7 @@ async function init(session) {
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         if (settingsExportStatusEl) {
-          let msg = t('settings.exportDone').replace('{count}', String(totalExportedRows(payload)));
+          let msg = tCount('settings.exportDone', totalExportedRows(payload));
           if (payload.skipped.length > 0) msg += ` ${t('settings.exportSkipped').replace('{tables}', payload.skipped.map((x) => x.table).join(', '))}`;
           settingsExportStatusEl.textContent = msg;
         }
@@ -814,7 +831,7 @@ async function init(session) {
     qaAddTaskBtn.addEventListener('click', () => {
       activatePlannerScroll('plannerForm');
       document.getElementById('addStudyBtn').click(); // exact same handler a manual click already uses
-      studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      studyList.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     });
   }
   const qaOpenPlannerBtn = document.getElementById('homeQaOpenPlanner');
@@ -844,13 +861,13 @@ async function init(session) {
   function quickAddStudyTask() {
     activatePlannerScroll('plannerForm');
     document.getElementById('addStudyBtn').click();
-    studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    studyList.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
   function quickAddClass() {
     activatePlannerScroll('plannerForm');
     document.getElementById('addClassBtn').click();
     const classListEl = document.getElementById('classList');
-    if (classListEl) classListEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (classListEl) classListEl.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
   }
   function quickAddRecurringClass() {
     activatePlannerScroll('recurringClassesCard');
@@ -882,7 +899,7 @@ async function init(session) {
     activatePlannerScroll('studyList');
     const row = findStudyRow(taskId);
     if (!row) return;
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
     row.classList.add('study-row-highlight');
     setTimeout(() => row.classList.remove('study-row-highlight'), 1800);
   }
@@ -953,7 +970,7 @@ async function init(session) {
   let activeToken = 0;
 
   function flashSaved() {
-    saveStatus.textContent = 'Saved';
+    saveStatus.textContent = t('common.saved');
     saveStatus.classList.remove('hint-error');
     clearTimeout(flashSaved._t);
     flashSaved._t = setTimeout(() => { saveStatus.textContent = ''; }, 1200);
@@ -973,6 +990,20 @@ async function init(session) {
     });
     target._savePromise = next;
     return next;
+  }
+
+  // "45 min" / "45 分钟" / "45 分" (V2-G translation audit).
+  function minText(n) {
+    return `${n} ${t('units.min')}`;
+  }
+
+  async function loadSubtasksSoft(subjectIds) {
+    try {
+      return await listSubtasksForSubjectIds(subjectIds);
+    } catch (err) {
+      console.error('Could not load subtasks:', err);
+      return [];
+    }
   }
 
   function toHHMM(t) {
@@ -1019,8 +1050,11 @@ async function init(session) {
     const h = Math.floor(total / 60);
     const m = total % 60;
     const durText = `${h}h${m ? ' ' + m + 'm' : ''}`;
-    const untilText = overnight ? `${minutesToClock(sleep)} (next day)` : minutesToClock(sleep);
-    hintEl.textContent = `Your day: ${minutesToClock(wake)} → ${untilText} (${durText} total)${total < 60 ? ' — too short, add more time' : ''}`;
+    // formatClock adds the translated "(next day)" for times past midnight.
+    hintEl.textContent = t('planner.dayLengthHint')
+      .replace('{start}', formatClock(wake))
+      .replace('{end}', formatClock(sleep))
+      .replace('{total}', durText) + (total < 60 ? t('planner.dayTooShortSuffix') : '');
     hintEl.className = 'hint day-length';
   }
 
@@ -1194,7 +1228,7 @@ async function init(session) {
       flashSaved();
     } catch (err) {
       console.error('Could not apply quick template:', err);
-      flashError('Could not apply that template — check your connection.');
+      flashError(t('errors.couldNotApplyTemplate'));
     } finally {
       btn.disabled = false;
     }
@@ -1331,13 +1365,13 @@ async function init(session) {
     el.className = 'entry-row';
     if (row.id) el.dataset.id = row.id;
     el.innerHTML = `
-      <input type="text" class="class-name" aria-label="Class name" placeholder="e.g. Math" value="${escapeAttr(row.name || '')}">
+      <input type="text" class="class-name" data-i18n-aria-label="classes.nameLabel" aria-label="${escapeAttr(t('classes.nameLabel'))}" data-i18n-placeholder="classes.namePlaceholder" placeholder="${escapeAttr(t('classes.namePlaceholder'))}" value="${escapeAttr(row.name || '')}">
       <div class="cls-time-group">
-        <input type="time" class="class-start" aria-label="Start time" value="${toHHMM(row.start_time)}">
+        <input type="time" class="class-start" data-i18n-aria-label="classes.startLabel" aria-label="${escapeAttr(t('classes.startLabel'))}" value="${toHHMM(row.start_time)}">
         <span class="cls-time-sep">–</span>
-        <input type="time" class="class-end" aria-label="End time" value="${toHHMM(row.end_time)}">
+        <input type="time" class="class-end" data-i18n-aria-label="classes.endLabel" aria-label="${escapeAttr(t('classes.endLabel'))}" value="${toHHMM(row.end_time)}">
       </div>
-      <button class="remove-btn" type="button" title="Remove">✕</button>
+      <button class="remove-btn" type="button" data-i18n-title="common.remove" title="${escapeAttr(t('common.remove'))}" data-i18n-aria-label="common.remove" aria-label="${escapeAttr(t('common.remove'))}"><span aria-hidden="true">✕</span></button>
     `;
     el.querySelector('.remove-btn').addEventListener('click', () => {
       el.remove();
@@ -1553,8 +1587,9 @@ async function init(session) {
       startDate: slot.querySelector('.recurring-start-date-input').value,
       endDate: slot.querySelector('.recurring-end-date-input').value,
     });
-    if (!validateSeriesFields(fields).valid) {
-      errorEl.textContent = t('recurring.invalidSeries');
+    const seriesValidation = validateSeriesFields(fields);
+    if (!seriesValidation.valid) {
+      errorEl.textContent = tMessage(seriesValidation);
       return;
     }
     errorEl.textContent = '';
@@ -1640,15 +1675,15 @@ async function init(session) {
     const badgeKey = occurrence.isModified ? 'recurring.editedBadge' : 'recurring.badge';
     const badgeClass = occurrence.isModified ? ' recurring-badge-modified' : '';
     el.innerHTML = `
-      <input type="text" class="class-name" readonly aria-label="Class name" value="${escapeAttr(occurrence.name)}">
+      <input type="text" class="class-name" readonly data-i18n-aria-label="classes.nameLabel" aria-label="${escapeAttr(t('classes.nameLabel'))}" value="${escapeAttr(occurrence.name)}">
       <div class="cls-time-group">
-        <input type="time" class="class-start" readonly aria-label="Start time" value="${toHHMM(occurrence.start_time)}">
+        <input type="time" class="class-start" readonly data-i18n-aria-label="classes.startLabel" aria-label="${escapeAttr(t('classes.startLabel'))}" value="${toHHMM(occurrence.start_time)}">
         <span class="cls-time-sep">–</span>
-        <input type="time" class="class-end" readonly aria-label="End time" value="${toHHMM(occurrence.end_time)}">
+        <input type="time" class="class-end" readonly data-i18n-aria-label="classes.endLabel" aria-label="${escapeAttr(t('classes.endLabel'))}" value="${toHHMM(occurrence.end_time)}">
       </div>
       <span class="recurring-badge${badgeClass}">${escapeAttr(t(badgeKey))}</span>
       <details class="planner-more-menu recurring-row-menu">
-        <summary class="planner-more-btn" title="${escapeAttr(t('recurring.moreActions'))}">⋯</summary>
+        <summary class="planner-more-btn" title="${escapeAttr(t('recurring.moreActions'))}" aria-label="${escapeAttr(t('recurring.moreActions'))}" data-i18n-title="recurring.moreActions" data-i18n-aria-label="recurring.moreActions">⋯</summary>
         <div class="planner-more-dropdown">
           <button type="button" class="planner-more-item recurring-edit-today-btn">${escapeAttr(t('recurring.editToday'))}</button>
           <button type="button" class="planner-more-item recurring-skip-today-btn">${escapeAttr(t('recurring.skipToday'))}</button>
@@ -1762,7 +1797,7 @@ async function init(session) {
     manageRecurringBtn.addEventListener('click', () => {
       recurringClassesCardEl.open = true;
       openSeriesForm(null);
-      recurringClassesCardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      recurringClassesCardEl.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     });
   }
   const addRecurringSeriesBtn = document.getElementById('addRecurringSeriesBtn');
@@ -1839,7 +1874,7 @@ async function init(session) {
             <div class="task-subtask-row" data-subtask-id="${escapeAttr(s.id)}">
               <input type="checkbox" class="task-subtask-toggle" ${s.completed ? 'checked' : ''}>
               <span class="task-subtask-title${s.completed ? ' task-subtask-done' : ''}">${escapeAttr(s.title)}</span>
-              <button type="button" class="task-subtask-remove" title="Remove">✕</button>
+              <button type="button" class="task-subtask-remove" data-i18n-title="study.removeSubtask" title="${escapeAttr(t('study.removeSubtask'))}" data-i18n-aria-label="study.removeSubtask" aria-label="${escapeAttr(t('study.removeSubtask'))}"><span aria-hidden="true">✕</span></button>
             </div>`
         )
         .join('');
@@ -1867,16 +1902,16 @@ async function init(session) {
     const canHaveSubtasks = Boolean(row.id);
     el.innerHTML = `
       <div class="task-row-top">
-        <button type="button" class="task-expand-toggle" data-i18n-title="study.expandDetails" title="Show details" data-i18n-aria-label="study.expandDetails" aria-label="Show details" aria-expanded="false">
+        <button type="button" class="task-expand-toggle" data-i18n-title="study.expandDetails" title="${escapeAttr(t('study.expandDetails'))}" data-i18n-aria-label="study.expandDetails" aria-label="${escapeAttr(t('study.expandDetails'))}" aria-expanded="false">
           <svg class="task-expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
         </button>
-        <input type="text" class="study-name" aria-label="Study task name" placeholder="e.g. Biology" value="${escapeAttr(row.name || '')}">
-        <select class="study-priority" aria-label="Priority" data-priority="${priority}">
-          <option value="low" ${priority === 'low' ? 'selected' : ''}>Low</option>
-          <option value="medium" ${priority === 'medium' ? 'selected' : ''}>Medium</option>
-          <option value="high" ${priority === 'high' ? 'selected' : ''}>High</option>
+        <input type="text" class="study-name" data-i18n-aria-label="study.nameLabel" aria-label="${escapeAttr(t('study.nameLabel'))}" data-i18n-placeholder="study.namePlaceholder" placeholder="${escapeAttr(t('study.namePlaceholder'))}" value="${escapeAttr(row.name || '')}">
+        <select class="study-priority" data-i18n-aria-label="study.priorityLabel" aria-label="${escapeAttr(t('study.priorityLabel'))}" data-priority="${priority}">
+          <option value="low" data-i18n="taskFilter.priorityLow" ${priority === 'low' ? 'selected' : ''}>${escapeAttr(t('taskFilter.priorityLow'))}</option>
+          <option value="medium" data-i18n="taskFilter.priorityMedium" ${priority === 'medium' ? 'selected' : ''}>${escapeAttr(t('taskFilter.priorityMedium'))}</option>
+          <option value="high" data-i18n="taskFilter.priorityHigh" ${priority === 'high' ? 'selected' : ''}>${escapeAttr(t('taskFilter.priorityHigh'))}</option>
         </select>
-        <button class="remove-btn" type="button" title="Remove">✕</button>
+        <button class="remove-btn" type="button" data-i18n-title="common.remove" title="${escapeAttr(t('common.remove'))}" data-i18n-aria-label="common.remove" aria-label="${escapeAttr(t('common.remove'))}"><span aria-hidden="true">✕</span></button>
       </div>
       <div class="task-row-chips">
         <span class="task-chip task-chip-due" hidden></span>
@@ -1886,17 +1921,17 @@ async function init(session) {
       <div class="task-row-details">
         <div class="task-row-meta">
           <label class="task-mini-field">
-            <span>Minutes</span>
+            <span data-i18n="study.minutesLabel">${escapeAttr(t('study.minutesLabel'))}</span>
             <input type="number" class="study-minutes" min="5" step="5" value="${row.minutes_requested || ''}">
           </label>
           <label class="task-mini-field">
-            <span>Due</span>
+            <span data-i18n="study.dueLabel">${escapeAttr(t('study.dueLabel'))}</span>
             <input type="date" class="study-due" value="${row.due_date || ''}">
           </label>
           ${row.id && !isChunk ? `<button type="button" class="edit-btn plan-days-btn">${escapeAttr(t('multiday.planDaysButton'))}</button>` : ''}
         </div>
         ${isChunk ? `<p class="hint multiday-chunk-hint">${escapeAttr(t('multiday.chunkHint'))}</p>` : ''}
-        <input type="text" class="study-notes" aria-label="Notes" placeholder="Notes (optional)" value="${escapeAttr(row.notes || '')}">
+        <input type="text" class="study-notes" data-i18n-aria-label="study.notesLabel" aria-label="${escapeAttr(t('study.notesLabel'))}" data-i18n-placeholder="study.notesPlaceholder" placeholder="${escapeAttr(t('study.notesPlaceholder'))}" value="${escapeAttr(row.notes || '')}">
 
         <div class="task-tags-section">
           <p class="hint task-section-label">${escapeAttr(t('study.tagsLabel'))}</p>
@@ -1912,7 +1947,7 @@ async function init(session) {
           <div class="task-subtasks-list"></div>
           <div class="task-subtasks-add">
             <input type="text" class="task-subtask-input" placeholder="${escapeAttr(t('study.addSubtaskPlaceholder'))}" ${canHaveSubtasks ? '' : 'disabled'}>
-            <button type="button" class="edit-btn task-subtask-add-btn" ${canHaveSubtasks ? '' : 'disabled'}>+</button>
+            <button type="button" class="edit-btn task-subtask-add-btn" data-i18n-title="study.addSubtaskButton" title="${escapeAttr(t('study.addSubtaskButton'))}" data-i18n-aria-label="study.addSubtaskButton" aria-label="${escapeAttr(t('study.addSubtaskButton'))}" ${canHaveSubtasks ? '' : 'disabled'}><span aria-hidden="true">+</span></button>
           </div>
         </div>
 
@@ -2102,12 +2137,29 @@ async function init(session) {
       dueChip.textContent = label || '';
       dueChip.hidden = !label;
     }
+    // V2-G: the task's status from its own study blocks, same badge as
+    // everywhere else; the remaining-time chip now only shows minutes.
+    let statusChip = row.querySelector('.task-chip-status');
+    if (!statusChip) {
+      statusChip = document.createElement('span');
+      statusChip.className = 'task-chip-status';
+      const chipsEl = row.querySelector('.task-row-chips');
+      if (chipsEl) chipsEl.prepend(statusChip);
+    }
+    if (hasContent) {
+      const blocks = currentScheduleItems.filter((i) => i.type === 'study' && (task.id ? i.sourceSubjectId === task.id : i.name === task.name));
+      const nowDate = new Date();
+      const status = blocks.length > 0
+        ? deriveTaskStatus(blocks, { isToday: Boolean(schedule) && schedule.for_date === todayDateStr(), nowMinutes: nowDate.getHours() * 60 + nowDate.getMinutes() })
+        : null;
+      statusChip.innerHTML = status ? statusBadgeHtml(status, t(statusLabelKey(status)), { compact: true }) : '';
+      statusChip.hidden = !status;
+    } else {
+      statusChip.hidden = true;
+    }
     if (remainingChip) {
-      if (!hasContent) {
+      if (!hasContent || task.completed) {
         remainingChip.hidden = true;
-      } else if (task.completed) {
-        remainingChip.textContent = t('study.doneChip');
-        remainingChip.hidden = false;
       } else if (task.remainingMinutes > 0) {
         remainingChip.textContent = t('study.minutesRemaining').replace('{minutes}', task.remainingMinutes);
         remainingChip.hidden = false;
@@ -2265,7 +2317,7 @@ async function init(session) {
 
     const warningHtml =
       unscheduledMinutes > 0
-        ? `<div class="edit-error">${escapeAttr(t('multiday.unscheduledWarning'))} ${unscheduledMinutes} min</div>`
+        ? `<div class="edit-error">${escapeAttr(t('multiday.unscheduledWarning'))} ${escapeAttr(minText(unscheduledMinutes))}</div>`
         : '';
     const errorHtml = planningError ? `<div class="edit-error">${escapeAttr(planningError)}</div>` : '';
 
@@ -2406,7 +2458,7 @@ async function init(session) {
 
         const scheduleId = schedule.id;
         const reloadedSubjects = await listStudySubjects(scheduleId);
-        const reloadedSubtasks = await listSubtasksForSubjectIds(reloadedSubjects.map((s) => s.id));
+        const reloadedSubtasks = await loadSubtasksSoft(reloadedSubjects.map((s) => s.id));
         if (token !== activeToken || !schedule || schedule.id !== scheduleId) return;
         const reloadedSubtasksBySubjectId = new Map();
         reloadedSubtasks.forEach((st) => {
@@ -2824,7 +2876,7 @@ async function init(session) {
 
     return `
       <div class="edit-panel carryover-panel">
-        <p class="hint">${escapeAttr(t('carryOver.remainingMinutesLabel'))}: ${preview.remainingMinutes} min</p>
+        <p class="hint">${escapeAttr(t('carryOver.remainingMinutesLabel'))}: ${escapeAttr(minText(preview.remainingMinutes))}</p>
         <div class="multiday-range-row">
           <label>${escapeAttr(t('multiday.startDate'))}
             <input type="date" class="co-start-date" value="${escapeAttr(preview.startDate)}">
@@ -2918,14 +2970,20 @@ async function init(session) {
       return;
     }
     const subjectByName = new Map((subjectsForLookup || []).map((s) => [s.name, s]));
+    const nowDate = new Date();
+    const timelineStatusContext = {
+      isToday: Boolean(schedule) && schedule.for_date === todayDateStr(),
+      nowMinutes: nowDate.getHours() * 60 + nowDate.getMinutes(),
+    };
     const html = events
       .map((e) => {
         const dur = e.end - e.start;
-        const durText = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60 ? (dur % 60) + 'm' : ''}`.trim() : `${dur} min`;
+        const durText = dur >= 60 ? `${Math.floor(dur / 60)}h ${dur % 60 ? (dur % 60) + 'm' : ''}`.trim() : minText(dur);
         const metaParts = [`${formatClock(e.start)} – ${formatClock(e.end)}`, durText];
 
         let priorityBadge = '';
-        let missedBadge = '';
+        let statusBadge = '';
+        let blockStatus = null;
         let lockControl = '';
         let doneControl = '';
         let editControl = '';
@@ -2933,31 +2991,36 @@ async function init(session) {
         let missedControl = '';
         let carryOverControl = '';
         let focusControl = '';
-        let nameHtml = escapeAttr(e.name);
+        let nameHtml = escapeAttr(displayBlockName(e, t));
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
           if (subj?.priority) {
-            priorityBadge = `<span class="tl-badge tl-badge-${subj.priority}">${subj.priority.toUpperCase()}</span>`;
+            const priorityKey = { high: 'taskFilter.priorityHigh', medium: 'taskFilter.priorityMedium', low: 'taskFilter.priorityLow' }[subj.priority];
+            priorityBadge = `<span class="tl-badge tl-badge-${subj.priority}">${escapeAttr(priorityKey ? t(priorityKey) : subj.priority)}</span>`;
           }
           const dueText = formatDueDate(subj?.dueDate);
           if (dueText) metaParts.push(dueText);
 
-          if (e.completed) nameHtml = `✓ ${nameHtml}`;
-          if (e.missed) missedBadge = `<span class="tl-badge tl-badge-missed">${escapeAttr(t('carryOver.missedBadge'))}</span>`;
+          // V2-G: one status badge (statusModel.js) — the same label/icon/
+          // color the Tasks list, Week, History, Board and Insights use.
+          blockStatus = deriveBlockStatus(e, timelineStatusContext);
+          if (blockStatus) statusBadge = statusBadgeHtml(blockStatus, t(statusLabelKey(blockStatus)));
 
           // Phase 14: partial-completion + carried-over audit trail, shown
           // right alongside the existing time/duration/due-date meta line —
           // never replacing it.
           const duration = e.end - e.start;
           if (e.completedMinutes > 0 && !e.completed) {
-            metaParts.push(`${t('carryOver.completedMinutesLabel')}: ${e.completedMinutes}/${duration} min`);
+            metaParts.push(`${t('carryOver.completedMinutesLabel')}: ${e.completedMinutes}/${minText(duration)}`);
           }
           if (e.carriedOverMinutes > 0) {
-            metaParts.push(`${t('carryOver.carriedOverNote')} ${e.carriedOverMinutes} min`);
+            metaParts.push(`${t('carryOver.carriedOverNote')} ${minText(e.carriedOverMinutes)}`);
           }
 
           if (e.id) {
-            if (canStartFocus(e)) {
+            // Focus Mode is a live timer, so only for today's blocks — not a
+            // past or future day that happens to be open in the Planner.
+            if (canStartFocus(e) && schedule && schedule.for_date === todayDateStr()) {
               focusControl = `<button type="button" class="focus-btn" data-id="${e.id}">${escapeAttr(t('focus.start'))}</button>`;
             }
             lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${escapeAttr(e.locked ? t('schedule.locked') : t('schedule.lockAction'))}</button>`;
@@ -3024,14 +3087,14 @@ async function init(session) {
             : '';
 
         return `
-          <div class="tl-row tl-${e.type}${e.locked ? ' tl-locked' : ''}${e.completed ? ' tl-completed' : ''}">
+          <div class="tl-row tl-${e.type}${e.locked ? ' tl-locked' : ''}${e.completed ? ' tl-completed' : ''}${blockStatus === 'in_progress' ? ' tl-in-progress' : ''}">
             <div class="tl-time">${formatClock(e.start)}</div>
             <div class="tl-rail"><span class="tl-dot"></span></div>
             <div class="tl-card">
               <div class="tl-card-top">
                 <span class="tl-name">${nameHtml}</span>
                 ${priorityBadge}
-                ${missedBadge}
+                ${statusBadge}
               </div>
               <div class="tl-meta">${escapeAttr(metaParts.join(' · '))}</div>
               ${actionsHtml}
@@ -3086,7 +3149,7 @@ async function init(session) {
       <div class="nextup-row">
         <span class="nextup-dot${current ? ' is-live' : ''}"></span>
         <div class="nextup-info">
-          <div class="nextup-name">${escapeAttr(block.name)}</div>
+          <div class="nextup-name">${escapeAttr(displayBlockName(block, t))}</div>
           <div class="nextup-meta">${escapeAttr(label)} · ${formatClock(block.start)} – ${formatClock(block.end)}</div>
         </div>
       </div>
@@ -3175,7 +3238,7 @@ async function init(session) {
 
       const bounds = resolveDayBounds(wakeTimeEl.value, sleepTimeEl.value);
       if (bounds.error) {
-        errorEl.textContent = bounds.error;
+        errorEl.textContent = tMessage(bounds);
         return;
       }
       const newStart = resolveClockTimeInDay(input.value, bounds.dayStart, bounds.dayEnd);
@@ -3205,7 +3268,7 @@ async function init(session) {
       });
 
       if (!result.ok) {
-        errorEl.textContent = result.error;
+        errorEl.textContent = tMessage(result);
         return;
       }
 
@@ -3257,7 +3320,7 @@ async function init(session) {
       const duration = item.end - item.start;
       const validated = validateCompletedMinutesInput(input.value, duration);
       if (!validated.ok) {
-        errorEl.textContent = validated.error;
+        errorEl.textContent = tMessage(validated);
         return;
       }
       const completed = isFullyCompletedByMinutes(validated.value, duration);
@@ -3301,7 +3364,7 @@ async function init(session) {
         await openCarryOverPanel(item);
       } catch (err) {
         console.error(err);
-        flashError('Could not mark this block missed — check your connection.');
+        flashError(t('errors.couldNotMarkMissed'));
         markMissedBtn.disabled = false;
       }
       return;
@@ -3459,13 +3522,13 @@ async function init(session) {
     }
     const affected = progress.subjects.filter((s) => s.unscheduled > 0);
     const list = affected
-      .map((s) => `<div class="item"><span>${escapeAttr(s.name)}</span><span class="value">${s.scheduled} / ${s.requested} min</span></div>`)
+      .map((s) => `<div class="item"><span>${escapeAttr(s.name)}</span><span class="value">${s.scheduled} / ${escapeAttr(minText(s.requested))}</span></div>`)
       .join('');
     shortfallWarningBody.innerHTML = `
       <div class="warning-totals">
-        <div class="row"><span>${escapeAttr(t('shortfall.requestedLabel'))}</span><span class="value">${progress.requestedTotal} min</span></div>
-        <div class="row"><span>${escapeAttr(t('shortfall.scheduledLabel'))}</span><span class="value">${progress.scheduledTotal} min</span></div>
-        <div class="row"><span>${escapeAttr(t('shortfall.unscheduledLabel'))}</span><span class="value">${progress.unscheduledTotal} min</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.requestedLabel'))}</span><span class="value">${escapeAttr(minText(progress.requestedTotal))}</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.scheduledLabel'))}</span><span class="value">${escapeAttr(minText(progress.scheduledTotal))}</span></div>
+        <div class="row"><span>${escapeAttr(t('shortfall.unscheduledLabel'))}</span><span class="value">${escapeAttr(minText(progress.unscheduledTotal))}</span></div>
       </div>
       <div class="warning-list">${list}</div>
     `;
@@ -3561,7 +3624,7 @@ async function init(session) {
     });
 
     if (result.error) {
-      showScheduleError(result.error);
+      showScheduleError(tMessage(result));
       renderDailySummary(null);
       renderShortfallWarning(null);
       renderLockConflicts(null);
@@ -3577,7 +3640,9 @@ async function init(session) {
     renderLockConflicts(null);
 
     renderScheduleEvents(result.events, subjectsInput);
-    renderNotes(result.notes);
+    renderNotes(result.noteDetails
+      ? result.noteDetails.map((d) => tMessage(d.params && d.params.meal ? { ...d, params: { ...d.params, meal: mealLabel(d.params.meal, t) } } : d))
+      : result.notes);
 
     const progress = computeSubjectProgress(result.events, subjectsInput);
     renderDailySummary(computeDailySummary(result.events, result.dayStart, result.dayEnd), progress);
@@ -3612,7 +3677,7 @@ async function init(session) {
       refreshHistoryList();
     } catch (e) {
       console.error(e);
-      flashError('Schedule generated, but could not be saved — check your connection.');
+      flashError(t('errors.generatedNotSaved'));
     }
   }
 
@@ -3712,7 +3777,7 @@ async function init(session) {
     historyListEl.innerHTML = history
       .map((h) => {
         const dateLabel = formatDateLabel(h.forDate);
-        const bits = [t('history.classCount').replace('{count}', h.classCount), t('history.subjectCount').replace('{count}', h.subjectCount)];
+        const bits = [tCount('history.classCount', h.classCount), tCount('history.subjectCount', h.subjectCount)];
         if (h.studyBlockCount > 0) bits.push(t('history.completionPercent').replace('{percent}', h.completionPercent));
         // V2-E: the minutes behind the percentage, plus carried-over and
         // missed work only when there is some.
@@ -3721,16 +3786,20 @@ async function init(session) {
           minuteBits.push(`${t('analytics.planned')} ${formatDuration(h.plannedMinutes)}`);
           minuteBits.push(`${t('analytics.completed')} ${formatDuration(h.completedMinutes)}`);
         }
-        if (h.carriedOverMinutes > 0) minuteBits.push(`${t('history.carriedOver')} ${formatDuration(h.carriedOverMinutes)}`);
-        const missedBadge = h.missedBlockCount > 0
-          ? `<span class="tl-badge tl-badge-missed">${escapeAttr(t('history.missedCount').replace('{count}', h.missedBlockCount))}</span>`
+        if (h.carriedOverMinutes > 0) minuteBits.push(`${t('status.carried_over')} ${formatDuration(h.carriedOverMinutes)}`);
+        // V2-G: the day's block statuses as the shared badges.
+        const counts = h.statusCounts || {};
+        const statusKeys = ['done', 'partial', 'missed', 'carried_over'].filter((k) => counts[k] > 0);
+        const statusRow = statusKeys.length > 0
+          ? `<span class="status-summary">${statusKeys.map((k) => statusBadgeHtml(k, t(statusLabelKey(k)), { count: counts[k], compact: true })).join('')}</span>`
           : '';
         return `
           <div class="history-item${h.forDate === activeDate ? ' active' : ''}" data-date="${h.forDate}" tabindex="0" role="button">
             <div class="history-main">
-              <span class="history-date">${escapeAttr(dateLabel)} ${missedBadge}</span>
+              <span class="history-date">${escapeAttr(dateLabel)}</span>
               <span class="history-stats">${escapeAttr(bits.join(' · '))}</span>
               ${minuteBits.length > 0 ? `<span class="history-stats history-minutes">${escapeAttr(minuteBits.join(' · '))}</span>` : ''}
+              ${statusRow}
             </div>
             <span class="history-arrow" aria-hidden="true">→</span>
           </div>
@@ -3794,7 +3863,7 @@ async function init(session) {
             `${destLabel} already has planning data. Copying will replace its classes, study subjects, meals, and preferences. Continue?`
           );
           if (!proceed) {
-            copyStatusEl.textContent = 'Copy canceled.';
+            copyStatusEl.textContent = t('copy.canceled');
             return;
           }
         }
@@ -3812,7 +3881,7 @@ async function init(session) {
       }
     } catch (e) {
       console.error(e);
-      copyStatusEl.textContent = 'Could not copy — check your connection.';
+      copyStatusEl.textContent = t('copy.failed');
     }
   });
 
@@ -3869,7 +3938,9 @@ async function init(session) {
     try {
       const [loadedClasses, loadedSubjects] = await Promise.all([listClasses(schedule.id), listStudySubjects(schedule.id)]);
       if (token !== activeToken) return;
-      const loadedSubtasks = await listSubtasksForSubjectIds(loadedSubjects.map((s) => s.id));
+      // Subtasks are an extra: if they can't be read (e.g. migration 0005 not
+      // applied yet) the day's classes and tasks must still render (V2-G).
+      const loadedSubtasks = await loadSubtasksSoft(loadedSubjects.map((s) => s.id));
       if (token !== activeToken) return;
       const loadedSubtasksBySubjectId = new Map();
       loadedSubtasks.forEach((st) => {
@@ -3929,6 +4000,8 @@ async function init(session) {
   // are user-scoped (not per-date), so renderClassListRows above (called
   // from inside loadScheduleForDate) needs them already populated the
   // very first time a date's classList is built.
+  setNextDayLabel(t('scheduler.nextDay')); // overnight times read "(次日)" etc. in zh/ja
+  setClockLocale(getLocale()); // zh/ja show their own clock style (e.g. 19:35)
   await loadRecurringClassesData();
   await loadScheduleForDate(initialDate);
 
@@ -3975,7 +4048,7 @@ async function init(session) {
     // save failed, so stop before generating a plan from unsaved tasks.
     if ([...classRows, ...taskRows].some((row) => !row.dataset.id)) throw new Error('onboarding_save_failed');
     if (taskRows.length > 0) await handleGenerateClick(generateBtn.hidden ? regenerateBtn : generateBtn);
-    output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 
   const onboarding = initOnboarding({

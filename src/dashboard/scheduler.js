@@ -17,8 +17,37 @@ export function minutesToClock(mins) {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
+// The "(next day)" suffix for overnight times. English by default (pure
+// tests and v1 behavior); the Planner sets the translated word at boot and
+// on every language change via setNextDayLabel (V2-G).
+let nextDayLabel = 'next day';
+export function setNextDayLabel(label) {
+  if (typeof label === 'string' && label.trim()) nextDayLabel = label.trim();
+}
+
+// Clock style for display (V2-G): null keeps minutesToClock's "7:35 PM"
+// (the default for tests and English); the Planner passes the app locale so
+// zh/ja read "19:35"-style times. Uses Intl with a fixed UTC date so it's
+// pure clock formatting — no timezone shifts.
+let clockFormatter = null;
+export function setClockLocale(locale) {
+  try {
+    clockFormatter = locale && !/^en/.test(locale)
+      ? new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
+      : null;
+  } catch {
+    clockFormatter = null;
+  }
+}
+
+function clockText(mins) {
+  if (!clockFormatter) return minutesToClock(mins);
+  const m = ((mins % 1440) + 1440) % 1440;
+  return clockFormatter.format(new Date(Date.UTC(2000, 0, 1, Math.floor(m / 60), m % 60)));
+}
+
 export function formatClock(mins) {
-  return mins >= 1440 ? `${minutesToClock(mins)} (next day)` : minutesToClock(mins);
+  return mins >= 1440 ? `${clockText(mins)} (${nextDayLabel})` : clockText(mins);
 }
 
 const PRIORITY_RANK = { high: 3, medium: 2, low: 1 };
@@ -146,11 +175,11 @@ export function resolveDayBounds(wakeTime, sleepTime) {
   const dayStart = timeToMinutes(wakeTime);
   let dayEnd = timeToMinutes(sleepTime);
   if (dayStart === null || dayEnd === null) {
-    return { error: 'Please set both a wake-up time and a sleep time.' };
+    return { error: 'Please set both a wake-up time and a sleep time.', errorKey: 'schedulerMsg.setWakeSleep' };
   }
   if (dayEnd <= dayStart) dayEnd += 1440; // bedtime at/before wake time means "next day"
   if (dayEnd - dayStart < 60) {
-    return { error: 'Your sleep time must be later than your wake-up time, with at least an hour in between.' };
+    return { error: 'Your sleep time must be later than your wake-up time, with at least an hour in between.', errorKey: 'schedulerMsg.dayTooShort' };
   }
   return { dayStart, dayEnd };
 }
@@ -270,7 +299,7 @@ export function validateManualStudyEdit({
   otherStudyBlocks,
 }) {
   if (!Number.isFinite(newStart) || !Number.isFinite(duration) || duration <= 0) {
-    return { ok: false, error: 'Please enter a valid time.' };
+    return { ok: false, error: 'Please enter a valid time.', errorKey: 'schedulerMsg.invalidTime' };
   }
   const newEnd = newStart + duration;
 
@@ -278,12 +307,16 @@ export function validateManualStudyEdit({
     return {
       ok: false,
       error: `That time falls outside your wake-up (${formatClock(dayStart)}) to bedtime (${formatClock(dayEnd)}) window. Choose another time.`,
+      errorKey: 'schedulerMsg.outsideDay',
+      errorParams: { start: formatClock(dayStart), end: formatClock(dayEnd) },
     };
   }
   if (newStart < studyWindowStart || newEnd > studyWindowEnd) {
     return {
       ok: false,
       error: `That time falls outside your earliest (${formatClock(studyWindowStart)}) to latest (${formatClock(studyWindowEnd)}) study time. Choose another time.`,
+      errorKey: 'schedulerMsg.outsideStudyWindow',
+      errorParams: { start: formatClock(studyWindowStart), end: formatClock(studyWindowEnd) },
     };
   }
 
@@ -292,6 +325,8 @@ export function validateManualStudyEdit({
       return {
         ok: false,
         error: `This time conflicts with ${f.type} "${f.name}" (${clockRange(f.start, f.end)}). Choose another time.`,
+        errorKey: 'schedulerMsg.conflict',
+        errorParams: { name: f.name, range: clockRange(f.start, f.end) },
       };
     }
   }
@@ -300,6 +335,8 @@ export function validateManualStudyEdit({
       return {
         ok: false,
         error: `This time conflicts with "${s.name}" (${clockRange(s.start, s.end)}). Choose another time.`,
+        errorKey: 'schedulerMsg.conflict',
+        errorParams: { name: s.name, range: clockRange(s.start, s.end) },
       };
     }
   }
@@ -320,6 +357,13 @@ export function validateManualStudyEdit({
  */
 export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects, prefs, lockedBlocks }) {
   const notes = [];
+  // V2-G: the same notes as structured { key, params } so the UI can
+  // translate them; `notes` keeps the English text for existing callers.
+  const noteDetails = [];
+  const addNote = (text, key, params = {}) => {
+    notes.push(text);
+    noteDetails.push({ key, params });
+  };
   const {
     sessionCap,
     staminaBreak,
@@ -339,7 +383,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   const bounds = resolveDayBounds(wakeTime, sleepTime);
   if (bounds.error) {
-    return { events: [], notes: [], error: bounds.error, lockConflicts: [] };
+    return { events: [], notes: [], error: bounds.error, errorKey: bounds.errorKey, lockConflicts: [] };
   }
   const { dayStart, dayEnd } = bounds;
 
@@ -349,7 +393,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   const studyWindowStart = window.studyWindowStart;
   const studyWindowEnd = window.studyWindowEnd;
   if (window.collapsed) {
-    notes.push("Your earliest/latest study time settings don't leave any room to study — ignoring them for today.");
+    addNote("Your earliest/latest study time settings don't leave any room to study — ignoring them for today.", 'schedulerMsg.windowCollapsed');
   }
 
   // ----- classes -----
@@ -365,7 +409,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
 
   for (let i = 1; i < classEvents.length; i++) {
     if (classEvents[i].start < classEvents[i - 1].end) {
-      notes.push(`Note: "${classEvents[i].name}" overlaps with "${classEvents[i - 1].name}" — double check your class times.`);
+      addNote(`Note: "${classEvents[i].name}" overlaps with "${classEvents[i - 1].name}" — double check your class times.`, 'schedulerMsg.classOverlap', { a: classEvents[i].name, b: classEvents[i - 1].name });
     }
   }
 
@@ -377,11 +421,11 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     if (desired === null) return;
     const placed = placeEvent(desired, m.duration, fixedEvents, dayStart, dayEnd);
     if (!placed) {
-      notes.push(`Couldn't fit ${m.name} into your day — skipped it.`);
+      addNote(`Couldn't fit ${m.name} into your day — skipped it.`, 'schedulerMsg.mealSkipped', { meal: m.name });
       return;
     }
     if (placed.start !== Math.max(desired, dayStart)) {
-      notes.push(`${m.name} was shifted to ${minutesToClock(placed.start)} to avoid a conflict.`);
+      addNote(`${m.name} was shifted to ${minutesToClock(placed.start)} to avoid a conflict.`, 'schedulerMsg.mealShifted', { meal: m.name, time: formatClock(placed.start) });
     }
     fixedEvents.push({ type: 'meal', name: m.name, start: placed.start, end: placed.end });
   });
@@ -432,7 +476,7 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
     }));
 
   if (subjectQueue.length === 0) {
-    notes.push('No study subjects were entered — schedule shows only classes, meals, and free time.');
+    addNote('No study subjects were entered — schedule shows only classes, meals, and free time.', 'schedulerMsg.noSubjects');
   }
 
   const studyEvents = [];
@@ -563,11 +607,13 @@ export function generateSchedule({ wakeTime, sleepTime, classes, meals, subjects
   const leftover = queue.filter((s) => s.remaining > 0);
   if (leftover.length > 0) {
     const list = leftover.map((s) => `${s.name} (${s.remaining} min short)`).join(', ');
-    notes.push(`Not enough free time to fit everything. Couldn't schedule: ${list}.`);
+    addNote(`Not enough free time to fit everything. Couldn't schedule: ${list}.`, 'schedulerMsg.notEnoughTime', {
+      list: leftover.map((s) => ({ name: s.name, minutes: s.remaining })),
+    });
   }
 
   const events = [...fixedEvents, ...lockedEvents, ...studyEvents].sort((a, b) => a.start - b.start);
-  return { events, notes, dayStart, dayEnd, lockConflicts: [] };
+  return { events, notes, noteDetails, dayStart, dayEnd, lockConflicts: [] };
 }
 
 /**

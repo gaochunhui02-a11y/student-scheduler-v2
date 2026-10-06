@@ -84,16 +84,16 @@ export function buildSeriesFields({ name, daysOfWeek, startTime, endTime, startD
 // boardModel.js's validateNewEdge already established for the Board.
 export function validateSeriesFields(fields) {
   if (!fields || !fields.name) {
-    return { valid: false, error: 'Please enter a class name.' };
+    return { valid: false, error: 'Please enter a class name.', errorKey: 'recurring.errName' };
   }
   if (!isValidDaysOfWeek(fields.days_of_week)) {
-    return { valid: false, error: 'Choose at least one day of the week.' };
+    return { valid: false, error: 'Choose at least one day of the week.', errorKey: 'recurring.errDays' };
   }
   if (!isValidTimeRange(fields.start_time, fields.end_time)) {
-    return { valid: false, error: 'End time must be after start time.' };
+    return { valid: false, error: 'End time must be after start time.', errorKey: 'recurring.errTimeOrder' };
   }
   if (!isValidDateRange(fields.start_date, fields.end_date)) {
-    return { valid: false, error: 'End date must be on or after the start date.' };
+    return { valid: false, error: 'End date must be on or after the start date.', errorKey: 'recurring.errDateOrder' };
   }
   return { valid: true, error: null };
 }

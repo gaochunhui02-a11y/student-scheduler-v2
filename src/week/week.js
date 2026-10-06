@@ -18,7 +18,8 @@
 
 import { t, getLocale } from '../shared/i18n.js';
 import { formatDuration } from '../dashboard/summary.js';
-import { getWeekStart, getWeekDates, shiftWeek, isCurrentWeek, aggregateWeekView, computeWeekWorkloadBars, computeWeekSummary } from './weekModel.js';
+import { getWeekStart, getWeekDates, shiftWeek, isCurrentWeek, aggregateWeekView, computeWeekWorkloadBars, computeWeekSummary, computeDayStatusCounts } from './weekModel.js';
+import { statusBadgeHtml, statusLabelKey, SUMMARY_ORDER } from '../shared/statusModel.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -36,6 +37,14 @@ function formatDayHeadLabel(dateStr) {
     weekday: d.toLocaleDateString(getLocale(), { weekday: 'short' }),
     dayNum: d.toLocaleDateString(getLocale(), { day: 'numeric' }),
   };
+}
+
+// "2 Done · 1 Missed" compact badges for a day card (V2-G).
+function statusSummaryHtml(counts) {
+  if (!counts) return '';
+  const keys = SUMMARY_ORDER.filter((k) => counts[k] > 0);
+  if (keys.length === 0) return '';
+  return `<div class="status-summary">${keys.map((k) => statusBadgeHtml(k, t(statusLabelKey(k)), { count: counts[k], compact: true })).join('')}</div>`;
 }
 
 export function initWeekSection(userId, hostApi = {}) {
@@ -77,7 +86,7 @@ export function initWeekSection(userId, hostApi = {}) {
     }
   }
 
-  function renderGrid(days, bars) {
+  function renderGrid(days, bars, statusCounts = new Map()) {
     const todayStr = typeof hostApi.getTodayDateStr === 'function' ? hostApi.getTodayDateStr() : null;
     const barsByDate = new Map(bars.map((b) => [b.date, b]));
 
@@ -106,6 +115,7 @@ export function initWeekSection(userId, hostApi = {}) {
               <div class="week-day-bar${bar.overloaded ? ' week-day-bar-overloaded' : ''}" style="height:${Math.round(bar.barFraction * 100)}%"></div>
             </div>
             <div class="week-day-study">${day.studyMinutes > 0 ? escapeHtml(formatDuration(day.studyMinutes)) : ''}</div>
+            ${statusSummaryHtml(statusCounts.get(day.date))}
             ${classesHtml ? `<ul class="week-day-classes">${classesHtml}</ul>` : ''}
             ${deadlinesHtml ? `<ul class="week-day-deadlines">${deadlinesHtml}</ul>` : ''}
           </button>
@@ -146,7 +156,15 @@ export function initWeekSection(userId, hostApi = {}) {
       exceptions: data.exceptions,
     });
     renderSummary(computeWeekSummary(days));
-    renderGrid(days, computeWeekWorkloadBars(days));
+    const now = new Date();
+    const statusCounts = computeDayStatusCounts({
+      weekDates,
+      schedules: data.schedules,
+      items: data.items,
+      todayDateStr: hostApi.getTodayDateStr(),
+      nowMinutes: now.getHours() * 60 + now.getMinutes(),
+    });
+    renderGrid(days, computeWeekWorkloadBars(days), statusCounts);
   }
 
   gridEl.addEventListener('click', (e) => {

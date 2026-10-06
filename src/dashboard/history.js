@@ -1,4 +1,5 @@
 import { effectiveCompletedMinutes } from '../analytics/analyticsModel.js';
+import { deriveBlockStatus, countStatuses } from '../shared/statusModel.js';
 
 // A study block's length in minutes; 0 for rows without start/end.
 function blockDuration(item) {
@@ -38,7 +39,7 @@ export function aggregateScheduleHistory(schedules, classes, subjects, items) {
   const minutesFor = (id) => {
     let m = minutes.get(id);
     if (!m) {
-      m = { planned: 0, completed: 0, carried: 0, missed: 0, names: new Set() };
+      m = { planned: 0, completed: 0, carried: 0, missed: 0, names: new Set(), statuses: [] };
       minutes.set(id, m);
     }
     return m;
@@ -54,6 +55,7 @@ export function aggregateScheduleHistory(schedules, classes, subjects, items) {
     m.carried += Number.isFinite(item.carried_over_minutes) ? Math.max(0, item.carried_over_minutes) : 0;
     if (item.missed) m.missed += 1;
     if (item.name) m.names.add(item.name);
+    m.statuses.push(deriveBlockStatus(item));
   }
   for (const subj of subjects) {
     if (subj.name) minutesFor(subj.schedule_id).names.add(subj.name);
@@ -75,6 +77,9 @@ export function aggregateScheduleHistory(schedules, classes, subjects, items) {
       carriedOverMinutes: minutes.get(s.id)?.carried || 0,
       missedBlockCount: minutes.get(s.id)?.missed || 0,
       subjectNames: Array.from(minutes.get(s.id)?.names || []).sort((a, b) => a.localeCompare(b)),
+      // V2-G: Done / Partial / Missed / Carried Over counts for this day's
+      // study blocks (statusModel.js) — the same statuses every view shows.
+      statusCounts: countStatuses(minutes.get(s.id)?.statuses || []),
     };
   });
 }

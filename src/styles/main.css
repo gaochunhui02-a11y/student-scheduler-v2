@@ -10,7 +10,7 @@
   --border-strong: #d8d3c8;
   --text: #1c1b19;
   --text-soft: #45433f;
-  --muted: #7a7770;
+  --muted: #6e6b64;
   --muted-2: #9c988f;
 
   --accent: #4f56d3;
@@ -348,7 +348,7 @@ button { font-family: inherit; }
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 .nav-item {
   display: flex;
@@ -1022,7 +1022,7 @@ button { font-family: inherit; }
 
 /* free time / breaks: no card, minimal text — the quietest rows */
 .tl-row.tl-free .tl-card, .tl-row.tl-break .tl-card { padding: 4px 0 10px; }
-.tl-row.tl-free .tl-name, .tl-row.tl-break .tl-name { font-size: 12px; font-weight: 500; color: var(--muted-2); }
+.tl-row.tl-free .tl-name, .tl-row.tl-break .tl-name { font-size: 12px; font-weight: 500; color: var(--muted); }
 .tl-row.tl-free .tl-meta, .tl-row.tl-break .tl-meta { display: none; }
 .tl-row.tl-break .tl-dot { background: var(--break-color); opacity: 0.7; }
 .tl-row.tl-free .tl-dot { background: var(--border-strong); }
@@ -1046,8 +1046,8 @@ button { font-family: inherit; }
 }
 .tl-row.tl-study .tl-dot { background: var(--study-color); }
 .tl-row.tl-study.tl-locked .tl-card { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.tl-row.tl-study.tl-completed .tl-card { background: var(--surface-2); border-color: var(--border); opacity: 0.72; }
-.tl-row.tl-study.tl-completed .tl-name { text-decoration: line-through; text-decoration-color: var(--muted-2); color: var(--muted); }
+.tl-row.tl-study.tl-completed .tl-card { background: var(--surface-2); border-color: var(--border); }
+.tl-row.tl-study.tl-completed .tl-name { color: var(--text-soft); }
 
 .tl-badge {
   display: inline-flex;
@@ -1089,7 +1089,6 @@ button { font-family: inherit; }
 .lock-btn[data-locked="1"] { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-soft-strong); }
 .done-btn[data-completed="1"] { background: var(--success-soft); color: var(--success); border-color: var(--success-soft); }
 .co-action-btn.mark-missed-btn, .co-action-btn.unmark-missed-btn { color: var(--danger); border-color: var(--danger-border); }
-.tl-badge-missed { background: var(--danger-soft); color: var(--danger); }
 
 .edit-panel {
   margin-top: 8px;
@@ -1313,7 +1312,7 @@ button { font-family: inherit; }
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 .board-heading, .planner-date-heading, .page-heading { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .board-subtitle, .planner-date-sub, .page-subtitle { margin: 3px 0 0; max-width: 44ch; color: var(--muted); font-size: 12.5px; }
@@ -1840,7 +1839,7 @@ button { font-family: inherit; }
   border-top: 1px dashed var(--border);
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
 .board-no-board { text-align: center; padding: 40px 20px; }
@@ -2231,6 +2230,10 @@ button { font-family: inherit; }
   padding: 2px 2px 14px;
   margin-bottom: 2px;
 }
+/* V2-G: the decorative glow below sits 60px past the right edge; clip it
+   at the page so it can never create a sideways scrollbar. `clip` (not
+   `hidden`) doesn't turn the page into a scroll container. */
+.home-view { overflow-x: clip; }
 .home-hero::before {
   content: '';
   position: absolute;
@@ -2962,7 +2965,6 @@ body.focus-open { overflow: hidden; }
 .board-node[data-status="done"] .board-node-title { color: var(--muted); }
 
 .board-node-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.board-status-chip,
 .board-node-chip {
   display: inline-flex;
   align-items: center;
@@ -2977,11 +2979,10 @@ body.focus-open { overflow: hidden; }
   font-weight: 600;
   white-space: nowrap;
 }
-button.board-status-chip { cursor: pointer; }
-button.board-status-chip:hover { border-color: var(--border-strong); color: var(--text); }
-.board-status-in_progress { background: var(--accent-soft); border-color: var(--accent-soft-strong); color: var(--accent-strong); }
-.board-status-done { background: var(--success-soft); border-color: var(--success-soft); color: var(--success); }
-.board-status-chip.is-linked::before { content: "↔"; margin-right: 4px; opacity: 0.7; }
+.board-status-chip { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; font-family: inherit; }
+button.board-status-chip { cursor: pointer; border-radius: var(--radius-pill); }
+button.board-status-chip:hover .status-badge { filter: brightness(0.96); box-shadow: 0 0 0 1px var(--border-strong); }
+.board-status-chip.is-linked::after { content: "↔"; font-size: 10px; color: var(--muted); }
 .board-due-overdue { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
 .board-due-today { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning); }
 .board-due-done { text-decoration: line-through; color: var(--muted); }
@@ -3101,7 +3102,7 @@ button.board-status-chip:hover { border-color: var(--border-strong); color: var(
   gap: 10px;
   margin-bottom: 14px;
 }
-.insights-metric.is-muted .analytics-card-value { color: var(--muted-2); }
+.insights-metric.is-muted .analytics-card-value { color: var(--muted); }
 .insights-view > .card { margin-top: 14px; }
 
 .analytics-subject-row.subject-bar-row { display: block; padding: 9px 0; }
@@ -3222,7 +3223,7 @@ button.board-status-chip:hover { border-color: var(--border-strong); color: var(
 .agenda-day-open { margin-left: auto; font-size: 11.5px; color: var(--muted); opacity: 0; transition: opacity var(--dur) var(--ease); }
 .agenda-day-head:hover .agenda-day-open,
 .agenda-day-head:focus-visible .agenda-day-open { opacity: 1; }
-.agenda-empty { margin: 6px 0 0; font-size: 12.5px; color: var(--muted-2); }
+.agenda-empty { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .agenda-entries { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .agenda-entry {
   display: grid;
@@ -3235,7 +3236,7 @@ button.board-status-chip:hover { border-color: var(--border-strong); color: var(
 .agenda-main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
 .agenda-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .agenda-name { color: var(--text); font-weight: 550; overflow-wrap: anywhere; min-width: 0; }
-.agenda-entry.is-done .agenda-name { color: var(--muted); text-decoration: line-through; }
+.agenda-entry.is-done .agenda-name { color: var(--text-soft); }
 .agenda-tag {
   font-size: 10.5px;
   font-weight: 600;
@@ -3245,7 +3246,6 @@ button.board-status-chip:hover { border-color: var(--border-strong); color: var(
   border-radius: var(--radius-pill);
   padding: 0 7px;
 }
-.agenda-tag-done { color: var(--success); background: var(--success-soft); border-color: var(--success-soft); }
 .calendar-io-grid { margin-top: 14px; }
 
 @media (max-width: 600px) {
@@ -3361,7 +3361,7 @@ body.palette-open { overflow: hidden; }
   color: var(--text);
 }
 .palette-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
-.palette-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-2); }
+.palette-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .palette-item {
   display: flex;
   align-items: center;
@@ -3499,4 +3499,107 @@ body.onboarding-open { overflow: hidden; }
   .onb-row-class .onb-field:first-child { grid-column: 1 / -1; }
   .onboarding-actions { flex-direction: row; }
   .onboarding-actions .btn-primary { flex: 1; }
+}
+
+/* ==========================================================================
+   V2-G: one status system (src/shared/statusModel.js)
+   Planned / In Progress / Done / Partial / Missed / Carried Over — same
+   label, icon and color everywhere. Every pair below is ≥ 4.5:1 (WCAG AA)
+   in both themes; the text label always carries the meaning, the color
+   and icon only reinforce it.
+   ========================================================================== */
+:root {
+  --status-planned-fg: #6b6861;   --status-planned-bg: #f3f1ed;
+  --status-progress-fg: #3d43b8;  --status-progress-bg: #eeeefb;
+  --status-done-fg: #1a7a4c;      --status-done-bg: #e7f5ee;
+  --status-partial-fg: #8a5d06;   --status-partial-bg: #fbf1de;
+  --status-missed-fg: #b23a27;    --status-missed-bg: #fbeae6;
+  --status-carried-fg: #5f5294;   --status-carried-bg: #efecf7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --status-planned-fg: #a9a9b3;   --status-planned-bg: rgba(255, 255, 255, 0.06);
+    --status-progress-fg: #9ba0f6;  --status-progress-bg: rgba(132, 137, 242, 0.16);
+    --status-done-fg: #6fcf9e;      --status-done-bg: rgba(31, 138, 87, 0.16);
+    --status-partial-fg: #e0b25c;   --status-partial-bg: rgba(165, 114, 15, 0.18);
+    --status-missed-fg: #e8917e;    --status-missed-bg: rgba(193, 67, 47, 0.16);
+    --status-carried-fg: #b9aee6;   --status-carried-bg: rgba(168, 158, 208, 0.16);
+  }
+}
+:root[data-theme="dark"] {
+  --status-planned-fg: #a9a9b3;   --status-planned-bg: rgba(255, 255, 255, 0.06);
+  --status-progress-fg: #9ba0f6;  --status-progress-bg: rgba(132, 137, 242, 0.16);
+  --status-done-fg: #6fcf9e;      --status-done-bg: rgba(31, 138, 87, 0.16);
+  --status-partial-fg: #e0b25c;   --status-partial-bg: rgba(165, 114, 15, 0.18);
+  --status-missed-fg: #e8917e;    --status-missed-bg: rgba(193, 67, 47, 0.16);
+  --status-carried-fg: #b9aee6;   --status-carried-bg: rgba(168, 158, 208, 0.16);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--status-fg);
+  background: var(--status-bg);
+}
+.status-badge-compact { height: 18px; padding: 0 6px; font-size: 10.5px; }
+.status-icon { font-size: 10px; line-height: 1; }
+.status-planned      { --status-fg: var(--status-planned-fg);  --status-bg: var(--status-planned-bg); }
+.status-in_progress  { --status-fg: var(--status-progress-fg); --status-bg: var(--status-progress-bg); }
+.status-done         { --status-fg: var(--status-done-fg);     --status-bg: var(--status-done-bg); }
+.status-partial      { --status-fg: var(--status-partial-fg);  --status-bg: var(--status-partial-bg); }
+.status-missed       { --status-fg: var(--status-missed-fg);   --status-bg: var(--status-missed-bg); }
+.status-carried_over { --status-fg: var(--status-carried-fg);  --status-bg: var(--status-carried-bg); }
+
+/* A row of summary badges (History days, Week cards, Insights). */
+.status-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+/* Planner timeline: the badge replaces the old "✓ name" prefix and the
+   separate red Missed badge; a done block is still dimmed, never struck
+   through (strike-through hurts readability). */
+.tl-card-top .status-badge { margin-left: auto; }
+.tl-row.tl-in-progress .tl-card { box-shadow: inset 3px 0 0 var(--status-progress-fg); }
+
+/* ==========================================================================
+   V2-G accessibility pass
+   ========================================================================== */
+/* Keyboard focus: one clearly visible ring (accent, ≥ 3:1 against every
+   surface in both themes) on every interactive control. Several components
+   above set `outline: none` with a pale --accent-soft-strong glow (~1.2:1),
+   which keyboard users could barely see; this wins over all of them.
+   Text fields/selects keep their accent border + glow (clearly visible on
+   their own) rather than getting a second ring. */
+:where(a, button, summary, [tabindex]:not([tabindex="-1"]), [role="button"], [role="tab"], [role="option"]):focus-visible,
+.week-day-card:focus-visible,
+.history-item:focus-visible,
+.analytics-upcoming-row:focus-visible,
+.settings-tab:focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Reduced motion: no animations, no smooth scrolling, near-instant
+   transitions — app-wide, not just the Board. (JS smooth scrolls go
+   through scrollBehavior(), which returns 'auto' under this setting.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

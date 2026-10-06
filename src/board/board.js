@@ -31,7 +31,8 @@
 // and the Edge Function itself are left in the repo untouched as optional/
 // future functionality; nothing in the active app references them anymore.
 
-import { t } from '../shared/i18n.js';
+import { t, tCount, getLocale } from '../shared/i18n.js';
+import { statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import {
   NODE_TYPES,
   createNodeDefaults,
@@ -572,7 +573,8 @@ export function initBoardSection(userId, hostApi = {}) {
     try {
       const items = await hostApi.getLinkedScheduleItems(linkedIds);
       if (token !== switchToken) return; // board switched while loading
-      plannerStatusMap = buildPlannerStatusMap(nodes, items);
+      const now = new Date();
+      plannerStatusMap = buildPlannerStatusMap(nodes, items, { nowMinutes: now.getHours() * 60 + now.getMinutes() });
       renderNodes();
       renderEdges();
     } catch (err) {
@@ -596,7 +598,7 @@ export function initBoardSection(userId, hostApi = {}) {
 
   function formatDueShort(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return new Date(y, m - 1, d).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
   }
 
   function progressText(p) {
@@ -663,16 +665,17 @@ export function initBoardSection(userId, hostApi = {}) {
     if (showStatus) {
       const status = effectiveNodeStatus(node, plannerStatusMap);
       const chip = document.createElement(linked ? 'span' : 'button');
-      chip.className = `board-status-chip board-status-${status}`;
-      chip.textContent = t(`board.status.${status}`);
+      // V2-G: same badge (label/icon/color) as every other status in the app.
+      chip.className = 'board-status-chip';
+      chip.innerHTML = statusBadgeHtml(status, t(statusLabelKey(status)), { compact: true });
       if (linked) {
         const ps = plannerStatusMap.get(node.linked_study_subject_id);
-        chip.title = ps ? t(`board.plannerStatus.${ps}`) : t('board.alreadyAdded');
+        chip.title = ps === 'not_scheduled' ? t('board.plannerStatus.not_scheduled') : t('board.statusFromPlannerShort');
         chip.classList.add('is-linked');
       } else {
         chip.type = 'button';
         chip.title = t('board.statusCycleHint');
-        chip.setAttribute('aria-label', `${t('board.statusLabel')}: ${t(`board.status.${status}`)}. ${t('board.statusCycleHint')}`);
+        chip.setAttribute('aria-label', `${t('board.statusLabel')}: ${t(statusLabelKey(status))}. ${t('board.statusCycleHint')}`);
         stopDragStart(chip);
         chip.addEventListener('click', () => {
           const current = normalizeNodeStatus(node.status);
@@ -726,13 +729,22 @@ export function initBoardSection(userId, hostApi = {}) {
     NODE_STATUSES.forEach((st) => {
       const opt = document.createElement('option');
       opt.value = st;
-      opt.textContent = t(`board.status.${st}`);
+      opt.textContent = t(statusLabelKey(st));
       statusSelect.appendChild(opt);
     });
     statusSelect.value = normalizeNodeStatus(node.status);
     if (linked) {
+      // A linked task can be in any of the six shared statuses (e.g.
+      // Missed), not just the three a student can set by hand.
+      const linkedStatus = effectiveNodeStatus(node, plannerStatusMap);
+      if (!NODE_STATUSES.includes(linkedStatus)) {
+        const opt = document.createElement('option');
+        opt.value = linkedStatus;
+        opt.textContent = t(statusLabelKey(linkedStatus));
+        statusSelect.appendChild(opt);
+      }
       statusSelect.disabled = true;
-      statusSelect.value = effectiveNodeStatus(node, plannerStatusMap);
+      statusSelect.value = linkedStatus;
     }
     statusSelect.addEventListener('change', () => saveNodeFields(node, { status: statusSelect.value }));
     panel.appendChild(labeled('board.statusLabel', statusSelect));
@@ -1346,7 +1358,7 @@ export function initBoardSection(userId, hostApi = {}) {
       if (hiddenCount > 0) {
         const badge = document.createElement('div');
         badge.className = 'board-node-hidden-badge';
-        badge.textContent = t('board.hiddenItems').replace('{count}', String(hiddenCount));
+        badge.textContent = tCount('board.hiddenItems', hiddenCount);
         el.appendChild(badge);
       }
     }

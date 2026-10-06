@@ -159,7 +159,13 @@ scenario('D. Planner status reflection never writes', () => {
   check("dashboard.js's getLinkedScheduleItems bridge is a pure read", () => {
     const line = dashboardSrc.match(/getLinkedScheduleItems:.*$/m);
     assert.ok(line, 'getLinkedScheduleItems not found in boardHostApi');
-    assert.match(line[0], /listScheduleItemsForSourceSubjectIds\(/);
+    assert.match(line[0], /loadLinkedScheduleItems\(/);
+    // V2-G: the helper tags each block with isToday — still reads only.
+    const fn = dashboardSrc.match(/async function loadLinkedScheduleItems\([\s\S]*?\n  \}/);
+    assert.ok(fn, 'loadLinkedScheduleItems not found');
+    assert.match(fn[0], /listScheduleItemsForSourceSubjectIds\(/);
+    assert.doesNotMatch(fn[0], /\b(insert|update|upsert|delete|set|create|save)\w*\(/i);
+    assert.doesNotMatch(fn[0], /updateNode|createNode|board_nodes/);
   });
 
   const dataSrc = readFileSync(join(__dirname, '../src/dashboard/data.js'), 'utf8');

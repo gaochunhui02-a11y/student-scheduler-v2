@@ -340,7 +340,7 @@ export function computeOverdueWorkload(studySubjects, items, todayDateStr, limit
     blocksBySubject.set(i.source_subject_id, list);
   });
 
-  const overdue = (studySubjects || [])
+  const overdueRows = (studySubjects || [])
     .filter((s) => s && s.due_date && todayDateStr && s.due_date < todayDateStr)
     .map((s) => {
       const blocks = blocksBySubject.get(s.id) || [];
@@ -356,7 +356,17 @@ export function computeOverdueWorkload(studySubjects, items, todayDateStr, limit
         }), 0);
       return { id: s.id, title: s.name, dueDate: s.due_date, daysOverdue: daysBetween(s.due_date, todayDateStr), remainingMinutes };
     })
-    .filter((o) => o.remainingMinutes > 0)
+    .filter((o) => o.remainingMinutes > 0);
+
+  // Per-day copies of one task (same name + due date) count once, with the
+  // largest remaining amount — same rule as dedupeDeadlineRows (V2-G).
+  const byKey = new Map();
+  overdueRows.forEach((o) => {
+    const key = `${String(o.title || '').trim().toLowerCase()}|${o.dueDate}`;
+    const prev = byKey.get(key);
+    if (!prev || o.remainingMinutes > prev.remainingMinutes) byKey.set(key, o);
+  });
+  const overdue = Array.from(byKey.values())
     .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0));
 
   return {
@@ -423,9 +433,26 @@ export function isValidRiskLevel(value) {
 // study subjects — the data behind both the "Upcoming Deadlines" count card
 // and the Upcoming list. Subjects without a due date are excluded (nothing
 // to sort/risk-assess by definition).
+//
+// V2-G: rows with the same task name and due date are one deadline shown
+// once — they're per-day copies of the same task (Copy to another day,
+// carry-over, multi-day planning). The largest requested time is kept
+// rather than summed, so a copied task never looks like double the work.
+export function dedupeDeadlineRows(studySubjects) {
+  const byKey = new Map();
+  (studySubjects || []).forEach((s) => {
+    if (!s || !s.due_date) return;
+    const key = `${String(s.name || '').trim().toLowerCase()}|${s.due_date}`;
+    const prev = byKey.get(key);
+    const minutes = Number.isFinite(s.minutes_requested) ? s.minutes_requested : 0;
+    const prevMinutes = prev && Number.isFinite(prev.minutes_requested) ? prev.minutes_requested : -1;
+    if (!prev || minutes > prevMinutes) byKey.set(key, s);
+  });
+  return Array.from(byKey.values());
+}
+
 export function computeUpcomingDeadlines(studySubjects, today, limit = 10) {
-  return (studySubjects || [])
-    .filter((s) => s.due_date)
+  return dedupeDeadlineRows(studySubjects)
     .map((s) => {
       const remainingMinutes = Number.isFinite(s.minutes_requested) ? s.minutes_requested : 0;
       const daysRemaining = daysBetween(today, s.due_date);

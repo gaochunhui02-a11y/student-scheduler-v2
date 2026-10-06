@@ -442,7 +442,7 @@ export async function listScheduleItemsForSourceSubjectIds(subjectIds) {
   if (!subjectIds || subjectIds.length === 0) return [];
   const { data, error } = await supabase
     .from('schedule_items')
-    .select('id, item_type, source_subject_id, start_minutes, end_minutes, completed, completed_minutes, carried_over_minutes')
+    .select('id, schedule_id, item_type, source_subject_id, start_minutes, end_minutes, completed, completed_minutes, carried_over_minutes, missed')
     .in('source_subject_id', subjectIds);
   if (error) throw error;
   return data;

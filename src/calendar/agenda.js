@@ -12,6 +12,7 @@ import { t, getLocale } from '../shared/i18n.js';
 import { formatClock } from '../dashboard/scheduler.js';
 import { getWeekStart, getWeekDates, shiftWeek, isCurrentWeek } from '../week/weekModel.js';
 import { buildAgenda, filterAgenda, countAgendaCategories, agendaCategory, AGENDA_FILTERS } from './agendaModel.js';
+import { statusBadgeEl, statusLabelKey } from '../shared/statusModel.js';
 
 const FILTER_STORAGE_KEY = 'scheduler.agendaFilter.v1';
 
@@ -115,7 +116,7 @@ export function initAgendaSection(userId, hostApi = {}) {
           const tagKey = ORIGIN_LABEL_KEYS[entry.origin];
           if (tagKey) main.appendChild(el('span', 'agenda-tag', t(tagKey)));
           if (entry.modified) main.appendChild(el('span', 'agenda-tag', t('calendar.originModified')));
-          if (entry.completed) main.appendChild(el('span', 'agenda-tag agenda-tag-done', t('calendar.done')));
+          if (entry.status && entry.status !== 'planned') main.appendChild(statusBadgeEl(entry.status, t(statusLabelKey(entry.status)), { compact: true }));
           li.appendChild(main);
           ul.appendChild(li);
         });
