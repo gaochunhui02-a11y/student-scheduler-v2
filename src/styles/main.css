@@ -3038,3 +3038,101 @@ button.board-status-chip:hover { border-color: var(--border-strong); color: var(
   cursor: pointer;
 }
 .board-node-details-close:hover { background: var(--surface-2); color: var(--text); }
+
+/* ---------------- V2-E: Home Weekly Progress / Workload / Why, Insights ---------------- */
+.meter {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.meter > span { display: block; height: 100%; width: 0; background: var(--success); transition: width var(--dur) var(--ease); }
+
+.home-weekly-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.home-weekly-rate { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.home-weekly-label { font-size: 13px; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.home-weekly-foot { margin: 8px 0 0; }
+.home-open-insights-btn { margin-top: 12px; }
+
+.home-workload { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.workload-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.workload-row:hover { background: var(--surface-2); }
+.workload-row.is-overloaded { grid-template-columns: 40px 1fr auto auto; }
+.workload-day { font-size: 12px; font-weight: 600; color: var(--muted); }
+.workload-row.is-today .workload-day { color: var(--accent-strong); }
+.workload-track { position: relative; height: 10px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); }
+.workload-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-pill); background: var(--study-color); min-width: 0; }
+.workload-row.is-overloaded .workload-fill { background: var(--danger); }
+.workload-marker { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed var(--muted-2); }
+.workload-value { font-size: 12px; color: var(--text-soft); font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+.workload-flag {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+}
+
+.home-why { margin: 6px 0 10px; }
+.home-why-label { font-size: 12px; font-weight: 650; color: var(--text-soft); }
+.home-why-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-soft); line-height: 1.55; }
+.home-why-list li::marker { color: var(--accent); }
+
+.insights-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.insights-metric.is-muted .analytics-card-value { color: var(--muted-2); }
+.insights-view > .card { margin-top: 14px; }
+
+.analytics-subject-row.subject-bar-row { display: block; padding: 9px 0; }
+.subject-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 5px; }
+.subject-bar-track { position: relative; height: 8px; border-radius: var(--radius-pill); background: var(--surface-2); }
+.subject-bar-planned { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-pill); background: var(--border-strong); opacity: 0.55; }
+.subject-bar-completed { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-pill); background: var(--study-color); }
+
+.insights-overdue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.insights-overdue-row:hover { background: var(--surface-2); }
+.insights-overdue-title { font-size: 13px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.insights-overdue-meta { font-size: 12px; color: var(--danger); font-variant-numeric: tabular-nums; }
+.insights-overdue-note { margin-top: 10px; }
+
+@media (max-width: 1080px) {
+  .insights-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .insights-metrics { grid-template-columns: 1fr; }
+}

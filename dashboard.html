@@ -61,6 +61,10 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12.5" r="7.5"/><path d="M12 8.2v4.6l3 2.2"/><path d="M8.6 3.6 5 5.6"/></svg>
           <span data-i18n="nav.history">History</span>
         </button>
+        <button type="button" class="nav-item" data-view-target="insightsView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h15"/><path d="M7.5 16V11M12 16V6.5M16.5 16v-7"/></svg>
+          <span data-i18n="nav.insights">Insights</span>
+        </button>
       </div>
 
       <div class="nav-section">
@@ -638,28 +642,24 @@
 
         <div class="home-grid-2">
           <div class="card">
-            <h2 data-i18n="analytics.weeklyChartTitle">Planned vs Completed</h2>
-            <div class="analytics-chart-legend">
-              <span><i class="swatch analytics-swatch-planned"></i><span data-i18n="analytics.planned">Planned</span></span>
-              <span><i class="swatch analytics-swatch-completed"></i><span data-i18n="analytics.completed">Completed</span></span>
-            </div>
-            <div class="analytics-chart" id="analyticsChart"></div>
-          </div>
-
-          <div class="card">
-            <h2 data-i18n="analytics.upcomingDeadlines">Upcoming Deadlines</h2>
+            <h2 data-i18n="home.upcomingTitle">Upcoming</h2>
             <div id="analyticsUpcomingList">
               <div class="placeholder" id="analyticsUpcomingEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
             </div>
           </div>
+
+          <div class="card home-weekly-card">
+            <h2 data-i18n="home.weeklyProgressTitle">Weekly Progress</h2>
+            <div id="homeWeeklyBody"></div>
+            <button type="button" class="btn-secondary home-open-insights-btn" id="homeOpenInsightsBtn" data-i18n="home.openInsights">See all insights →</button>
+          </div>
         </div>
 
         <div class="home-grid-2">
-          <div class="card">
-            <h2 data-i18n="analytics.productivity">Productivity</h2>
-            <div id="analyticsProductivity">
-              <div class="placeholder" id="analyticsProductivityEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
-            </div>
+          <div class="card home-workload-card">
+            <h2 data-i18n="home.workloadTitle">Workload this week</h2>
+            <p class="hint" data-i18n="home.workloadHint">Planned study per day. Days over 4h are flagged.</p>
+            <div class="home-workload" id="homeWorkload"></div>
           </div>
 
           <div class="card home-quick-actions" id="homeQuickActions">
@@ -685,17 +685,55 @@
           </div>
         </div>
 
+        <div class="card" id="analyticsBoardsCard" hidden>
+          <h2 data-i18n="analytics.boardsTitle">Boards</h2>
+          <p class="hint" id="analyticsBoardsSummary"></p>
+        </div>
+      </section>
+
+      <section class="analytics-view insights-view" id="insightsView" hidden>
+        <div class="board-header">
+          <div class="board-header-info">
+            <p class="page-eyebrow" data-i18n="insights.eyebrow">Review</p>
+            <h1 class="page-heading" data-i18n="insights.heading">Insights</h1>
+            <p class="page-subtitle" data-i18n="insights.subtitle">How your planned study turned into real study. Only measured from what you've logged — no guesses.</p>
+          </div>
+        </div>
+
+        <p class="hint" id="insightsStatus" hidden></p>
+
+        <div class="insights-metrics" id="insightsMetrics"></div>
+
         <div class="home-grid-2">
           <div class="card">
+            <h2 data-i18n="analytics.weeklyChartTitle">Planned vs Completed</h2>
+            <div class="analytics-chart-legend">
+              <span><i class="swatch analytics-swatch-planned"></i><span data-i18n="analytics.planned">Planned</span></span>
+              <span><i class="swatch analytics-swatch-completed"></i><span data-i18n="analytics.completed">Completed</span></span>
+            </div>
+            <div class="analytics-chart" id="analyticsChart"></div>
+          </div>
+
+          <div class="card">
             <h2 data-i18n="analytics.subjectBreakdown">Study Time by Subject</h2>
+            <p class="hint" data-i18n="insights.last7Days">Last 7 days</p>
             <div id="analyticsSubjectList">
               <div class="placeholder" id="analyticsSubjectEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
             </div>
           </div>
+        </div>
 
-          <div class="card" id="analyticsBoardsCard" hidden>
-            <h2 data-i18n="analytics.boardsTitle">Boards</h2>
-            <p class="hint" id="analyticsBoardsSummary"></p>
+        <div class="home-grid-2">
+          <div class="card">
+            <h2 data-i18n="insights.overdueTitle">Overdue work</h2>
+            <div id="insightsOverdueBody"></div>
+          </div>
+
+          <div class="card">
+            <h2 data-i18n="analytics.productivity">Productivity</h2>
+            <div id="analyticsProductivity">
+              <div class="placeholder" id="analyticsProductivityEmpty" data-i18n="analytics.noDataYet" hidden>Not enough data yet.</div>
+            </div>
           </div>
         </div>
 

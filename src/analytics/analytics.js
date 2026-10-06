@@ -18,7 +18,7 @@
 // Checkpoint A) — analyticsModel.js's buildAdvisorPromptForTask is kept,
 // unimported, alongside the rest of the optional/future AI code.
 
-import { t } from '../shared/i18n.js';
+import { t, getLocale } from '../shared/i18n.js';
 import {
   lastNDates,
   attachDatesToItems,
@@ -31,10 +31,16 @@ import {
   computeProductivityPeriod,
   summarizeBoards,
   computeTodayBlockStatus,
+  computeAverageBlockLength,
+  computeEstimateAccuracy,
+  computeOverdueWorkload,
+  computeSubjectWorkloadBars,
 } from './analyticsModel.js';
+import { getWeekStart, getWeekDates, aggregateWeekView, isOverloadedDay, OVERLOAD_THRESHOLD_MINUTES } from '../week/weekModel.js';
+import { addDaysToDateStr } from '../dashboard/dateUtils.js';
 import { formatDuration } from '../dashboard/summary.js';
 import { formatClock } from '../dashboard/scheduler.js';
-import { buildSmartTasks, computeAvailableStudyMinutes, rankTasks, buildReasonTags, buildExplanation } from '../dashboard/smartPriority.js';
+import { buildSmartTasks, computeAvailableStudyMinutes, rankTasks, buildReasonTags, buildExplanation, buildReasonFacts } from '../dashboard/smartPriority.js';
 
 const RISK_LABEL_KEYS = { on_track: 'analytics.onTrack', needs_attention: 'analytics.needsAttention', at_risk: 'analytics.atRisk' };
 const PERIOD_LABEL_KEYS = { morning: 'analytics.periodMorning', afternoon: 'analytics.periodAfternoon', evening: 'analytics.periodEvening', night: 'analytics.periodNight' };
@@ -68,16 +74,33 @@ export function initAnalyticsSection(userId, hostApi = {}) {
   const completedSecondaryEl = document.getElementById('homeCompletedSecondary');
   const atRiskSecondaryEl = document.getElementById('homeAtRiskSecondary');
   const todayBodyEl = document.getElementById('homeTodayBody');
+  const weeklyBodyEl = document.getElementById('homeWeeklyBody');
+  const workloadEl = document.getElementById('homeWorkload');
+  const openInsightsBtn = document.getElementById('homeOpenInsightsBtn');
+  const insightsMetricsEl = document.getElementById('insightsMetrics');
+  const overdueBodyEl = document.getElementById('insightsOverdueBody');
+
+  if (openInsightsBtn) {
+    openInsightsBtn.addEventListener('click', () => {
+      if (typeof hostApi.openInsights === 'function') hostApi.openInsights();
+    });
+  }
 
   let loading = false;
+  let pendingOpts = null; // a request that arrived mid-load runs right after
 
+  const insightsStatusEl = document.getElementById('insightsStatus');
   function showError(message) {
-    if (!statusEl) return;
-    statusEl.textContent = message;
-    statusEl.hidden = false;
+    [statusEl, insightsStatusEl].forEach((node) => {
+      if (!node) return;
+      node.textContent = message;
+      node.hidden = false;
+    });
   }
   function hideError() {
-    if (statusEl) statusEl.hidden = true;
+    [statusEl, insightsStatusEl].forEach((node) => {
+      if (node) node.hidden = true;
+    });
   }
 
   // Greeting + date line are rendered here (not just once on load) so a
@@ -231,7 +254,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
   // capped to at most 3 by the caller. `hasAnyUnfinishedInput` distinguishes
   // "you've added nothing yet" from "you've finished everything" (section 7
   // of the brief) — two different empty states, never the same placeholder.
-  function renderRecommendations(ranked, hasAnyTasksToday) {
+  function renderRecommendations(ranked, hasAnyTasksToday, factContext = {}) {
     if (!recommendBodyEl) return;
     recommendBodyEl.innerHTML = '';
 
@@ -282,9 +305,15 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       minutesChip.textContent = `${formatDuration(r.task.remainingMinutes)} ${t('home.remainingSuffix')}`;
       chips.appendChild(minutesChip);
 
-      const explanation = document.createElement('p');
-      explanation.className = 'hint home-recommend-explanation';
-      explanation.textContent = buildExplanation(r.task, r, labels);
+      // V2-E: the top pick explains itself with concrete facts ("Due in 2
+      // days · 120 min remaining · Tomorrow is heavily scheduled"); the
+      // others keep the compact chips + one-line explanation.
+      const facts = isPrimary ? buildReasonFacts(r.task, r, factContext, 4) : [];
+      const explanation = facts.length > 0 ? buildWhyList(facts) : document.createElement('p');
+      if (facts.length === 0) {
+        explanation.className = 'hint home-recommend-explanation';
+        explanation.textContent = buildExplanation(r.task, r, labels);
+      }
 
       const planBtn = document.createElement('button');
       planBtn.type = 'button';
@@ -293,7 +322,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       planBtn.addEventListener('click', () => planTask(r.task.id));
 
       item.appendChild(nameEl);
-      item.appendChild(chips);
+      if (facts.length === 0) item.appendChild(chips);
       item.appendChild(explanation);
       item.appendChild(planBtn);
       recommendBodyEl.appendChild(item);
@@ -376,28 +405,32 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     });
   }
 
+  // Subject workload (V2-E): one bar per subject, planned as the track and
+  // completed as the fill, scaled to the biggest subject.
   function renderSubjects(subjectTotals) {
     if (!subjectListEl) return;
-    subjectListEl.querySelectorAll('.analytics-subject-row').forEach((el) => el.remove());
-    if (subjectEmptyEl) subjectEmptyEl.hidden = subjectTotals.length > 0;
-    subjectTotals.forEach((s) => {
-      const row = document.createElement('div');
-      row.className = 'analytics-subject-row';
-
-      const name = document.createElement('span');
-      name.className = 'analytics-subject-name';
-      name.textContent = s.subject; // user-created content — never translated
-
-      const values = document.createElement('span');
-      values.className = 'analytics-subject-values';
+    subjectListEl.querySelectorAll('.analytics-subject-row').forEach((node) => node.remove());
+    const rows = computeSubjectWorkloadBars(subjectTotals.filter((s) => s.planned > 0 || s.completed > 0));
+    if (subjectEmptyEl) subjectEmptyEl.hidden = rows.length > 0;
+    rows.forEach((s) => {
+      const row = el('div', 'analytics-subject-row subject-bar-row');
+      const head = el('div', 'subject-bar-head');
+      head.appendChild(el('span', 'analytics-subject-name', s.subject)); // user-created content — never translated
       // Missed (Phase 14) is shown only when there's actually something to
-      // report — most subjects have nothing missed, and the row shouldn't
-      // grow a permanent "Missed: 0m" for every subject that never needed it.
-      const missedPart = s.missed > 0 ? `  ·  ${t('analytics.missed')}: ${formatDuration(s.missed)}` : '';
-      values.textContent = `${t('analytics.planned')}: ${formatDuration(s.planned)}  ·  ${t('analytics.completed')}: ${formatDuration(s.completed)}${missedPart}`;
-
-      row.appendChild(name);
-      row.appendChild(values);
+      // report, not as a permanent "Missed: 0m" on every subject.
+      const missedPart = s.missed > 0 ? ` · ${t('analytics.missed')} ${formatDuration(s.missed)}` : '';
+      head.appendChild(el('span', 'analytics-subject-values', `${formatDuration(s.completed)} / ${formatDuration(s.planned)}${missedPart}`));
+      const track = el('div', 'subject-bar-track');
+      track.setAttribute('aria-hidden', 'true');
+      const planned = el('span', 'subject-bar-planned');
+      planned.style.width = `${s.plannedPercent}%`;
+      const done = el('span', 'subject-bar-completed');
+      done.style.width = `${s.completedPercent}%`;
+      track.appendChild(planned);
+      track.appendChild(done);
+      row.appendChild(head);
+      row.appendChild(track);
+      row.setAttribute('aria-label', `${s.subject}: ${t('analytics.completed')} ${formatDuration(s.completed)}, ${t('analytics.planned')} ${formatDuration(s.planned)}`);
       subjectListEl.appendChild(row);
     });
   }
@@ -442,6 +475,172 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     subjects.forEach((r) => addRow(body, r.subject, r)); // user-created content — never translated
     if (subjects.length > 1) addRow(table.createTFoot(), t('analytics.total'), totals);
     actualBodyEl.appendChild(table);
+  }
+
+  // ---------------- V2-E: Home "Weekly Progress" + "Workload", Insights ----------------
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function progressBar(percent, extraClass = '') {
+    const bar = el('div', `meter${extraClass ? ` ${extraClass}` : ''}`);
+    bar.setAttribute('aria-hidden', 'true');
+    const fill = el('span');
+    fill.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+    bar.appendChild(fill);
+    return bar;
+  }
+
+  // Last 7 days: completion rate as the headline, the minutes behind it,
+  // and missed time only when there is some.
+  function renderWeeklyProgress(weekly, completionRate) {
+    if (!weeklyBodyEl) return;
+    weeklyBodyEl.innerHTML = '';
+    if (weekly.totalPlanned <= 0) {
+      weeklyBodyEl.appendChild(el('p', 'hint', t('home.weeklyEmpty')));
+      return;
+    }
+    const head = el('div', 'home-weekly-head');
+    head.appendChild(el('span', 'home-weekly-rate', `${completionRate}%`));
+    head.appendChild(el('span', 'home-weekly-label', t('home.weeklyCompletedOfPlanned')
+      .replace('{completed}', formatDuration(weekly.totalCompleted))
+      .replace('{planned}', formatDuration(weekly.totalPlanned))));
+    weeklyBodyEl.appendChild(head);
+    weeklyBodyEl.appendChild(progressBar(completionRate));
+    const foot = el('p', 'hint home-weekly-foot', t('insights.last7Days'));
+    if (weekly.totalMissed > 0) foot.textContent += ` · ${t('analytics.missed')}: ${formatDuration(weekly.totalMissed)}`;
+    weeklyBodyEl.appendChild(foot);
+  }
+
+  // Mon–Sun planned study per day. The scale is the busier of the week's
+  // biggest day and the overload line, so a light week doesn't draw a
+  // modest day as a full, alarming bar; the dashed marker is the 4h line.
+  function renderWorkload(weekDays, todayStr) {
+    if (!workloadEl) return;
+    workloadEl.innerHTML = '';
+    const busiest = weekDays.reduce((m, d) => Math.max(m, d.studyMinutes), 0);
+    const scale = Math.max(busiest, OVERLOAD_THRESHOLD_MINUTES);
+    const markerPct = (OVERLOAD_THRESHOLD_MINUTES / scale) * 100;
+    weekDays.forEach((day) => {
+      const overloaded = isOverloadedDay(day.studyMinutes);
+      const row = el('button', `workload-row${overloaded ? ' is-overloaded' : ''}${day.date === todayStr ? ' is-today' : ''}`);
+      row.type = 'button';
+      const [y, m, d] = day.date.split('-').map(Number);
+      const label = new Date(y, m - 1, d).toLocaleDateString(getLocale(), { weekday: 'short' });
+      row.appendChild(el('span', 'workload-day', label));
+      const track = el('span', 'workload-track');
+      track.setAttribute('aria-hidden', 'true');
+      const fill = el('span', 'workload-fill');
+      fill.style.width = `${(day.studyMinutes / scale) * 100}%`;
+      const marker = el('span', 'workload-marker');
+      marker.style.left = `${markerPct}%`;
+      track.appendChild(fill);
+      track.appendChild(marker);
+      row.appendChild(track);
+      const value = el('span', 'workload-value', day.studyMinutes > 0 ? formatDuration(day.studyMinutes) : '—');
+      row.appendChild(value);
+      if (overloaded) row.appendChild(el('span', 'workload-flag', t('home.overloaded')));
+      const deadlineNote = day.deadlines.length > 0 ? ` · ${day.deadlines.length} ${t('home.deadlinesSuffix')}` : '';
+      row.setAttribute('aria-label', `${label}: ${formatDuration(day.studyMinutes)}${overloaded ? ` (${t('home.overloaded')})` : ''}${deadlineNote}`);
+      row.addEventListener('click', () => {
+        if (typeof hostApi.openDateInPlanner === 'function') hostApi.openDateInPlanner(day.date);
+      });
+      workloadEl.appendChild(row);
+    });
+  }
+
+  function whyText(fact) {
+    switch (fact.key) {
+      case 'overdue': return (fact.value === 1 ? t('why.overdueOne') : t('why.overdueMany')).replace('{n}', fact.value);
+      case 'dueToday': return t('why.dueToday');
+      case 'dueTomorrow': return t('why.dueTomorrow');
+      case 'dueIn': return t('why.dueIn').replace('{n}', fact.value);
+      case 'highPriority': return t('why.highPriority');
+      case 'missed': return t('why.missed');
+      case 'remaining': return t('why.remaining').replace('{time}', formatDuration(fact.value));
+      case 'tomorrowHeavy': return t('why.tomorrowHeavy').replace('{time}', formatDuration(fact.value));
+      case 'carriedOver': return t('why.carriedOver').replace('{time}', formatDuration(fact.value));
+      case 'inProgress': return t('why.inProgress');
+      case 'fitsToday': return t('why.fitsToday');
+      default: return '';
+    }
+  }
+
+  function buildWhyList(facts) {
+    const wrap = el('div', 'home-why');
+    wrap.appendChild(el('span', 'home-why-label', t('home.whyLabel')));
+    const ul = el('ul', 'home-why-list');
+    facts.forEach((f) => {
+      const text = whyText(f);
+      if (text) ul.appendChild(el('li', null, text));
+    });
+    wrap.appendChild(ul);
+    return wrap;
+  }
+
+  function metricCard(label, value, secondary, muted = false) {
+    const card = el('div', `analytics-card insights-metric${muted ? ' is-muted' : ''}`);
+    card.appendChild(el('span', 'analytics-card-label', label));
+    card.appendChild(el('span', 'analytics-card-value', value));
+    if (secondary) card.appendChild(el('span', 'home-stat-secondary', secondary));
+    return card;
+  }
+
+  function renderInsightMetrics({ weekly, completionRate, avgBlock, accuracy, overdue }) {
+    if (!insightsMetricsEl) return;
+    insightsMetricsEl.innerHTML = '';
+    const notEnough = t('analytics.noDataYet');
+    insightsMetricsEl.appendChild(metricCard(
+      t('analytics.completionRate'),
+      completionRate === null ? '—' : `${completionRate}%`,
+      completionRate === null ? notEnough : `${formatDuration(weekly.totalCompleted)} / ${formatDuration(weekly.totalPlanned)} · ${t('insights.last7Days')}`,
+      completionRate === null
+    ));
+    insightsMetricsEl.appendChild(metricCard(
+      t('insights.avgBlock'),
+      avgBlock.insufficientData ? '—' : formatDuration(avgBlock.averageMinutes),
+      avgBlock.insufficientData ? notEnough : t('insights.acrossBlocks').replace('{n}', avgBlock.blockCount),
+      avgBlock.insufficientData
+    ));
+    insightsMetricsEl.appendChild(metricCard(
+      t('insights.estimateAccuracy'),
+      accuracy.insufficientData ? '—' : `${accuracy.ratioPercent}%`,
+      accuracy.insufficientData ? t('insights.accuracyNeedsData') : t('insights.accuracyDetail').replace('{n}', accuracy.taskCount),
+      accuracy.insufficientData
+    ));
+    insightsMetricsEl.appendChild(metricCard(
+      t('insights.overdueTitle'),
+      overdue.count > 0 ? formatDuration(overdue.totalMinutes) : '0',
+      overdue.count > 0 ? t('insights.overdueTasks').replace('{n}', overdue.count) : t('insights.nothingOverdue'),
+      overdue.count === 0
+    ));
+  }
+
+  function renderOverdue(overdue) {
+    if (!overdueBodyEl) return;
+    overdueBodyEl.innerHTML = '';
+    if (overdue.count === 0) {
+      overdueBodyEl.appendChild(el('p', 'hint', t('insights.nothingOverdue')));
+      return;
+    }
+    overdue.items.forEach((o) => {
+      const row = el('button', 'insights-overdue-row');
+      row.type = 'button';
+      row.appendChild(el('span', 'insights-overdue-title', o.title)); // user-created content — never translated
+      row.appendChild(el('span', 'insights-overdue-meta', `${(o.daysOverdue === 1 ? t('why.overdueOne') : t('why.overdueMany')).replace('{n}', o.daysOverdue)} · ${t('why.remaining').replace('{time}', formatDuration(o.remainingMinutes))}`));
+      row.addEventListener('click', () => {
+        if (typeof hostApi.viewInPlanner === 'function') hostApi.viewInPlanner();
+      });
+      overdueBodyEl.appendChild(row);
+    });
+    if (overdue.count > overdue.items.length) {
+      overdueBodyEl.appendChild(el('p', 'hint', t('insights.andMore').replace('{n}', overdue.count - overdue.items.length)));
+    }
+    overdueBodyEl.appendChild(el('p', 'hint insights-overdue-note', t('insights.overdueWindow')));
   }
 
   function renderProductivity(result) {
@@ -519,8 +718,14 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     if (boardsSummaryEl) boardsSummaryEl.textContent = parts.join(' · ');
   }
 
-  async function loadAndRender() {
-    if (loading) return;
+  // `insights` (V2-E): also load the longer-window data only the Insights
+  // page uses, so opening Home doesn't pay for it. Both pages share every
+  // other number, computed once here.
+  async function loadAndRender(opts = {}) {
+    if (loading) {
+      pendingOpts = { insights: Boolean(opts.insights || pendingOpts?.insights) };
+      return;
+    }
     loading = true;
     hideError();
     renderGreeting();
@@ -530,11 +735,25 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       const startDate = dates[0];
       const endDate = dates[dates.length - 1];
 
-      const [weekData, upcomingSubjects, boards, todaySchedule] = await Promise.all([
-        typeof hostApi.getWeekData === 'function' ? hostApi.getWeekData(startDate, endDate) : { schedules: [], items: [], subjects: [] },
+      // Home's workload card covers the calendar week (Mon–Sun) and also
+      // needs tomorrow (for "Tomorrow is heavily scheduled"), which on a
+      // Sunday falls in next week — so the range stretches to include it.
+      const weekDates = getWeekDates(getWeekStart(today));
+      const tomorrow = addDaysToDateStr(today, 1);
+      const rangeEnd = tomorrow > weekDates[6] ? tomorrow : weekDates[6];
+      const longStart = addDaysToDateStr(today, -27);
+      const emptyWeek = { schedules: [], items: [], subjects: [] };
+
+      const [weekData, upcomingSubjects, boards, todaySchedule, workloadData, longData, dueData] = await Promise.all([
+        typeof hostApi.getWeekData === 'function' ? hostApi.getWeekData(startDate, endDate) : emptyWeek,
         typeof hostApi.getUpcomingDeadlines === 'function' ? hostApi.getUpcomingDeadlines(today) : [],
         typeof hostApi.getBoardsSummary === 'function' ? hostApi.getBoardsSummary() : [],
         typeof hostApi.getTodaySchedule === 'function' ? hostApi.getTodaySchedule() : null,
+        !opts.insights && typeof hostApi.getWeekRangeData === 'function' ? hostApi.getWeekRangeData(weekDates[0], rangeEnd) : null,
+        opts.insights && typeof hostApi.getWeekData === 'function' ? hostApi.getWeekData(longStart, today) : null,
+        opts.insights && typeof hostApi.getDueTasksWithBlocks === 'function'
+          ? hostApi.getDueTasksWithBlocks(addDaysToDateStr(today, -30), addDaysToDateStr(today, -1))
+          : null,
       ]);
 
       const itemsWithDate = attachDatesToItems(weekData.items, weekData.schedules);
@@ -599,21 +818,49 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       const missedMinutes = weekly.totalMissed;
       const unfinishedMinutes = Math.max(0, weekly.totalPlanned - weekly.totalCompleted);
 
+      // Each page renders only its own cards, so a load for one page never
+      // overwrites the other's with less context (e.g. Insights has no
+      // week workload, so it must not re-render Home's "Why:" list).
+      if (opts.insights) {
+        renderChart(weekly.byDay);
+        renderSubjects(subjectTotals);
+        renderActualVsPlanned(actualVsPlanned);
+        renderProductivity(productivity);
+        const longItems = longData ? longData.items || [] : [];
+        const avgBlock = computeAverageBlockLength(longItems);
+        const accuracy = computeEstimateAccuracy(longData ? longData.subjects || [] : [], longItems);
+        const overdue = dueData ? computeOverdueWorkload(dueData.subjects, dueData.items, today) : { count: 0, totalMinutes: 0, items: [] };
+        renderInsightMetrics({ weekly, completionRate, avgBlock, accuracy, overdue });
+        renderOverdue(overdue);
+        return;
+      }
+
       renderCards({ todayTotals, todayStudyCounts, weekly, completionRate, upcomingCount: upcoming.length, atRiskCount });
       renderToday(todayStatus);
-      renderRecommendations(ranked, smartTasks.length > 0);
+      let tomorrowStudyMinutes = null;
+      if (workloadData) {
+        const weekDays = aggregateWeekView({ weekDates, ...workloadData });
+        renderWorkload(weekDays, today);
+        const [tomorrowDay] = aggregateWeekView({ weekDates: [tomorrow], ...workloadData });
+        tomorrowStudyMinutes = tomorrowDay ? tomorrowDay.studyMinutes : null;
+      }
+      renderWeeklyProgress(weekly, completionRate);
+      renderRecommendations(ranked, smartTasks.length > 0, { todayDateStr: today, tomorrowStudyMinutes, heavyDayMinutes: OVERLOAD_THRESHOLD_MINUTES });
       renderInsights({ dueWithin3Count, missedMinutes, unfinishedMinutes });
-      renderChart(weekly.byDay);
-      renderSubjects(subjectTotals);
-      renderActualVsPlanned(actualVsPlanned);
-      renderProductivity(productivity);
-      renderUpcoming(upcoming);
+      // Home is an overview: the 5 soonest. The count card above still
+      // reports the full number.
+      renderUpcoming(upcoming.slice(0, 5));
       renderBoardsSummary(boardsSummary);
     } catch (err) {
       console.error('Could not load analytics:', err);
       showError(t('analytics.couldNotLoad'));
     } finally {
       loading = false;
+      if (pendingOpts) {
+        const next = pendingOpts;
+        pendingOpts = null;
+        loadAndRender(next);
+      }
     }
   }
 
@@ -624,5 +871,9 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     loadAndRender();
   }
 
-  return { onShow };
+  function onShowInsights() {
+    loadAndRender({ insights: true });
+  }
+
+  return { onShow, onShowInsights };
 }

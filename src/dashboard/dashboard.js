@@ -273,7 +273,11 @@ async function init(session) {
       // Home's greeting/labels are rendered via t(), not [data-i18n] alone
       // (the greeting also splices in the display name) — re-run its
       // render pass so a language switch updates it immediately too.
-      if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
+      if (analyticsSection && typeof analyticsSection.onShow === 'function') {
+        const onInsights = !document.getElementById('insightsView')?.hidden;
+        if (onInsights) analyticsSection.onShowInsights();
+        else analyticsSection.onShow();
+      }
     });
   }
 
@@ -292,6 +296,7 @@ async function init(session) {
     document.getElementById('boardView'),
     document.getElementById('weekView'),
     document.getElementById('analyticsView'),
+    document.getElementById('insightsView'),
     document.getElementById('settingsView'),
   ].filter(Boolean);
   function showPlannerView() {
@@ -374,8 +379,32 @@ async function init(session) {
   // from the exact same tables (schedules/schedule_items/study_subjects/
   // boards) every other feature already reads; nothing here writes
   // anything.
+  // Shared by Week View and Home's workload card (V2-E) — one fetch shape
+  // for "everything planned in a date range", never two.
+  async function getWeekRangeData(startDate, endDate) {
+    const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
+    const scheduleIds = schedulesInRange.map((s) => s.id);
+    const [classes, items, dueSubjects] = await Promise.all([
+      listClassesForScheduleIds(scheduleIds),
+      listScheduleItemsForScheduleIds(scheduleIds),
+      listStudySubjectsDueInRange(userId, startDate, endDate),
+    ]);
+    return { schedules: schedulesInRange, classes, items, dueSubjects };
+  }
+
   const analyticsHostApi = {
     getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
+    getWeekRangeData,
+    // V2-E Insights: tasks due in [startDate, endDate] plus the study blocks
+    // placed for them (by source_subject_id, wherever they were scheduled),
+    // so overdue work can be measured with real remaining minutes. Read-only.
+    getDueTasksWithBlocks: async (startDate, endDate) => {
+      const subjects = await listStudySubjectsDueInRange(userId, startDate, endDate);
+      const items = await listScheduleItemsForSourceSubjectIds(subjects.map((s) => s.id));
+      return { subjects, items };
+    },
+    openInsights: () => activateView('insightsView'),
+    openDateInPlanner: (dateStr) => openPlannerForDate(dateStr),
     getDisplayName: () => displayName,
     getWeekData: async (startDate, endDate) => {
       const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
@@ -428,16 +457,7 @@ async function init(session) {
   }
   const weekHostApi = {
     getTodayDateStr: () => addDaysToDateStr(tomorrowDateStr(), -1),
-    getWeekRangeData: async (startDate, endDate) => {
-      const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
-      const scheduleIds = schedulesInRange.map((s) => s.id);
-      const [classes, items, dueSubjects] = await Promise.all([
-        listClassesForScheduleIds(scheduleIds),
-        listScheduleItemsForScheduleIds(scheduleIds),
-        listStudySubjectsDueInRange(userId, startDate, endDate),
-      ]);
-      return { schedules: schedulesInRange, classes, items, dueSubjects };
-    },
+    getWeekRangeData,
     openDateInPlanner: openPlannerForDate,
   };
   const weekSection = initWeekSection(userId, weekHostApi);
@@ -605,6 +625,7 @@ async function init(session) {
     boardView: boardSection,
     weekView: weekSection,
     analyticsView: analyticsSection,
+    insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
     settingsView: settingsSection,
   };
   async function activateView(key) {
