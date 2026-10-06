@@ -142,6 +142,8 @@ export function initWeekSection(userId, hostApi = {}) {
       classes: data.classes,
       items: data.items,
       dueSubjects: data.dueSubjects,
+      seriesList: data.seriesList,
+      exceptions: data.exceptions,
     });
     renderSummary(computeWeekSummary(days));
     renderGrid(days, computeWeekWorkloadBars(days));

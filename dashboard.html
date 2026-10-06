@@ -49,7 +49,7 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2.2"/><circle cx="18" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M7.6 8 10.7 15.7M16.4 8 13.3 15.7"/></svg>
           <span data-i18n="nav.board">Board</span>
         </button>
-        <button type="button" class="nav-item" data-scroll-target="calendarExportCard">
+        <button type="button" class="nav-item" data-view-target="calendarView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14.5" rx="2"/><path d="M4.5 9.5h15M8.5 3v3.5M15.5 3v3.5"/></svg>
           <span data-i18n="nav.calendar">Calendar</span>
         </button>
@@ -386,6 +386,48 @@
           <div id="historyList"><div class="placeholder" data-i18n="history.noSavedDates">No saved dates yet.</div></div>
         </div>
 
+        <div class="card" id="copyToAnotherDayCard">
+          <h2 data-i18n="copy.title">Copy to another day</h2>
+          <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>
+          <div class="row-2">
+            <div>
+              <label for="copyDestDate" data-i18n="copy.destDate">Destination date</label>
+              <input type="date" id="copyDestDate">
+            </div>
+            <div></div>
+          </div>
+          <button class="btn-secondary" id="copyConfirmBtn" type="button" data-i18n="copy.button">Copy to another day</button>
+          <p class="hint" id="copyStatus"></p>
+        </div>
+      </div>
+    </details>
+  </div>
+
+      <section class="calendar-view" id="calendarView" hidden>
+        <div class="board-header">
+          <div class="board-header-info">
+            <p class="page-eyebrow" data-i18n="calendar.eyebrow">Organize</p>
+            <h1 class="page-heading" id="agendaRangeHeading">&nbsp;</h1>
+            <p class="page-subtitle" data-i18n="calendar.subtitle">Classes, imported events, and study blocks in one place.</p>
+          </div>
+          <div class="week-nav-row">
+            <button type="button" class="date-nav-btn" id="agendaPrevBtn" data-i18n-title="week.previousWeek" title="Previous week" data-i18n-aria-label="week.previousWeek" aria-label="Previous week">←</button>
+            <button type="button" class="btn-secondary" id="agendaTodayBtn" data-i18n="week.thisWeek">This Week</button>
+            <button type="button" class="date-nav-btn" id="agendaNextBtn" data-i18n-title="week.nextWeek" title="Next week" data-i18n-aria-label="week.nextWeek" aria-label="Next week">→</button>
+          </div>
+        </div>
+
+        <div class="agenda-filters" id="agendaFilters" role="group" data-i18n-aria-label="calendar.filterLabel" aria-label="Show">
+          <button type="button" class="agenda-chip active" data-filter="all" aria-pressed="true"><span data-i18n="calendar.filterAll">All</span> <span class="agenda-chip-count"></span></button>
+          <button type="button" class="agenda-chip" data-filter="classes" aria-pressed="false"><i class="agenda-dot agenda-dot-class" aria-hidden="true"></i><span data-i18n="calendar.typeClasses">Classes</span> <span class="agenda-chip-count"></span></button>
+          <button type="button" class="agenda-chip" data-filter="study" aria-pressed="false"><i class="agenda-dot agenda-dot-study" aria-hidden="true"></i><span data-i18n="calendar.filterStudy">Study</span> <span class="agenda-chip-count"></span></button>
+          <button type="button" class="agenda-chip" data-filter="external" aria-pressed="false"><i class="agenda-dot agenda-dot-external" aria-hidden="true"></i><span data-i18n="calendar.filterExternal">External Calendar</span> <span class="agenda-chip-count"></span></button>
+        </div>
+
+        <p class="hint" id="agendaStatus" hidden></p>
+        <div class="card agenda-card" id="agendaList"></div>
+
+        <div class="home-grid-2 calendar-io-grid">
         <div class="card" id="calendarExportCard">
           <h2 data-i18n="calendar.exportTitle">Export Calendar</h2>
           <p class="hint" data-i18n="calendar.exportHint">Save your schedule as a .ics file you can import into Google Calendar, Apple Calendar, or Outlook.</p>
@@ -427,30 +469,15 @@
           <p class="hint" id="calendarExportStatus" hidden></p>
         </div>
 
-        <div class="card" id="calendarImportCard">
+          <div class="card" id="calendarImportCard">
           <h2 data-i18n="calendar.importTitle">Import Calendar</h2>
           <p class="hint" data-i18n="calendar.importHint">Import events from a .ics file as fixed events that block study time. You'll preview them before anything is saved.</p>
           <input type="file" id="calendarFileInput" accept=".ics,text/calendar" style="display:none;">
           <button type="button" class="btn-secondary" id="importCalendarBtn" data-i18n="calendar.chooseFile">Choose Calendar File</button>
           <p class="hint" id="calendarImportStatus" hidden></p>
         </div>
-
-        <div class="card" id="copyToAnotherDayCard">
-          <h2 data-i18n="copy.title">Copy to another day</h2>
-          <p class="hint"><span data-i18n="copy.hintBefore">Copying from</span> <strong id="copySourceDateLabel">—</strong><span data-i18n="copy.hintAfter">: wake/sleep time, meals, classes, subjects, and study preferences. Not copied: the generated schedule, locks, or completion.</span></p>
-          <div class="row-2">
-            <div>
-              <label for="copyDestDate" data-i18n="copy.destDate">Destination date</label>
-              <input type="date" id="copyDestDate">
-            </div>
-            <div></div>
-          </div>
-          <button class="btn-secondary" id="copyConfirmBtn" type="button" data-i18n="copy.button">Copy to another day</button>
-          <p class="hint" id="copyStatus"></p>
         </div>
-      </div>
-    </details>
-  </div>
+      </section>
 
       <section class="week-view" id="weekView" hidden>
         <div class="board-header">

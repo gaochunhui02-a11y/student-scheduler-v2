@@ -96,6 +96,7 @@ import { initWeekSection } from '../week/week.js';
 import { initNotificationsSection } from '../notifications/notifications.js';
 import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
 import { initCalendarSection } from '../calendar/calendar.js';
+import { initAgendaSection } from '../calendar/agenda.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -296,6 +297,7 @@ async function init(session) {
   const altViewEls = [
     document.getElementById('boardView'),
     document.getElementById('weekView'),
+    document.getElementById('calendarView'),
     document.getElementById('analyticsView'),
     document.getElementById('insightsView'),
     document.getElementById('settingsView'),
@@ -382,15 +384,25 @@ async function init(session) {
   // anything.
   // Shared by Week View and Home's workload card (V2-E) — one fetch shape
   // for "everything planned in a date range", never two.
+  // Also returns the user's recurring class series + exceptions (V2-E) so
+  // every week-shaped view can project recurring occurrences. Those two
+  // reads degrade to [] on failure (e.g. migration 0006 not applied yet)
+  // rather than taking the whole view down with them.
   async function getWeekRangeData(startDate, endDate) {
     const schedulesInRange = await listSchedulesInRange(userId, startDate, endDate);
     const scheduleIds = schedulesInRange.map((s) => s.id);
-    const [classes, items, dueSubjects] = await Promise.all([
+    const softList = (promise, label) => promise.catch((err) => {
+      console.error(`Could not load ${label}:`, err);
+      return [];
+    });
+    const [classes, items, dueSubjects, seriesList, exceptions] = await Promise.all([
       listClassesForScheduleIds(scheduleIds),
       listScheduleItemsForScheduleIds(scheduleIds),
       listStudySubjectsDueInRange(userId, startDate, endDate),
+      softList(listClassSeries(userId), 'recurring classes'),
+      softList(listClassSeriesExceptions(userId), 'recurring class exceptions'),
     ]);
-    return { schedules: schedulesInRange, classes, items, dueSubjects };
+    return { schedules: schedulesInRange, classes, items, dueSubjects, seriesList, exceptions };
   }
 
   const analyticsHostApi = {
@@ -462,6 +474,9 @@ async function init(session) {
     openDateInPlanner: openPlannerForDate,
   };
   const weekSection = initWeekSection(userId, weekHostApi);
+  // V2-E: the Calendar page's agenda needs exactly what Week View needs
+  // (today, the week-range fetch, open-a-date), so it shares that bridge.
+  const agendaSection = initAgendaSection(userId, weekHostApi);
 
   // ---------------- Notifications -> existing schedule + due dates (Phase 11) ----------------
   // notifications.js never imports data.js directly — it only calls these
@@ -510,7 +525,9 @@ async function init(session) {
       const baseSortOrder = isCurrentlyLoaded ? classList.children.length : 0;
       for (let i = 0; i < fieldsList.length; i += 1) {
         // eslint-disable-next-line no-await-in-loop
-        const created = await insertClass(targetSchedule.id, userId, fieldsList[i], baseSortOrder + i);
+        // V2-E: tagged 'imported' so the Calendar page can show/filter
+        // external events separately from hand-typed classes.
+        const created = await insertClass(targetSchedule.id, userId, { ...fieldsList[i], source: 'imported' }, baseSortOrder + i);
         if (isCurrentlyLoaded) addClassRow(created);
       }
       refreshHistoryList();
@@ -606,6 +623,13 @@ async function init(session) {
   }
   syncSettingsControls();
 
+  // V2-E: Import/Export moved from the Planner onto the Calendar page.
+  async function openCalendarCard(cardId) {
+    await activateView('calendarView');
+    const card = document.getElementById(cardId);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function jumpFromSettingsToPlanner(targetId) {
     activatePlannerScroll(targetId);
     const plannerNavBtn = document.querySelector('.nav-item[data-scroll-target="plannerForm"]');
@@ -617,7 +641,7 @@ async function init(session) {
   }
   const settingsOpenCalendarBtn = document.getElementById('settingsOpenCalendarBtn');
   if (settingsOpenCalendarBtn) {
-    settingsOpenCalendarBtn.addEventListener('click', () => jumpFromSettingsToPlanner('calendarExportCard'));
+    settingsOpenCalendarBtn.addEventListener('click', () => openCalendarCard('calendarExportCard'));
   }
 
   const settingsSection = { onShow: () => syncSettingsControls() };
@@ -625,6 +649,7 @@ async function init(session) {
   const altViewSections = {
     boardView: boardSection,
     weekView: weekSection,
+    calendarView: agendaSection,
     analyticsView: analyticsSection,
     insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
     settingsView: settingsSection,
@@ -696,7 +721,7 @@ async function init(session) {
     });
   }
   const qaImportCalendarBtn = document.getElementById('homeQaImportCalendar');
-  if (qaImportCalendarBtn) qaImportCalendarBtn.addEventListener('click', () => activatePlannerScroll('calendarImportCard'));
+  if (qaImportCalendarBtn) qaImportCalendarBtn.addEventListener('click', () => openCalendarCard('calendarImportCard'));
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that

@@ -11,6 +11,7 @@
 // end_minutes}; study_subjects due-date rows: {id, name, due_date, priority}).
 
 import { addDaysToDateStr } from '../dashboard/dateUtils.js';
+import { resolveOccurrenceForDate } from '../dashboard/recurringClasses.js';
 
 const DAYS_PER_WEEK = 7;
 
@@ -76,7 +77,12 @@ function emptyDayShell(date) {
 // gets a real entry (classes: [], studyMinutes: 0, deadlines: []), not an
 // omission — so the UI never has to guess whether a day was "not loaded"
 // vs. "genuinely empty."
-export function aggregateWeekView({ weekDates, schedules, classes, items, dueSubjects }) {
+//
+// V2-E: recurring classes (V2-B) are never stored as `classes` rows — they
+// are projected per date from `seriesList` + `exceptions` (optional; both
+// default to none) with the same resolveOccurrenceForDate the Planner uses,
+// including skipped/modified occurrences and dates with no schedule row.
+export function aggregateWeekView({ weekDates, schedules, classes, items, dueSubjects, seriesList = [], exceptions = [] }) {
   const scheduleIdToDate = new Map((schedules || []).map((s) => [s.id, s.for_date]));
   const byDate = new Map((weekDates || []).map((d) => [d, emptyDayShell(d)]));
 
@@ -96,6 +102,13 @@ export function aggregateWeekView({ weekDates, schedules, classes, items, dueSub
   (dueSubjects || []).forEach((s) => {
     const day = byDate.get(s.due_date);
     if (day) day.deadlines.push({ id: s.id, name: s.name, priority: s.priority || 'medium' });
+  });
+
+  (seriesList || []).forEach((series) => {
+    byDate.forEach((day, date) => {
+      const occurrence = resolveOccurrenceForDate(series, date, exceptions);
+      if (occurrence) day.classes.push({ name: occurrence.name, start_time: occurrence.start_time, end_time: occurrence.end_time, recurring: true });
+    });
   });
 
   byDate.forEach((day) => {
