@@ -448,6 +448,39 @@ export async function listScheduleItemsForSourceSubjectIds(subjectIds) {
   return data;
 }
 
+// ---------------- First-run onboarding (V2-F) ----------------
+
+// Whether this user has ever saved a class or a study task. Used to never
+// show onboarding to an existing user, even before migration 0009 exists.
+// Errors propagate: the caller treats "unknown" as "has data".
+export async function userHasAnyPlanningData(userId) {
+  const [classesRes, subjectsRes] = await Promise.all([
+    supabase.from('classes').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('study_subjects').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+  if (classesRes.error) throw classesRes.error;
+  if (subjectsRes.error) throw subjectsRes.error;
+  return (classesRes.count || 0) + (subjectsRes.count || 0) > 0;
+}
+
+// profiles.onboarding_completed_at, or undefined if it can't be read
+// (e.g. migration 0009 not applied yet).
+export async function getOnboardingCompletedAt(userId) {
+  const { data, error } = await supabase.from('profiles').select('onboarding_completed_at').eq('id', userId).maybeSingle();
+  if (error) return undefined;
+  return data ? data.onboarding_completed_at : undefined;
+}
+
+// Best effort: returns false instead of throwing if the column doesn't
+// exist yet — the browser-side flag still records it.
+export async function markOnboardingCompleted(userId) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ onboarding_completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  return !error;
+}
+
 // V2-F: Settings -> Data -> Export. Reads every user-owned table (read-only,
 // RLS-scoped). A table that can't be read (e.g. its migration isn't applied
 // yet) is reported in `errors` instead of failing the whole export.

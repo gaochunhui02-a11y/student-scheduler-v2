@@ -34,6 +34,9 @@ import {
   listScheduleItemsForScheduleIds,
   listScheduleItemsForSourceSubjectIds,
   fetchAllUserDataForExport,
+  userHasAnyPlanningData,
+  getOnboardingCompletedAt,
+  markOnboardingCompleted,
   listStudySubjectsForScheduleIds,
   listClassesForScheduleIds,
   listUpcomingStudySubjects,
@@ -101,6 +104,8 @@ import { initAgendaSection } from '../calendar/agenda.js';
 import { initCommandPalette } from '../shared/commandPaletteView.js';
 import { isPaletteShortcut } from '../shared/commandPalette.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
+import { initOnboarding } from './onboarding.js';
+import { shouldShowOnboarding } from './onboardingModel.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -3932,4 +3937,73 @@ async function init(session) {
   // data is still loaded above regardless, so switching to it is instant.
   showAltView(document.getElementById('analyticsView'));
   if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
+
+  // ---------------- First-run onboarding (V2-F) ----------------
+  // "Build my first plan" fills the REAL Planner inputs and fires their own
+  // change events, so the existing save handlers (saveScheduleSettings,
+  // the classes/study rows' chainSave listeners) persist everything, then
+  // the existing Generate runs. No second way of saving.
+  const ONBOARDING_LOCAL_KEY = `scheduler.onboardingDone.v1:${userId}`;
+  function readOnboardingLocalFlag() {
+    try {
+      return localStorage.getItem(ONBOARDING_LOCAL_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  async function applyOnboardingPlan(plan) {
+    if (forDateEl.value !== todayDateStr()) await loadScheduleForDate(todayDateStr());
+    activatePlannerScroll('plannerForm');
+
+    if (plan.day) {
+      wakeTimeEl.value = plan.day.wake_time;
+      sleepTimeEl.value = plan.day.sleep_time;
+    }
+    preferredPeriodEl.value = plan.prefs.preferred_study_period;
+    if (plan.prefs.session_cap_minutes) sessionCapEl.value = String(plan.prefs.session_cap_minutes);
+    saveScheduleSettings();
+    await scheduleSaveTarget._savePromise;
+
+    const classRows = plan.classes.map((c) => addClassRow(c));
+    classRows.forEach((row) => row.querySelector('.class-name').dispatchEvent(new Event('change', { bubbles: true })));
+    const taskRows = plan.tasks.map((task) => addStudyRow(task));
+    taskRows.forEach((row) => row.querySelector('.study-name').dispatchEvent(new Event('change', { bubbles: true })));
+    await Promise.all([...classRows, ...taskRows].map((row) => row._savePromise));
+
+    // chainSave reports its own errors; a row without an id here means its
+    // save failed, so stop before generating a plan from unsaved tasks.
+    if ([...classRows, ...taskRows].some((row) => !row.dataset.id)) throw new Error('onboarding_save_failed');
+    if (taskRows.length > 0) await handleGenerateClick(generateBtn.hidden ? regenerateBtn : generateBtn);
+    output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const onboarding = initOnboarding({
+    t,
+    applyPlan: applyOnboardingPlan,
+    markComplete: async () => {
+      try {
+        localStorage.setItem(ONBOARDING_LOCAL_KEY, '1');
+      } catch {
+        // the server flag below still records it when available
+      }
+      await markOnboardingCompleted(userId);
+    },
+  });
+
+  const replayOnboardingBtn = document.getElementById('settingsReplayOnboardingBtn');
+  if (replayOnboardingBtn) {
+    replayOnboardingBtn.hidden = false;
+    replayOnboardingBtn.addEventListener('click', () => onboarding.open());
+  }
+
+  try {
+    const [completedAt, hasExistingData] = await Promise.all([
+      getOnboardingCompletedAt(userId),
+      userHasAnyPlanningData(userId).catch(() => undefined),
+    ]);
+    if (shouldShowOnboarding({ completedAt, hasExistingData, dismissedLocally: readOnboardingLocalFlag() })) onboarding.open();
+  } catch (err) {
+    console.error('Could not check onboarding state:', err);
+  }
 }
