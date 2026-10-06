@@ -97,6 +97,8 @@ import { initNotificationsSection } from '../notifications/notifications.js';
 import { registerServiceWorker, initInstallPrompt, initOfflineIndicator } from '../shared/pwa.js';
 import { initCalendarSection } from '../calendar/calendar.js';
 import { initAgendaSection } from '../calendar/agenda.js';
+import { initCommandPalette } from '../shared/commandPaletteView.js';
+import { isPaletteShortcut } from '../shared/commandPalette.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -722,6 +724,107 @@ async function init(session) {
   }
   const qaImportCalendarBtn = document.getElementById('homeQaImportCalendar');
   if (qaImportCalendarBtn) qaImportCalendarBtn.addEventListener('click', () => openCalendarCard('calendarImportCard'));
+
+  // ---------------- Command palette (Ctrl/Cmd+K) + Quick Add (V2-F) ----------------
+  // Every command's run() calls an EXISTING handler — the same button
+  // clicks/view switches the rest of the app already uses — so neither the
+  // palette nor Quick Add is a second way of creating anything.
+  function quickAddStudyTask() {
+    activatePlannerScroll('plannerForm');
+    document.getElementById('addStudyBtn').click();
+    studyList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function quickAddClass() {
+    activatePlannerScroll('plannerForm');
+    document.getElementById('addClassBtn').click();
+    const classListEl = document.getElementById('classList');
+    if (classListEl) classListEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function quickAddRecurringClass() {
+    activatePlannerScroll('recurringClassesCard');
+    const btn = document.getElementById('addRecurringSeriesBtn');
+    if (btn) btn.click();
+  }
+  async function quickNewBoard() {
+    if (qaNewBoardBtn) qaNewBoardBtn.click();
+  }
+  async function quickAddBoardNode() {
+    await activateView('boardView');
+    const addNodeBtn = document.getElementById('boardAddNodeBtn');
+    // No board yet -> the Board's own "create a board" flow comes first.
+    if (addNodeBtn && addNodeBtn.offsetParent) addNodeBtn.click();
+    else if (qaNewBoardBtn) qaNewBoardBtn.click();
+  }
+  function focusTaskSearch() {
+    activatePlannerScroll('studyList');
+    const searchInput = document.getElementById('taskSearchInput');
+    if (searchInput) {
+      const details = searchInput.closest('details');
+      if (details) details.open = true;
+      searchInput.focus({ preventScroll: true });
+    }
+  }
+  // Reveals a task row on the date already open in the Planner (no date
+  // change, unlike goToPlannerStudyList's "plan today's task" behavior).
+  function revealStudyRow(taskId) {
+    activatePlannerScroll('studyList');
+    const row = findStudyRow(taskId);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('study-row-highlight');
+    setTimeout(() => row.classList.remove('study-row-highlight'), 1800);
+  }
+
+  function buildPaletteCommands(mode) {
+    const create = [
+      { id: 'add-task', group: 'create', title: t('palette.addTask'), keywords: ['study', 'subject', 'new task'], run: quickAddStudyTask },
+      { id: 'add-class', group: 'create', title: t('palette.addClass'), keywords: ['lecture', 'course'], run: quickAddClass },
+      { id: 'add-recurring', group: 'create', title: t('palette.addRecurringClass'), keywords: ['repeat', 'weekly', 'class'], run: quickAddRecurringClass },
+      { id: 'new-board', group: 'create', title: t('palette.newBoard'), keywords: ['project'], run: quickNewBoard },
+      { id: 'add-node', group: 'create', title: t('palette.addBoardNode'), keywords: ['board', 'card', 'node'], run: quickAddBoardNode },
+    ];
+    if (mode === 'create') return create;
+
+    const go = (id, titleKey, run, keywords = []) => ({ id, group: 'navigate', title: t(titleKey), keywords, run });
+    const navigate = [
+      go('search-tasks', 'palette.searchTasks', focusTaskSearch, ['find', 'filter']),
+      go('open-home', 'palette.openHome', () => activateView('analyticsView'), ['dashboard']),
+      go('open-planner', 'palette.openPlanner', () => activatePlannerScroll('plannerForm'), ['today', 'schedule', 'plan']),
+      go('open-week', 'palette.openWeek', () => activateView('weekView'), ['week view']),
+      go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
+      go('open-calendar', 'palette.openCalendar', () => activateView('calendarView'), ['agenda', 'events']),
+      go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics', 'google']),
+      go('open-history', 'palette.openHistory', () => activatePlannerScroll('historyCard'), ['past']),
+      go('open-insights', 'palette.openInsights', () => activateView('insightsView'), ['analytics', 'stats']),
+      go('open-settings', 'palette.openSettings', () => activateView('settingsView'), ['preferences', 'theme', 'notifications']),
+    ];
+
+    // The date open in the Planner's own tasks, searchable by name.
+    const dateHint = schedule ? formatDateLabel(schedule.for_date) : '';
+    const tasks = buildSubjectsInput()
+      .filter((s) => s.id && s.name)
+      .map((s) => ({ id: `task-${s.id}`, group: 'tasks', title: s.name, hint: dateHint, run: () => revealStudyRow(s.id) }));
+
+    return [...create, ...navigate, ...tasks];
+  }
+
+  const commandPalette = initCommandPalette({ getCommands: buildPaletteCommands, t });
+  const paletteShortcutHintEl = document.getElementById('paletteShortcutHint');
+  if (paletteShortcutHintEl && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '')) {
+    paletteShortcutHintEl.textContent = '⌘K';
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!isPaletteShortcut(e)) return;
+    e.preventDefault();
+    if (commandPalette.isOpen()) commandPalette.close();
+    else commandPalette.open('all');
+  });
+  document.querySelectorAll('[data-open-palette]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      closeSidebar();
+      commandPalette.open(btn.dataset.openPalette === 'create' ? 'create' : 'all');
+    });
+  });
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that

@@ -18,6 +18,14 @@
       <span class="brand-name">Scheduler</span>
     </div>
 
+    <div class="sidebar-actions">
+      <button type="button" class="sidebar-quickadd" data-open-palette="create"><span aria-hidden="true">+</span> <span data-i18n="palette.quickAdd">Quick add</span></button>
+      <button type="button" class="sidebar-search" data-open-palette="all">
+        <span data-i18n="palette.searchShort">Search…</span>
+        <kbd class="sidebar-kbd" id="paletteShortcutHint">Ctrl K</kbd>
+      </button>
+    </div>
+
     <nav class="sidebar-nav" id="sidebarNav">
       <div class="nav-section">
         <span class="nav-section-label" data-i18n="nav.sectionHome">Home</span>
@@ -119,6 +127,7 @@
              greeting on Home + the sidebar's own name display already cover this
              visually now — a third "Hi, Name" line would just be noise. -->
         <span id="userName" class="sr-only">Loading…</span>
+        <button type="button" class="header-quickadd" data-open-palette="create" data-i18n-aria-label="palette.quickAdd" aria-label="Quick add">+</button>
       </header>
 
       <div class="offline-banner" id="offlineBanner" hidden>
