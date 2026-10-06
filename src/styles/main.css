@@ -2805,3 +2805,153 @@ button { font-family: inherit; }
   .advisor-send-btn { width: 100%; }
   .analytics-upcoming-row { flex-wrap: wrap; }
 }
+
+/* ---------------- V2-C: Focus Mode ----------------
+   Full-screen, calm, one decision at a time: the countdown is the hero,
+   Pause/Complete are the only primary controls, and the two ways out
+   (save partial progress / discard) sit below as quieter text buttons. */
+.focus-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.focus-btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+
+body.focus-open { overflow: hidden; }
+.focus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+}
+.focus-panel {
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.focus-eyebrow {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.focus-task {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.focus-meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.focus-countdown {
+  margin-top: 36px;
+  font-size: clamp(56px, 18vw, 88px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dur) var(--ease);
+}
+.focus-countdown.is-paused { color: var(--muted); }
+.focus-status { margin-top: 10px; min-height: 18px; font-size: 13px; color: var(--muted); }
+.focus-bar {
+  width: 100%;
+  height: 4px;
+  margin-top: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.focus-bar-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width 250ms linear; }
+.focus-controls { display: flex; gap: 10px; margin-top: 30px; width: 100%; }
+.focus-controls button {
+  flex: 1;
+  height: 44px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.focus-complete-btn {
+  border: 1px solid var(--success);
+  background: var(--success);
+  color: #fff;
+}
+.focus-complete-btn:hover { filter: brightness(0.95); }
+.focus-controls button:disabled { opacity: 0.55; cursor: default; }
+.focus-secondary { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 14px; }
+.focus-link-btn {
+  border: 0;
+  background: none;
+  padding: 6px 2px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-soft);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border-strong);
+}
+.focus-link-btn:hover { color: var(--text); }
+.focus-link-btn:disabled { opacity: 0.55; cursor: default; }
+.focus-exit-btn { color: var(--muted); }
+.focus-error { margin-top: 8px; min-height: 16px; font-size: 13px; }
+.focus-progress {
+  margin-top: 30px;
+  padding: 14px 18px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.focus-progress-label { font-size: 12px; color: var(--muted); }
+.focus-progress-value { margin-top: 2px; font-size: 16px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.focus-progress-dots { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.focus-progress-dots:empty { display: none; }
+.focus-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+.focus-dot.is-done { background: var(--success); }
+
+/* ---------------- V2-C: Planned vs Actual (Home insights) ---------------- */
+.avp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.avp-table th {
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 0 6px 10px;
+}
+.avp-table th:first-child, .avp-table td:first-child { text-align: left; padding-left: 0; }
+.avp-table td {
+  text-align: right;
+  padding: 7px 0 7px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.avp-table td:first-child { color: var(--text); font-weight: 550; white-space: normal; overflow-wrap: anywhere; }
+.avp-table tfoot td { font-weight: 650; color: var(--text); }
+.avp-delta { display: block; font-size: 11px; color: var(--muted); }
+.avp-delta.is-under { color: var(--warning); }

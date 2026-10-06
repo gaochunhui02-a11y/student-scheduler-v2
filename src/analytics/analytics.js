@@ -25,6 +25,7 @@ import {
   computeWeeklyTotals,
   computeCompletionRate,
   computeSubjectTotals,
+  computeActualVsPlanned,
   computeUpcomingDeadlines,
   countByRisk,
   computeProductivityPeriod,
@@ -51,6 +52,8 @@ export function initAnalyticsSection(userId, hostApi = {}) {
   const chartEl = document.getElementById('analyticsChart');
   const subjectListEl = document.getElementById('analyticsSubjectList');
   const subjectEmptyEl = document.getElementById('analyticsSubjectEmpty');
+  const actualBodyEl = document.getElementById('analyticsActualBody');
+  const actualEmptyEl = document.getElementById('analyticsActualEmpty');
   const productivityEl = document.getElementById('analyticsProductivity');
   const productivityEmptyEl = document.getElementById('analyticsProductivityEmpty');
   const upcomingListEl = document.getElementById('analyticsUpcomingList');
@@ -399,6 +402,48 @@ export function initAnalyticsSection(userId, hostApi = {}) {
     });
   }
 
+  // V2-C: Estimated / Planned / Actual per subject. Built with DOM nodes
+  // (not innerHTML) since subject names are user content. The small delta
+  // under Actual only appears once something was actually logged — a
+  // subject with zero actual time is "not started", not "-100%".
+  function renderActualVsPlanned({ subjects, totals }) {
+    if (!actualBodyEl) return;
+    actualBodyEl.querySelectorAll('.avp-table').forEach((el) => el.remove());
+    if (actualEmptyEl) actualEmptyEl.hidden = subjects.length > 0;
+    if (subjects.length === 0) return;
+
+    const table = document.createElement('table');
+    table.className = 'avp-table';
+    const head = table.createTHead().insertRow();
+    ['taskFilter.subjectLabel', 'analytics.estimated', 'analytics.planned', 'analytics.actual'].forEach((key) => {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = t(key);
+      head.appendChild(th);
+    });
+
+    function addRow(section, label, r) {
+      const row = section.insertRow();
+      row.insertCell().textContent = label;
+      row.insertCell().textContent = formatDuration(r.estimated);
+      row.insertCell().textContent = formatDuration(r.planned);
+      const actualCell = row.insertCell();
+      actualCell.textContent = formatDuration(r.actual);
+      if (r.actual > 0 && r.planned > 0 && r.actual !== r.planned) {
+        const delta = document.createElement('span');
+        const diff = r.actual - r.planned;
+        delta.className = `avp-delta${diff < 0 ? ' is-under' : ''}`;
+        delta.textContent = `${diff > 0 ? '+' : '−'}${formatDuration(Math.abs(diff))}`;
+        actualCell.appendChild(delta);
+      }
+    }
+
+    const body = table.createTBody();
+    subjects.forEach((r) => addRow(body, r.subject, r)); // user-created content — never translated
+    if (subjects.length > 1) addRow(table.createTFoot(), t('analytics.total'), totals);
+    actualBodyEl.appendChild(table);
+  }
+
   function renderProductivity(result) {
     if (!productivityEl) return;
     productivityEl.querySelectorAll('.analytics-productivity-result').forEach((el) => el.remove());
@@ -496,6 +541,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       const weekly = computeWeeklyTotals(itemsWithDate, dates);
       const completionRate = computeCompletionRate(weekly.totalPlanned, weekly.totalCompleted);
       const subjectTotals = computeSubjectTotals(weekData.subjects, itemsWithDate);
+      const actualVsPlanned = computeActualVsPlanned(weekData.subjects, itemsWithDate);
       const upcoming = computeUpcomingDeadlines(upcomingSubjects, today, 10);
       const atRiskCount = countByRisk(upcoming, 'at_risk');
       const completedStudyItems = itemsWithDate
@@ -559,6 +605,7 @@ export function initAnalyticsSection(userId, hostApi = {}) {
       renderInsights({ dueWithin3Count, missedMinutes, unfinishedMinutes });
       renderChart(weekly.byDay);
       renderSubjects(subjectTotals);
+      renderActualVsPlanned(actualVsPlanned);
       renderProductivity(productivity);
       renderUpcoming(upcoming);
       renderBoardsSummary(boardsSummary);

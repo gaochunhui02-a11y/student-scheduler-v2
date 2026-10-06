@@ -56,6 +56,20 @@ import {
 } from './scheduler.js';
 import { buildMultiDayPreview, recomputeMultiDaySegments, acceptMultiDayPlan, buildCarryOverPreview, recomputeCarryOverSegments, acceptCarryOver } from './multiDayPlan.js';
 import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMinutesInput, canCarryOverBlock, canMarkMissed } from './carryOverModel.js';
+import {
+  createFocusSession,
+  isPaused,
+  getRemainingMs,
+  isTimeUp,
+  pauseSession,
+  resumeSession,
+  formatCountdown,
+  buildFocusCompletionWrite,
+  computeTodaySessionProgress,
+  serializeSession,
+  parseStoredSession,
+  canStartFocus,
+} from './focusMode.js';
 import { computeDailySummary, computeSubjectProgress, formatDuration } from './summary.js';
 import { validateCopyDestination } from './copySchedule.js';
 import { buildSmartTasks, computeAvailableStudyMinutes, sortTasksForDisplay } from './smartPriority.js';
@@ -2236,6 +2250,250 @@ async function init(session) {
     carryOverError = '';
   }
 
+  // ---------------- V2-C: Focus Mode ----------------
+  // A full-screen countdown for one study block. All timer math lives in
+  // focusMode.js (timestamp-based, so a backgrounded tab never drifts); the
+  // 250ms interval below only re-renders. Ending a session writes through
+  // setScheduleItemPartialCompletion — the same call the Partial Completion
+  // panel makes — so there is no second completion path to disagree with
+  // the Done/Partial buttons.
+  const FOCUS_STORAGE_KEY = 'scheduler.focusSession.v1';
+  let focusSession = null;
+  let focusItem = null;
+  let focusOverlay = null;
+  let focusTickTimer = null;
+  let focusSaving = false;
+  let focusPrevTitle = '';
+
+  function storeFocusSession() {
+    try {
+      if (focusSession) localStorage.setItem(FOCUS_STORAGE_KEY, serializeSession(focusSession));
+      else localStorage.removeItem(FOCUS_STORAGE_KEY);
+    } catch {
+      // storage unavailable — the session just won't survive a reload
+    }
+  }
+
+  function readStoredFocusSession() {
+    try {
+      return parseStoredSession(localStorage.getItem(FOCUS_STORAGE_KEY));
+    } catch {
+      return null;
+    }
+  }
+
+  function buildFocusOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'focus-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'focusTaskName');
+    overlay.innerHTML = `
+      <div class="focus-panel">
+        <div class="focus-eyebrow"></div>
+        <h2 class="focus-task" id="focusTaskName"></h2>
+        <div class="focus-meta"></div>
+        <div class="focus-countdown" aria-live="off"></div>
+        <div class="focus-status" aria-live="polite"></div>
+        <div class="focus-bar" aria-hidden="true"><span class="focus-bar-fill"></span></div>
+        <div class="focus-controls">
+          <button type="button" class="btn-secondary focus-pause-btn"></button>
+          <button type="button" class="focus-complete-btn"></button>
+        </div>
+        <div class="focus-secondary">
+          <button type="button" class="focus-link-btn focus-stop-btn"></button>
+          <button type="button" class="focus-link-btn focus-exit-btn"></button>
+        </div>
+        <div class="focus-error hint-error"></div>
+        <div class="focus-progress">
+          <div class="focus-progress-label"></div>
+          <div class="focus-progress-value"></div>
+          <div class="focus-progress-dots" aria-hidden="true"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const q = (sel) => overlay.querySelector(sel);
+    const els = {
+      overlay,
+      eyebrow: q('.focus-eyebrow'),
+      task: q('.focus-task'),
+      meta: q('.focus-meta'),
+      countdown: q('.focus-countdown'),
+      status: q('.focus-status'),
+      barFill: q('.focus-bar-fill'),
+      pauseBtn: q('.focus-pause-btn'),
+      completeBtn: q('.focus-complete-btn'),
+      stopBtn: q('.focus-stop-btn'),
+      exitBtn: q('.focus-exit-btn'),
+      error: q('.focus-error'),
+      progressLabel: q('.focus-progress-label'),
+      progressValue: q('.focus-progress-value'),
+      progressDots: q('.focus-progress-dots'),
+    };
+
+    els.pauseBtn.addEventListener('click', () => {
+      if (!focusSession) return;
+      const now = Date.now();
+      focusSession = isPaused(focusSession) ? resumeSession(focusSession, now) : pauseSession(focusSession, now);
+      storeFocusSession();
+      renderFocusOverlay();
+    });
+    els.completeBtn.addEventListener('click', () => endFocusSession('complete'));
+    els.stopBtn.addEventListener('click', () => endFocusSession('stop'));
+    els.exitBtn.addEventListener('click', () => {
+      if (focusSaving) return;
+      if (!window.confirm(t('focus.exitConfirm'))) return;
+      closeFocusOverlay();
+    });
+    // A tab returning from the background re-renders immediately rather
+    // than waiting for the next (possibly throttled) tick.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !overlay.hidden) renderFocusOverlay();
+    });
+
+    return els;
+  }
+
+  // Only touches the DOM when text actually changes — the overlay re-renders
+  // every 250ms, and rewriting an aria-live region with identical text can
+  // make screen readers re-announce it.
+  function setFocusText(el, text) {
+    if (el.textContent !== text) el.textContent = text;
+  }
+
+  function renderFocusOverlay() {
+    if (!focusOverlay || !focusSession || !focusItem) return;
+    const els = focusOverlay;
+    const now = Date.now();
+    const remaining = getRemainingMs(focusSession, now);
+    const paused = isPaused(focusSession);
+    const timeUp = isTimeUp(focusSession, now);
+    const countdown = formatCountdown(remaining);
+
+    setFocusText(els.eyebrow, t('focus.eyebrow'));
+    setFocusText(els.task, focusItem.name); // user-created content — never translated
+    const loggedNote = focusSession.baseCompletedMinutes > 0 ? ` · ${t('focus.alreadyLogged').replace('{n}', focusSession.baseCompletedMinutes)}` : '';
+    setFocusText(els.meta, `${formatClock(focusItem.start)} – ${formatClock(focusItem.end)}${loggedNote}`);
+    setFocusText(els.countdown, countdown);
+    els.countdown.classList.toggle('is-paused', paused);
+    setFocusText(els.status, timeUp ? t('focus.timeUp') : paused ? t('focus.paused') : t('focus.remaining'));
+    const fraction = focusSession.plannedMs > 0 ? 1 - remaining / focusSession.plannedMs : 1;
+    els.barFill.style.width = `${Math.round(Math.min(1, Math.max(0, fraction)) * 1000) / 10}%`;
+
+    setFocusText(els.pauseBtn, paused ? t('focus.resume') : t('focus.pause'));
+    els.pauseBtn.disabled = focusSaving || timeUp;
+    setFocusText(els.completeBtn, t('focus.complete'));
+    els.completeBtn.disabled = focusSaving;
+    setFocusText(els.stopBtn, t('focus.stopEarly'));
+    els.stopBtn.disabled = focusSaving;
+    setFocusText(els.exitBtn, t('focus.exit'));
+    els.exitBtn.disabled = focusSaving;
+
+    const isToday = schedule && schedule.for_date === addDaysToDateStr(tomorrowDateStr(), -1);
+    const progress = computeTodaySessionProgress(currentScheduleItems);
+    setFocusText(els.progressLabel, isToday ? t('focus.todayProgress') : t('focus.dayProgress'));
+    setFocusText(els.progressValue, t('focus.sessionsCount').replace('{done}', progress.done).replace('{total}', progress.total));
+    const dotsHtml = Array.from({ length: Math.min(progress.total, 12) }, (_, i) =>
+      `<span class="focus-dot${i < progress.done ? ' is-done' : ''}"></span>`
+    ).join('');
+    if (els.progressDots.innerHTML !== dotsHtml) els.progressDots.innerHTML = dotsHtml;
+
+    document.title = `${paused ? '⏸ ' : ''}${countdown} · ${focusItem.name}`;
+  }
+
+  function openFocusOverlay() {
+    if (!focusOverlay) focusOverlay = buildFocusOverlay();
+    focusOverlay.error.textContent = '';
+    if (focusOverlay.overlay.hidden) focusPrevTitle = document.title;
+    focusOverlay.overlay.hidden = false;
+    document.body.classList.add('focus-open');
+    renderFocusOverlay();
+    clearInterval(focusTickTimer);
+    focusTickTimer = setInterval(renderFocusOverlay, 250);
+    focusOverlay.pauseBtn.focus(); // never Complete — a stray Enter/Space must not end the session
+  }
+
+  function closeFocusOverlay() {
+    clearInterval(focusTickTimer);
+    focusTickTimer = null;
+    focusSession = null;
+    focusItem = null;
+    focusSaving = false;
+    storeFocusSession();
+    if (focusOverlay) focusOverlay.overlay.hidden = true;
+    document.body.classList.remove('focus-open');
+    if (focusPrevTitle) document.title = focusPrevTitle;
+  }
+
+  function startFocusSession(item) {
+    const duration = item.end - item.start;
+    const base = Number.isFinite(item.completedMinutes) ? Math.max(0, item.completedMinutes) : 0;
+    focusItem = item;
+    focusSession = createFocusSession({
+      itemId: item.id,
+      plannedMinutes: Math.max(0, duration - base),
+      baseCompletedMinutes: base,
+      now: Date.now(),
+    });
+    storeFocusSession();
+    openFocusOverlay();
+  }
+
+  // A session left open across a reload comes back when its block is on
+  // screen again. A stored session whose block is gone, done or locked is
+  // dropped rather than resumed against the wrong data.
+  function maybeRestoreFocusSession() {
+    if (focusSession) return;
+    const stored = readStoredFocusSession();
+    if (!stored) return;
+    const item = currentScheduleItems.find((i) => i.id === stored.itemId);
+    if (!item) return; // may belong to another date — keep it for when that date loads
+    if (!canStartFocus(item)) {
+      try { localStorage.removeItem(FOCUS_STORAGE_KEY); } catch { /* ignore */ }
+      return;
+    }
+    focusItem = item;
+    focusSession = stored;
+    openFocusOverlay();
+  }
+
+  async function endFocusSession(kind) {
+    if (!focusSession || !focusItem || focusSaving) return;
+    const item = focusItem;
+    const duration = item.end - item.start;
+    const write = buildFocusCompletionWrite({ kind, session: focusSession, now: Date.now(), duration });
+    // Nothing to record — leave the block untouched instead of writing a no-op.
+    if (kind === 'stop' && write.completedMinutes === (item.completedMinutes || 0) && !write.completed) {
+      closeFocusOverlay();
+      return;
+    }
+    // Freeze the clock while saving so the number written is the one shown.
+    focusSession = pauseSession(focusSession, Date.now());
+    focusSaving = true;
+    renderFocusOverlay();
+    const token = activeToken;
+    try {
+      await setScheduleItemPartialCompletion(item.id, write.completedMinutes, write.completed);
+      closeFocusOverlay();
+      if (token !== activeToken) return; // navigated away before this resolved
+      item.completedMinutes = write.completedMinutes;
+      item.completed = write.completed;
+      renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
+      renderDailySummaryFromCurrent();
+      refreshHistoryList();
+      flashSaved();
+    } catch (err) {
+      console.error('Could not save focus session:', err);
+      focusSaving = false;
+      storeFocusSession();
+      if (focusOverlay) focusOverlay.error.textContent = t('errors.couldNotSave');
+      renderFocusOverlay();
+    }
+  }
+
   function minutesToInputTime(mins) {
     const m = ((mins % 1440) + 1440) % 1440;
     const h = Math.floor(m / 60);
@@ -2408,6 +2666,7 @@ async function init(session) {
         let partialControl = '';
         let missedControl = '';
         let carryOverControl = '';
+        let focusControl = '';
         let nameHtml = escapeAttr(e.name);
         if (e.type === 'study') {
           const subj = subjectByName.get(e.name);
@@ -2432,6 +2691,9 @@ async function init(session) {
           }
 
           if (e.id) {
+            if (canStartFocus(e)) {
+              focusControl = `<button type="button" class="focus-btn" data-id="${e.id}">${escapeAttr(t('focus.start'))}</button>`;
+            }
             lockControl = `<button type="button" class="lock-btn" data-id="${e.id}" data-locked="${e.locked ? '1' : '0'}">${escapeAttr(e.locked ? t('schedule.locked') : t('schedule.lockAction'))}</button>`;
             doneControl = `<button type="button" class="done-btn" data-id="${e.id}" data-completed="${e.completed ? '1' : '0'}">${escapeAttr(e.completed ? t('schedule.undo') : t('schedule.markDone'))}</button>`;
             // editing a locked block is blocked in favor of unlocking it first — see
@@ -2491,8 +2753,8 @@ async function init(session) {
         }
 
         const actionsHtml =
-          lockControl || doneControl || editControl || partialControl || missedControl || carryOverControl
-            ? `<div class="tl-actions">${lockControl}${doneControl}${editControl}${partialControl}${missedControl}${carryOverControl}</div>`
+          focusControl || lockControl || doneControl || editControl || partialControl || missedControl || carryOverControl
+            ? `<div class="tl-actions">${focusControl}${lockControl}${doneControl}${editControl}${partialControl}${missedControl}${carryOverControl}</div>`
             : '';
 
         return `
@@ -2514,6 +2776,7 @@ async function init(session) {
       .join('');
     output.innerHTML = `<div class="timeline">${html}</div>`;
     renderNextUp(events);
+    maybeRestoreFocusSession();
     // Checkpoint E: whatever just changed the schedule (generate, lock,
     // done, edit, partial completion, missed, carry-over) may have changed
     // remaining minutes / missed status — re-rank if the Study Tasks list
@@ -2565,6 +2828,16 @@ async function init(session) {
   }
 
   output.addEventListener('click', async (e) => {
+    const focusBtn = e.target.closest('.focus-btn');
+    if (focusBtn) {
+      const item = currentScheduleItems.find((i) => i.id === focusBtn.dataset.id);
+      if (item && canStartFocus(item)) {
+        closeSecondaryPanels();
+        startFocusSession(item);
+      }
+      return;
+    }
+
     const lockBtn = e.target.closest('.lock-btn');
     if (lockBtn) {
       const id = lockBtn.dataset.id;
