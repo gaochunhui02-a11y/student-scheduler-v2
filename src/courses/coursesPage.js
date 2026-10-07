@@ -27,6 +27,8 @@ import { taskRowHtml } from '../tasks/taskRow.js';
 import { courseTabs, courseOverviewWidgets, courseCardProviders } from './courseTabs.js';
 import { buildSeriesFields, validateSeriesFields } from '../dashboard/recurringClasses.js';
 import { statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
+import { matchesSpace } from '../workspace/spacesModel.js';
+import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
 
 const ROOT_ID = 'coursesView';
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -93,7 +95,10 @@ export function initCoursesPage() {
     lastData = data;
     const currentSemester = pickCurrentSemester(data.semesters, data.today);
     if (state.semesterFilter === null) state.semesterFilter = currentSemester && data.courses.some((c) => c.semester_id === currentSemester.id) ? currentSemester.id : 'all';
-    const visible = filterCoursesBySemester(data.courses, state.semesterFilter).filter((c) => state.showArchived || !c.archived);
+    const spaceFilter = currentSpaceFilter();
+    const visible = filterCoursesBySemester(data.courses, state.semesterFilter)
+      .filter((c) => state.showArchived || !c.archived)
+      .filter((c) => matchesSpace(c.space_id || null, spaceFilter));
     const archivedCount = data.courses.filter((c) => c.archived).length;
 
     const providerResults = {};
@@ -138,7 +143,7 @@ export function initCoursesPage() {
     const footer = archivedCount
       ? html`<div class="row" style="margin-top:var(--space-4)"><label class="field-check"><input type="checkbox" id="coursesShowArchived"${state.showArchived ? raw(' checked') : ''}><span>${t('courses.showArchived').replace('{n}', String(archivedCount))}</span></label></div>`
       : '';
-    setHtml(root, [head, body, footer]);
+    setHtml(root, [head, spaceScopeNote(), body, footer]);
     const sel = root.querySelector('#coursesSemesterFilter');
     if (sel) sel.addEventListener('change', () => { state.semesterFilter = sel.value; renderList(); });
     const arch = root.querySelector('#coursesShowArchived');

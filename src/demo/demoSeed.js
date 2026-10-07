@@ -53,7 +53,7 @@ export function buildDemoSeed(now = new Date()) {
     profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240 } }],
     schedules: [], classes: [], study_subjects: [], schedule_items: [], study_subject_subtasks: [],
     class_series: [], class_series_exceptions: [], boards: [], board_nodes: [], board_edges: [],
-    semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
+    spaces: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
     task_dependencies: [], task_recurrence_rules: [], resources: [], focus_sessions: [],
   };
 
@@ -71,12 +71,17 @@ export function buildDemoSeed(now = new Date()) {
     id: id(), user_id: U, name: 'Spring 2026', start_date: addDays(semStart, -7 * 30), end_date: addDays(semStart, -7 * 14), is_current: false, breaks: [], created_at: ts, updated_at: ts,
   });
 
+  // ---------------- spaces (V4) ----------------
+  const schoolSpace = { id: id(), user_id: U, name: 'School', icon: 'school', color: '#3b6fe0', archived: false, sort_order: 0, created_at: ts, updated_at: ts };
+  db.spaces.push(schoolSpace);
+  db.spaces.push({ id: id(), user_id: U, name: 'Personal', icon: 'home', color: '#d9466b', archived: false, sort_order: 1, created_at: ts, updated_at: ts });
+
   // ---------------- courses + weekly classes ----------------
   const course = {};
   COURSE_DEFS.forEach((c, i) => {
     const row = {
       id: id(), user_id: U, semester_id: semester.id, name: c.name, code: c.code, instructor: c.instructor, color: c.color,
-      location: c.location, notes: '', target_grade: c.target, credits: c.credits, archived: false, sort_order: i, created_at: ts, updated_at: ts,
+      location: c.location, notes: '', target_grade: c.target, credits: c.credits, archived: false, sort_order: i, created_at: ts, updated_at: ts, space_id: schoolSpace.id,
     };
     db.courses.push(row);
     course[c.key] = row;

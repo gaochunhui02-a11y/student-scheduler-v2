@@ -16,6 +16,10 @@ const ctx = {
   plannerDate: () => null,
   openQuickAdd: () => {},
   onDataChanged: () => {},
+  // V4-A
+  workspace: () => null,
+  spaces: () => [],
+  spaceFilter: () => null, // null = all spaces, '__none' = no space, else a space id
 };
 
 const listeners = new Set();

@@ -9,6 +9,8 @@ import {
   buildOnboardingPlan,
   buildOnboardingAcademics,
   defaultOnboardingAnswersV3,
+  onboardingStepsV4,
+  PURPOSES,
 } from '../src/dashboard/onboardingModel.js';
 
 let failures = 0;
@@ -34,6 +36,22 @@ check('the V3 defaults pass every step untouched (everything is optional)', () =
   onboardingSteps({ courses: true }).forEach((step) => assert.equal(validateOnboardingStep(step, a).ok, true, step));
   assert.equal(a.classes[0].weekday, 3); // Wednesday
   assert.equal(a.classes[0].weekly, true);
+});
+
+console.log('\n=== V4 purpose step ===');
+check('V4 setup starts with "what is this for?"; the rest follows the answer', () => {
+  assert.deepEqual(onboardingStepsV4({ courses: true }), ['purpose', 'courses', 'classes', 'tasks', 'day', 'style']);
+  assert.deepEqual(onboardingStepsV4({ courses: true, purpose: 'school' }), ['purpose', 'courses', 'classes', 'tasks', 'day', 'style']);
+  assert.deepEqual(onboardingStepsV4({ courses: true, purpose: 'multiple' }), ['purpose', 'courses', 'classes', 'tasks', 'day', 'style']);
+  assert.deepEqual(onboardingStepsV4({ courses: true, purpose: 'work' }), ['purpose', 'tasks', 'day', 'style']);
+  assert.deepEqual(onboardingStepsV4({ courses: true, purpose: 'personal' }), ['purpose', 'tasks', 'day', 'style']);
+  assert.deepEqual(onboardingStepsV4({ courses: false, purpose: 'school' }), ['purpose', 'tasks', 'day', 'classes', 'style']);
+});
+check('the purpose must be one of the five options', () => {
+  assert.deepEqual(PURPOSES, ['school', 'work', 'personal', 'selfstudy', 'multiple']);
+  assert.equal(validateOnboardingStep('purpose', { purpose: 'work' }).ok, true);
+  assert.deepEqual(validateOnboardingStep('purpose', {}).errors.map((e) => e.key), ['onboarding.errPurpose']);
+  assert.equal(validateOnboardingStep('purpose', { purpose: 'party' }).ok, false);
 });
 
 console.log('\n=== courses step ===');

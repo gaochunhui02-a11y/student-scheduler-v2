@@ -31,12 +31,18 @@ const TIME = /^\d{2}:\d{2}(:\d{2})?$/;
 // text (max len), date, time, ts, int (min,max), num (min,max), bool,
 // enum (values), json-array, json-object.
 const S = {
+  // V4 (0018)
+  spaces: {
+    id: ['id', true], name: ['text', true, 60], icon: ['enum', false, ['school', 'briefcase', 'home', 'heart', 'dumbbell', 'language', 'code', 'book', 'flask', 'music', 'leaf', 'star', 'circle']],
+    color: ['color'], archived: ['bool'], sort_order: ['int', false, [-1e6, 1e6]],
+  },
   semesters: {
     id: ['id', true], name: ['text', true, 120], start_date: ['date', true], end_date: ['date', true], breaks: ['breaks'], is_current: ['bool'],
   },
   courses: {
     id: ['id', true], semester_id: ['ref'], name: ['text', true, 120], code: ['text', false, 32], instructor: ['text', false, 120], color: ['color'],
     location: ['text', false, 120], notes: ['text', false, 5000], target_grade: ['num', false, [0, 100]], credits: ['num', false, [0, 50]], archived: ['bool'], sort_order: ['int', false, [-1e6, 1e6]],
+    space_id: ['ref'],
   },
   schedules: {
     id: ['id', true], for_date: ['date', true], wake_time: ['time'], sleep_time: ['time'], breakfast_on: ['bool'], breakfast_time: ['time'], lunch_on: ['bool'], lunch_time: ['time'],
@@ -70,6 +76,7 @@ const S = {
     id: ['id', true], schedule_id: ['ref', true], name: ['text', true, 200], minutes_requested: ['int', true, [1, 1440]], sort_order: ['int', false, [-1e6, 1e6]], priority: ['enum', false, ['low', 'medium', 'high']],
     due_date: ['date'], notes: ['text', false, 5000], tags: ['tags'], origin_subject_id: ['ref'], course_id: ['ref'], completed_at: ['ts'], actual_minutes: ['int', false, [0, 10000]],
     dependency_override: ['bool'], exam_topic_id: ['ref'], recurrence_rule_id: ['ref'], recurrence_date: ['date'],
+    space_id: ['ref'],
   },
   study_subject_subtasks: { id: ['id', true], subject_id: ['ref', true], title: ['text', false, 200], completed: ['bool'], sort_order: ['int', false, [-1e6, 1e6]] },
   task_dependencies: { id: ['id', true], task_id: ['ref', true], depends_on_id: ['ref', true] },
@@ -78,7 +85,7 @@ const S = {
     end_minutes: ['int', true, [-1440, 2880]], sort_order: ['int', false, [-1e6, 1e6]], locked: ['bool'], completed: ['bool'], source_subject_id: ['ref'], completed_minutes: ['int', false, [0, 2880]],
     missed: ['bool'], carried_over_minutes: ['int', false, [0, 2880]],
   },
-  boards: { id: ['id', true], title: ['text', false, 200], course_id: ['ref'] },
+  boards: { id: ['id', true], title: ['text', false, 200], course_id: ['ref'], space_id: ['ref'] },
   board_nodes: {
     id: ['id', true], board_id: ['ref', true], node_type: ['enum', false, ['goal', 'subject', 'task', 'note', 'milestone']], title: ['text', false, 2000], x_position: ['num', false, [-1e7, 1e7]],
     y_position: ['num', false, [-1e7, 1e7]], color: ['text', false, 40], linked_study_subject_id: ['ref'], status: ['enum', false, ['planned', 'in_progress', 'done']], due_date: ['date'],
@@ -104,18 +111,18 @@ export const BACKUP_TABLES = Object.keys(S);
 
 // Foreign keys to rewrite: table -> { column: parentTable }
 export const REFS = {
-  courses: { semester_id: 'semesters' },
+  courses: { semester_id: 'semesters', space_id: 'spaces' },
   classes: { schedule_id: 'schedules', course_id: 'courses' },
   class_series: { course_id: 'courses' },
   class_series_exceptions: { series_id: 'class_series' },
   task_recurrence_rules: { course_id: 'courses' },
   exams: { course_id: 'courses' },
   exam_topics: { exam_id: 'exams' },
-  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules' },
+  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules', space_id: 'spaces' },
   study_subject_subtasks: { subject_id: 'study_subjects' },
   task_dependencies: { task_id: 'study_subjects', depends_on_id: 'study_subjects' },
   schedule_items: { schedule_id: 'schedules', source_subject_id: 'study_subjects' },
-  boards: { course_id: 'courses' },
+  boards: { course_id: 'courses', space_id: 'spaces' },
   board_nodes: { board_id: 'boards', linked_study_subject_id: 'study_subjects', course_id: 'courses' },
   board_edges: { board_id: 'boards', source_node_id: 'board_nodes', target_node_id: 'board_nodes' },
   grade_categories: { course_id: 'courses' },
@@ -257,10 +264,11 @@ export const CAPABILITY_COLUMNS = {
   classCourseLinks: { classes: ['course_id'], class_series: ['course_id'] },
   boardCourseLinks: { boards: ['course_id'], board_nodes: ['course_id'] },
   taskExtensions: { study_subjects: ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'] },
+  spaceLinks: { courses: ['space_id'], study_subjects: ['space_id'], boards: ['space_id'] },
 };
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
-  semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
+  spaces: 'spaces', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
   task_recurrence_rules: 'recurringTasks', task_dependencies: 'dependencies', resources: 'resources', focus_sessions: 'focusSessions',
 };
 
@@ -291,7 +299,8 @@ export function planRestore({ tables, existing, availableTables, unavailableColu
   const inserts = {};
   const skipped = {};
   const unavailable = [];
-  const conflicts = { days: 0, courses: 0, semesters: 0, existing: 0 };
+  const conflicts = { days: 0, courses: 0, semesters: 0, spaces: 0, existing: 0 };
+  const existingSpace = new Map((existing.spaces || []).map((s) => [String(s.name).trim().toLowerCase(), s.id]));
   const existingIds = existing.ids || {};
   const existingCourse = new Map((existing.courses || []).map((c) => [`${String(c.name).trim().toLowerCase()}|${String(c.code || '').trim().toLowerCase()}`, c.id]));
   const existingSemester = new Map((existing.semesters || []).map((s) => [`${String(s.name).trim().toLowerCase()}|${s.start_date}`, s.id]));
@@ -328,6 +337,14 @@ export function planRestore({ tables, existing, availableTables, unavailableColu
           idMap.courses.set(row.id, existingCourse.get(key));
           conflicts.courses += 1;
           reused.add(`courses:${existingCourse.get(key)}`);
+          return;
+        }
+      }
+      if (table === 'spaces') {
+        const key = String(row.name).trim().toLowerCase();
+        if (existingSpace.has(key)) {
+          idMap.spaces.set(row.id, existingSpace.get(key));
+          conflicts.spaces += 1;
           return;
         }
       }

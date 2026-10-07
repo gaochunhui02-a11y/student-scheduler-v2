@@ -27,18 +27,19 @@ export const TABLE_DEFAULTS = {
   }),
   classes: () => ({ sort_order: 0, source: 'manual', course_id: null }),
   study_subjects: () => ({
-    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null,
+    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null,
     actual_minutes: null, completed_at: null, dependency_override: false, exam_topic_id: null, recurrence_rule_id: null, recurrence_date: null,
   }),
   schedule_items: () => ({ sort_order: 0, locked: false, completed: false, completed_minutes: 0, missed: false, carried_over_minutes: 0, source_subject_id: null }),
-  boards: () => ({ title: 'Untitled board', course_id: null }),
+  boards: () => ({ title: 'Untitled board', course_id: null, space_id: null }),
   board_nodes: () => ({ node_type: 'note', title: '', x_position: 0, y_position: 0, color: null, linked_study_subject_id: null, status: 'planned', due_date: null, estimated_minutes: null, course_id: null }),
   board_edges: () => ({ relationship: 'related' }),
   study_subject_subtasks: () => ({ title: '', completed: false, sort_order: 0 }),
   class_series: () => ({ days_of_week: [], course_id: null }),
   class_series_exceptions: () => ({ override_name: null, override_start_time: null, override_end_time: null }),
   semesters: () => ({ breaks: [], is_current: false }),
-  courses: () => ({ semester_id: null, code: null, instructor: null, color: null, location: null, notes: '', target_grade: null, credits: null, archived: false, sort_order: 0 }),
+  spaces: () => ({ icon: 'circle', color: null, archived: false, sort_order: 0 }),
+  courses: () => ({ space_id: null, semester_id: null, code: null, instructor: null, color: null, location: null, notes: '', target_grade: null, credits: null, archived: false, sort_order: 0 }),
   grade_categories: () => ({ weight: 0, sort_order: 0 }),
   grade_items: () => ({ category_id: null, earned_points: null, due_date: null, counts: true, notes: '', sort_order: 0 }),
   exams: () => ({ course_id: null, start_time: null, duration_minutes: null, location: null, weight: null, notes: '' }),
@@ -87,6 +88,10 @@ const SET_NULLS = [
   ['focus_sessions', 'schedule_items', 'schedule_item_id'],
   ['focus_sessions', 'study_subjects', 'task_id'],
   ['focus_sessions', 'courses', 'course_id'],
+  // V4 (0018)
+  ['courses', 'spaces', 'space_id'],
+  ['study_subjects', 'spaces', 'space_id'],
+  ['boards', 'spaces', 'space_id'],
 ];
 
 function cmp(a, b) {

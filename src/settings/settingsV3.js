@@ -21,6 +21,7 @@ import { buildShortcutList } from '../shared/shortcutList.js';
 import { exportBackup, prepareRestore, executeRestore } from '../backup/backupData.js';
 import { parseBackup, validateBackup, backupFilename, BACKUP_TABLES } from '../backup/backupModel.js';
 import { APP_VERSION } from '../app/version.js';
+import { renderWorkspace } from './workspaceSettings.js';
 import { examRemindersEnabled, setExamRemindersEnabled, startExamReminders } from '../notifications/examReminders.js';
 import { listExams } from '../exams/examsData.js';
 
@@ -307,6 +308,7 @@ function openRestoreDrawer() {
 export function initSettingsV3() {
   const panels = {
     academics: document.getElementById('settingsPanel-academics'),
+    workspace: document.getElementById('settingsPanel-workspace'),
     keyboard: document.getElementById('settingsPanel-keyboard'),
     about: document.getElementById('settingsPanel-about'),
   };
@@ -334,6 +336,7 @@ export function initSettingsV3() {
   return {
     onTab(key) {
       if (key === 'academics' && panels.academics) renderAcademics(panels.academics);
+      if (key === 'workspace' && panels.workspace) renderWorkspace(panels.workspace);
       if (key === 'keyboard' && panels.keyboard) renderKeyboard(panels.keyboard);
       if (key === 'about' && panels.about) renderAbout(panels.about);
     },

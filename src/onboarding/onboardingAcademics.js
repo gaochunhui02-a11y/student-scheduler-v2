@@ -25,7 +25,7 @@ export async function applyOnboardingAcademics(userId, academics) {
     const all = [...existing];
     for (const c of academics.courses) {
       const color = pickCourseColor(all);
-      const row = await createCourse(userId, { name: c.name, code: c.code, color, semester_id: semesterId });
+      const row = await createCourse(userId, { name: c.name, code: c.code, color, semester_id: semesterId, ...(academics.spaceId && has('spaceLinks') ? { space_id: academics.spaceId } : {}) });
       all.push(row);
       courseIds.push(row.id);
     }

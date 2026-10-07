@@ -138,6 +138,26 @@ check('a record deleted since the backup comes back, linked to the records still
   assert.equal(plan.inserts.resources[0].course_id, course.id);
   assert.equal(plan.inserts.courses, undefined);
 });
+check('V4 spaces are backed up first and links are remapped; same-name spaces are reused', () => {
+  const sp = { id: uid(), name: 'School', icon: 'school', color: '#3b6fe0' };
+  const tables = { spaces: [sp], courses: [{ ...course, space_id: sp.id }] };
+  const v4 = validateBackup({ ...backup, tables });
+  assert.equal(v4.ok, true, JSON.stringify(v4.errors));
+  assert.equal(BACKUP_TABLES[0], 'spaces');
+  const fresh = planRestore({ tables: v4.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  assert.equal(fresh.inserts.courses[0].space_id, fresh.inserts.spaces[0].id);
+  const reuse = planRestore({ tables: v4.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [], spaces: [{ id: 'mine', name: 'school' }] }, availableTables: all, newId: newIds(), userId: 'me' });
+  assert.equal(reuse.inserts.spaces, undefined);
+  assert.equal(reuse.conflicts.spaces, 1);
+  assert.equal(reuse.inserts.courses[0].space_id, 'mine');
+  const v3db = restoreAvailability({ semesters: 1, courses: 1, courseLinks: 1 });
+  assert.ok(!v3db.availableTables.includes('spaces'));
+  assert.deepEqual(v3db.unavailableColumns.courses, ['space_id']);
+});
+check('a bad space icon is rejected', () => {
+  const bad = validateBackup({ ...backup, tables: { spaces: [{ id: uid(), name: 'x', icon: '<svg onload=1>' }] } });
+  assert.ok(bad.errors.some((e) => e.table === 'spaces' && e.column === 'icon'));
+});
 check('tables the database does not have yet are reported, not written', () => {
   const plan = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: ['schedules', 'study_subjects', 'schedule_items'], newId: newIds(), userId: 'me' });
   assert.ok(plan.unavailable.includes('courses'));

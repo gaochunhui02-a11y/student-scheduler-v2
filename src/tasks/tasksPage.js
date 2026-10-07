@@ -22,6 +22,8 @@ import { listDependencies, setTaskDone, listRecurrenceRules, saveRecurrenceRule,
 import { openTaskEditor } from './taskEditor.js';
 import { taskRowHtml } from './taskRow.js';
 import { tagLabel } from './taskEditorSections.js';
+import { matchesSpace, effectiveSpaceId } from '../workspace/spacesModel.js';
+import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
 
 const VIEWS = ['today', 'upcoming', 'overdue', 'open', 'done'];
 const FILTER_KEY = 'student-scheduler-tasks-filters';
@@ -58,6 +60,8 @@ const BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'thisWeek', 'nextTwoWeeks'
 export function filterTaskGroups(groups, filters, today, courseById = new Map()) {
   const q = (filters.search || '').trim().toLowerCase();
   return groups.filter((g) => {
+    // V4: the sidebar's space switcher (a task inherits its course's space).
+    if (filters.space && !matchesSpace(effectiveSpaceId(g, courseById), filters.space)) return false;
     if (filters.view === 'done' && !g.done) return false;
     if (filters.view !== 'done' && g.done) return false;
     if (filters.view === 'today' && !(g.dueDate === today || g.dates.includes(today) || g.overdue)) return false;
@@ -114,7 +118,7 @@ export function initTasksPage() {
   async function render() {
     const my = ++token;
     const head = pageHead({
-      eyebrow: t('nav.sectionAcademics'),
+      eyebrow: t('nav.sectionWork'),
       title: t('nav.tasks'),
       subtitle: t('tasks.pageSubtitle'),
       actions: [
@@ -139,8 +143,9 @@ export function initTasksPage() {
   function draw(head) {
     const data = last;
     const courseById = new Map(data.courses.map((c) => [c.id, c]));
-    const filtered = filterTaskGroups(data.groups, filters, data.today, courseById);
-    const counts = Object.fromEntries(VIEWS.map((v) => [v, filterTaskGroups(data.groups, { ...filters, view: v, search: '' }, data.today, courseById).length]));
+    const scoped = { ...filters, space: currentSpaceFilter() };
+    const filtered = filterTaskGroups(data.groups, scoped, data.today, courseById);
+    const counts = Object.fromEntries(VIEWS.map((v) => [v, filterTaskGroups(data.groups, { ...scoped, view: v, search: '' }, data.today, courseById).length]));
     const tags = [...new Set(data.groups.flatMap((g) => g.tags))].sort();
     const remaining = filtered.filter((g) => !g.done).reduce((s, g) => s + g.remainingMinutes, 0);
 
@@ -182,7 +187,7 @@ export function initTasksPage() {
         <div class="card card-flush"><div class="list">${buckets[b].map((g) => taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: true, blockedInfo: data.blocked.get(g.id), today: data.today }))}</div></div>
       </section>`);
     }
-    setHtml(root, [head || pageHead({ eyebrow: t('nav.sectionAcademics'), title: t('nav.tasks') }), toolbar, body]);
+    setHtml(root, [head || pageHead({ eyebrow: t('nav.sectionWork'), title: t('nav.tasks') }), spaceScopeNote(), toolbar, body]);
     wireSegmented(root, 'taskView', (v) => { filters.view = v; saveFilters(filters); draw(headCache); });
     const search = root.querySelector('#tasksSearch');
     search.addEventListener('input', debounce(() => {

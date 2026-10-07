@@ -86,6 +86,7 @@ export function buildTaskGroups(rows = [], blocks = [], ctx = {}) {
       blocks: groupBlocks,
       name: root.name,
       courseId: root.course_id || groupRows.map((r) => r.course_id).find(Boolean) || null,
+      spaceId: root.space_id || null, // V4: its own space; course space is resolved by spacesModel
       dueDate: root.due_date || null,
       priority: root.priority || 'medium',
       tags: Array.isArray(root.tags) ? root.tags : [],

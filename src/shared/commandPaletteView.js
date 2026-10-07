@@ -25,6 +25,8 @@ export function initCommandPalette({ getCommands, t }) {
     // V3 groups
     commands: 'search.groupCommands', courses: 'search.groupCourses', exams: 'search.groupExams',
     classes: 'search.groupClasses', boards: 'search.groupBoards', settings: 'search.groupSettings',
+    // V4
+    spaces: 'search.groupSpaces',
   };
 
   function build() {

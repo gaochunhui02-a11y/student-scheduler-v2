@@ -11,11 +11,16 @@ syncDemoFlagFromUrl();
 
 function createDemoClient() {
   // Dev-only switch for QA: simulate a database where the V3 migrations
-  // haven't been applied yet (?premigration=v3).
+  // haven't been applied yet (?premigration=v3), or only the V4 ones
+  // (?premigration=v4 = a V3 database).
   const missing = new Set();
-  if (import.meta.env.DEV && new URLSearchParams(location.search).get('premigration') === 'v3') {
+  const pre = import.meta.env.DEV ? new URLSearchParams(location.search).get('premigration') : null;
+  if (pre === 'v3') {
     ['semesters', 'courses', 'grade_categories', 'grade_items', 'exams', 'exam_topics', 'task_dependencies', 'task_recurrence_rules', 'resources', 'focus_sessions']
       .forEach((name) => missing.add(name));
+  }
+  if (pre === 'v3' || pre === 'v4') {
+    ['spaces'].forEach((name) => missing.add(name));
   }
   return createMemoryClient({
     seed: () => buildDemoSeed(new Date()),

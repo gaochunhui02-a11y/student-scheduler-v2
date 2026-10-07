@@ -14,6 +14,7 @@ import { listCourses } from '../academics/academicsData.js';
 import { sortCourses } from '../academics/courseModel.js';
 import { validateTaskFields } from './taskModel.js';
 import { createTask, updateTask, moveTaskToDate, deleteTaskGroup } from './tasksData.js';
+import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
 
 const extraSections = [];
 
@@ -82,6 +83,9 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
         select.value = (task ? task.courseId : defaults.courseId) || '';
         body.appendChild(field('te-course', 'tasks.fieldCourse', select));
       }
+      // V4: a task's own space; empty = follow its course's space.
+      const space = spaceSelect('te-space', task ? task.spaceId : (defaults.spaceId || (defaults.courseId ? '' : defaultSpaceForNew())), 'spaces.fromCourse');
+      if (space) body.appendChild(field('te-space', 'spaces.field', space, { hint: t('spaces.taskHint') }));
 
       const more = h('details', { class: 'disclosure' }, h('summary', {}, t('common.moreOptions')));
       const moreBody = h('div', { class: 'disclosure-body' });
@@ -151,6 +155,8 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
           }
           const courseSel = body.querySelector('#te-course');
           if (courseSel) fields.course_id = courseSel.value || null;
+          const spaceSel = body.querySelector('#te-space');
+          if (spaceSel) fields.space_id = spaceSel.value || null;
           sectionHandles.forEach((hd) => { if (hd.collect) Object.assign(fields, hd.collect()); });
           const planDate = body.querySelector('#te-plan').value || todayStr();
           const formErr = body.querySelector('#te-form-error');

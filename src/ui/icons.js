@@ -46,6 +46,24 @@ export const ICONS = {
   offline: wrap('<path d="M3 3l18 18"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5-2.7M14 10.3A10 10 0 0 1 19 13M2 9.5a15 15 0 0 1 4.5-2.8M10.5 5.6A15 15 0 0 1 22 9.5"/><path d="M12 20h.01"/>'),
 };
 
+// V4 space icons (keys stored in spaces.icon; see spacesModel.SPACE_ICONS).
+Object.assign(ICONS, {
+  school: ICONS.grade,
+  briefcase: wrap('<rect x="3.5" y="7" width="17" height="12.5" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M3.5 12.5h17"/>'),
+  home: wrap('<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/>'),
+  heart: wrap('<path d="M12 19.5s-7.5-4.4-7.5-9.6A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.3c0 5.2-7.5 9.6-7.5 9.6z"/>'),
+  dumbbell: wrap('<path d="M6.5 8v8M17.5 8v8M4 10v4M20 10v4M6.5 12h11"/>'),
+  language: wrap('<path d="M4 5.5h9M8.5 4v1.5M6 5.5c.6 3 2.6 5.6 5.5 7M11 5.5c-.7 3.4-2.9 6.2-6 7.5"/><path d="m12.5 20 3.5-8.5 3.5 8.5M13.8 17h4.4"/>'),
+  code: wrap('<path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13"/>'),
+  flask: wrap('<path d="M9.5 3.5h5M10.5 3.5v5.2l-5 8.6A2 2 0 0 0 7.2 20.5h9.6a2 2 0 0 0 1.7-3.2l-5-8.6V3.5"/><path d="M7.6 14.5h8.8"/>'),
+  music: wrap('<path d="M9 17.5V5.5l10-2v12"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>'),
+  leaf: wrap('<path d="M5 19c0-8 5-13.5 14.5-14-.5 9.5-6 14.5-14 14z"/><path d="M5 19c3-4 6-6.5 9.5-8"/>'),
+  star: wrap('<path d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z"/>'),
+  circle: wrap('<circle cx="12" cy="12" r="6.5"/>'),
+  sliders: wrap('<path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>'),
+  archive: wrap('<rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v10a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18.5v-10M10 12.5h4"/>'),
+});
+
 export function icon(name) {
   return ICONS[name] || '';
 }

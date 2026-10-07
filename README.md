@@ -333,6 +333,7 @@ Run each of these once, **in order**, in the Supabase dashboard's
 9. [`supabase/migrations/0008_board_node_status.sql`](./supabase/migrations/0008_board_node_status.sql)
 10. [`supabase/migrations/0009_onboarding.sql`](./supabase/migrations/0009_onboarding.sql)
 11. **V3 only, after review:** `0010_semesters.sql` → `0011_courses.sql` → `0012_grades.sql` → `0013_exams.sql` → `0014_task_extensions.sql` → `0015_resources.sql` → `0016_focus_sessions.sql` → `0017_profile_preferences.sql` (see [V3 migrations](#v3-migrations-0010-0017))
+12. **V4 beta only, after review:** `0018_spaces.sql` (and later V4 files in order) — see [`docs/V4_PLAN.md`](./docs/V4_PLAN.md)
 
 See [Database structure](#database-structure) for what each one adds, and
 [V2 migrations](#v2-migrations-0005-0009) for the safety notes on 0005–0009.

@@ -69,6 +69,10 @@ async function loadExisting(userId, caps, tableNames) {
     const { data } = await supabase.from('semesters').select('id, name, start_date').eq('user_id', userId);
     existing.semesters = data || [];
   }
+  if (caps.spaces) {
+    const { data } = await supabase.from('spaces').select('id, name').eq('user_id', userId);
+    existing.spaces = data || [];
+  }
   return existing;
 }
 

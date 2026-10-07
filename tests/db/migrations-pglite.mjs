@@ -127,6 +127,28 @@ await expectErr('grade item category from another course rejected', `insert into
 await ins('recurring occurrence created', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, recurrence_rule_id, recurrence_date) values ($1, $2, 'Reading', 30, $3, '2026-10-07')`, [A, schedA, ruleA]);
 await expectErr('duplicate occurrence of a rule rejected', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, recurrence_rule_id, recurrence_date) values ($1, $2, 'Reading', 30, $3, '2026-10-07')`, [A, schedA, ruleA], /duplicate|unique/);
 
+console.log('\n=== V4 spaces (0018) ===');
+await as(A);
+const spaceA = await ins('A space', `insert into public.spaces (user_id, name, icon, color) values ($1, 'School', 'school', '#3b6fe0')`, [A]);
+const course3 = await ins('A course in a space', `insert into public.courses (user_id, name, space_id) values ($1, 'Physics', $2)`, [A, spaceA]);
+const spacedTask = await ins('A task in a space', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, space_id) values ($1, $2, 'Lab', 30, $3)`, [A, schedA, spaceA]);
+await ins('A board in a space', `insert into public.boards (user_id, title, space_id) values ($1, 'Portfolio', $2)`, [A, spaceA]);
+await expectErr('space icon must be a key', `insert into public.spaces (user_id, name, icon) values ($1, 'x', '<svg>')`, [A], /check/);
+await expectErr('space colour must be hex', `insert into public.spaces (user_id, name, color) values ($1, 'x', 'red')`, [A], /check/);
+await expectErr('blank space name rejected', `insert into public.spaces (user_id, name) values ($1, '   ')`, [A], /check/);
+await as(B);
+const bs = (await rows('select count(*)::int n from public.spaces'))[0].n;
+bs === 0 ? ok("B sees 0 of A's spaces") : bad('B sees A spaces', String(bs));
+await expectErr('B task -> A space', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, space_id) values ($1, $2, 'x', 30, $3)`, [B, schedB, spaceA], /42501|does not belong/);
+await expectErr('B course -> A space', `insert into public.courses (user_id, name, space_id) values ($1, 'x', $2)`, [B, spaceA], /42501|does not belong/);
+await expectErr('B board -> A space', `insert into public.boards (user_id, title, space_id) values ($1, 'x', $2)`, [B, spaceA], /42501|does not belong/);
+const bu = await db.query(`update public.spaces set name = 'hacked' where id = $1`, [spaceA]);
+bu.affectedRows === 0 ? ok("B rename of A's space affects 0 rows") : bad('B renamed A space', String(bu.affectedRows));
+await as(A);
+await expectOk('A deletes the space', `delete from public.spaces where id = $1`, [spaceA]);
+const afterSpace = await rows(`select (select space_id from public.courses where id = $1) as c, (select space_id from public.study_subjects where id = $2) as t, (select count(*)::int from public.study_subjects where id = $2) as n`, [course3, spacedTask]);
+afterSpace[0].c === null && afterSpace[0].t === null && afterSpace[0].n === 1 ? ok('deleting a space keeps its course and task (space_id -> null)') : bad('space delete', JSON.stringify(afterSpace));
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

@@ -4,8 +4,10 @@
 // fills the real Planner inputs so their existing save handlers persist
 // them, then generates. Skip/finish call host.markComplete.
 
+import { icon } from '../ui/icons.js';
 import {
-  onboardingSteps,
+  onboardingStepsV4,
+  PURPOSES,
   buildOnboardingAcademics,
   defaultOnboardingAnswersV3,
   STUDY_PERIODS,
@@ -28,7 +30,7 @@ export function initOnboarding(host) {
   let overlay = null;
   let stepIndex = 0;
   let answers = defaultOnboardingAnswers();
-  let STEPS = onboardingSteps();
+  let STEPS = onboardingStepsV4();
   let v3 = false;
   const WEEKDAY_KEYS = ['recurring.daySun', 'recurring.dayMon', 'recurring.dayTue', 'recurring.dayWed', 'recurring.dayThu', 'recurring.dayFri', 'recurring.daySat'];
   let busy = false;
@@ -78,12 +80,16 @@ export function initOnboarding(host) {
   }
 
   const q = (sel) => overlay.querySelector(sel);
+  const generalPurpose = () => answers.purpose === 'work' || answers.purpose === 'personal';
 
   function readStep() {
     const step = STEPS[stepIndex];
     const body = q('.onboarding-body');
     const courseOf = (row) => { const sel = row.querySelector('.onb-course'); return sel ? sel.value : ''; };
-    if (step === 'courses') {
+    if (step === 'purpose') {
+      const picked = body.querySelector('input[name="onbPurpose"]:checked');
+      answers.purpose = picked ? picked.value : null;
+    } else if (step === 'courses') {
       answers.semester = { name: body.querySelector('.onb-sem-name').value, start: body.querySelector('.onb-sem-start').value, end: body.querySelector('.onb-sem-end').value };
       answers.courses = Array.from(body.querySelectorAll('.onb-row-course')).map((row) => ({
         name: row.querySelector('.onb-name').value,
@@ -167,7 +173,28 @@ export function initOnboarding(host) {
   function renderBody(step) {
     const body = q('.onboarding-body');
     body.innerHTML = '';
-    if (step === 'courses') {
+    if (step === 'purpose') {
+      const PURPOSE_ICON = { school: 'school', work: 'briefcase', personal: 'home', selfstudy: 'book', multiple: 'sliders' };
+      const group = el('div', 'ws-modes onb-purpose');
+      group.setAttribute('role', 'radiogroup');
+      group.setAttribute('aria-labelledby', 'onboardingTitle');
+      PURPOSES.forEach((p) => {
+        const label = el('label', `ws-mode${answers.purpose === p ? ' is-on' : ''}`);
+        const radio = input('radio', '', p, { name: 'onbPurpose' });
+        radio.checked = answers.purpose === p;
+        radio.addEventListener('change', () => group.querySelectorAll('.ws-mode').forEach((l) => l.classList.toggle('is-on', l.contains(radio))));
+        const ic = el('span', 'ws-mode-icon');
+        ic.setAttribute('aria-hidden', 'true');
+        ic.innerHTML = icon(PURPOSE_ICON[p]);
+        const text = el('span', 'ws-mode-text');
+        text.appendChild(el('strong', null, t(`workspace.mode_${p}`)));
+        text.appendChild(el('span', null, t(`workspace.mode_${p}Hint`)));
+        label.append(radio, ic, text);
+        group.appendChild(label);
+      });
+      body.appendChild(group);
+      body.appendChild(el('p', 'hint', t('onboarding.purposeChangeLater')));
+    } else if (step === 'courses') {
       const sem = el('div', 'onb-row onb-row-sem');
       sem.appendChild(labeled(t('onboarding.semesterName'), input('text', 'onb-sem-name', answers.semester.name, { placeholder: t('onboarding.semesterExample'), maxlength: '120' })));
       sem.appendChild(labeled(t('onboarding.semesterStart'), input('date', 'onb-sem-start', answers.semester.start)));
@@ -183,7 +210,9 @@ export function initOnboarding(host) {
     } else if (step === 'tasks') {
       answers.tasks.forEach((task, i) => {
         const row = el('div', v3 ? 'onb-row onb-row-task3' : 'onb-row');
-        row.appendChild(labeled(t('onboarding.taskName'), input('text', 'onb-name', task.name, { placeholder: t(`onboarding.taskExample${i + 1}`), maxlength: '80' })));
+        // Work / Personal setups get non-academic examples.
+        const exampleKey = generalPurpose() ? `onboarding.taskGeneralExample${i + 1}` : `onboarding.taskExample${i + 1}`;
+        row.appendChild(labeled(t('onboarding.taskName'), input('text', 'onb-name', task.name, { placeholder: t(exampleKey), maxlength: '80' })));
         row.appendChild(labeled(t('onboarding.minutes'), input('number', 'onb-minutes', task.minutes, { min: '15', max: '600', step: '15', inputmode: 'numeric' })));
         const cs = courseSelect(task.course);
         if (cs) row.appendChild(cs);
@@ -234,7 +263,8 @@ export function initOnboarding(host) {
     q('.onboarding-skip').textContent = t('onboarding.skip');
     q('.onboarding-eyebrow').textContent = t('onboarding.stepOf').replace('{n}', stepIndex + 1).replace('{total}', STEPS.length);
     // V3 rewords the classes step (a weekly timetable, not just today).
-    const copyKey = v3 && step === 'classes' ? 'classes3' : step;
+    // V3 rewords the classes step; V4 Work / Personal setups reword the tasks step.
+    const copyKey = v3 && step === 'classes' ? 'classes3' : step === 'tasks' && generalPurpose() ? 'tasksGeneral' : step;
     q('.onboarding-title').textContent = t(`onboarding.${copyKey}Title`);
     q('.onboarding-lead').textContent = t(`onboarding.${copyKey}Lead`);
     q('.onboarding-error').textContent = '';
@@ -257,7 +287,7 @@ export function initOnboarding(host) {
   }
 
   // Point at the exact field(s) an error is about.
-  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep', semName: '.onb-sem-name', semDates: '.onb-sem-start, .onb-sem-end', weekday: '.onb-weekday' };
+  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep', purpose: 'input[name="onbPurpose"]', semName: '.onb-sem-name', semDates: '.onb-sem-start, .onb-sem-end', weekday: '.onb-weekday' };
   function markInvalid(errors) {
     const body = q('.onboarding-body');
     const rows = body.querySelectorAll(STEPS[stepIndex] === 'courses' ? '.onb-row-course' : '.onb-row');
@@ -285,6 +315,7 @@ export function initOnboarding(host) {
       markInvalid(result.errors);
       return;
     }
+    if (step === 'purpose') STEPS = onboardingStepsV4({ courses: v3, purpose: answers.purpose });
     if (stepIndex < STEPS.length - 1) {
       stepIndex += 1;
       render();
@@ -299,6 +330,9 @@ export function initOnboarding(host) {
     const nextBtn = q('.onboarding-next');
     nextBtn.disabled = true;
     try {
+      // V4: save the chosen purpose (workspace mode) first — also on Skip
+      // once it has been answered.
+      if (answers.purpose && typeof host.applyPurpose === 'function') await host.applyPurpose(answers.purpose);
       if (build) {
         const plan = buildOnboardingPlan(answers);
         const academics = v3 ? buildOnboardingAcademics(answers, { today: host.today() }) : null;
@@ -322,8 +356,9 @@ export function initOnboarding(host) {
     if (!overlay) build();
     stepIndex = 0;
     v3 = Boolean(host.isV3 && host.isV3());
-    STEPS = onboardingSteps({ courses: v3 });
+    STEPS = onboardingStepsV4({ courses: v3, purpose: null });
     answers = v3 ? defaultOnboardingAnswersV3(host.today()) : defaultOnboardingAnswers();
+    answers.purpose = null;
     returnFocusTo = document.activeElement;
     overlay.hidden = false;
     document.body.classList.add('onboarding-open');

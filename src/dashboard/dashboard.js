@@ -106,6 +106,11 @@ import { initAgendaSection } from '../calendar/agenda.js';
 import { initCommandPalette } from '../shared/commandPaletteView.js';
 import { isPaletteShortcut } from '../shared/commandPalette.js';
 import { initSettingsV3 } from '../settings/settingsV3.js';
+import { readLocalWorkspace, loadWorkspace, saveWorkspace, listSpaces, createSpace, readSpaceFilter, writeSpaceFilter } from '../workspace/workspaceData.js';
+import { withMode } from '../workspace/modules.js';
+import { MODE_SPACE } from '../workspace/spacesModel.js';
+import { applyNavigation, renderSpaceSwitcher } from '../workspace/navigation.js';
+import { resolveSpaceFilter } from '../workspace/spacesModel.js';
 import { clearOfflineSnapshots } from '../offline/offlineSnapshot.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 import { initOnboarding } from './onboarding.js';
@@ -120,7 +125,7 @@ import { exitDemoMode } from '../demo/demoMode.js';
 import { probeCapabilities, has as hasCapability } from '../shared/capabilities.js';
 import { capabilityFilter, updateTask } from '../tasks/tasksData.js';
 import { applyOnboardingAcademics, linkOnboardingClasses } from '../onboarding/onboardingAcademics.js';
-import { setAppContext, onChange } from '../app/context.js';
+import { setAppContext, onChange, emitChange } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
 import { toast } from '../ui/toast.js';
@@ -307,6 +312,37 @@ async function init(session) {
 
   // Which V3 tables/columns exist yet (migrations 0010+ are applied by hand).
   await probeCapabilities();
+
+  // ---------------- V4-A workspace: visible modules + spaces ----------------
+  // First paint uses this device's cached workspace; the saved preference
+  // (profiles.preferences.workspace) replaces it as soon as it loads. An
+  // account that never chose a mode keeps the full V3 navigation.
+  let workspace = readLocalWorkspace(userId);
+  let spaceList = [];
+  let spaceFilter = null;
+  applyNavigation(workspace);
+  const spaceSwitcherEl = document.getElementById('spaceSwitcher');
+  async function refreshWorkspace() {
+    try {
+      workspace = await loadWorkspace(userId);
+    } catch (err) {
+      console.error('Could not load workspace preferences', err);
+    }
+    applyNavigation(workspace);
+    try {
+      spaceList = await listSpaces(userId);
+    } catch (err) {
+      console.error('Could not load spaces', err);
+      spaceList = [];
+    }
+    spaceFilter = resolveSpaceFilter(readSpaceFilter(userId), spaceList);
+    renderSpaceSwitcher(spaceSwitcherEl, spaceList, spaceFilter, (value) => {
+      spaceFilter = value;
+      writeSpaceFilter(userId, value);
+      emitChange('space');
+    });
+  }
+  await refreshWorkspace();
 
   const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
   nameEl.textContent = `Hi, ${profile?.name || session.user.email}`;
@@ -966,6 +1002,9 @@ async function init(session) {
     userId,
     displayName,
     isDemo: IS_DEMO,
+    workspace: () => workspace,
+    spaces: () => spaceList,
+    spaceFilter: () => spaceFilter,
     navigate: (view, param = null) => activateView(view, param),
     openCourse: (courseId) => activateView('coursesView', courseId),
     openPlannerForDate: (dateStr) => openPlannerForDate(dateStr),
@@ -1097,6 +1136,20 @@ async function init(session) {
   function openSettingsTab(key) {
     activateView('settingsView').then(() => selectSettingsTab(key));
   }
+  document.getElementById('navCustomizeBtn')?.addEventListener('click', () => openSettingsTab('workspace'));
+  // 'Show all spaces' on a filtered page drives the sidebar switcher itself.
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-space-clear]')) return;
+    const sel = document.getElementById('spaceSwitcherSelect');
+    if (!sel) return;
+    sel.value = '';
+    sel.dispatchEvent(new Event('change'));
+  });
+  // Workspace / spaces edited in Settings, onboarding or elsewhere.
+  onChange((topic) => {
+    if (topic === 'workspace' || topic === 'spaces') refreshWorkspace();
+    if (topic === 'space') rerenderCurrentView();
+  });
   function toggleDarkMode() {
     if (themeToggleBtn) themeToggleBtn.click();
   }
@@ -1135,10 +1188,24 @@ async function init(session) {
       { id: 'toggle-dark', group: 'commands', title: t('search.toggleDark'), keywords: ['theme', 'dark', 'light', 'night'], run: toggleDarkMode },
       { id: 'shortcuts', group: 'commands', title: t('search.shortcuts'), keywords: ['keyboard', 'keys', 'hotkeys'], run: openShortcutHelp },
       { id: 'focus-next', group: 'commands', title: t('search.focusNext'), keywords: ['focus', 'timer', 'pomodoro'], run: () => openPlannerForDate(todayDateStr()) },
+      { id: 'customize-nav', group: 'commands', title: t('nav.customize'), keywords: ['sidebar', 'modules', 'workspace', 'mode', 'navigation'], run: () => openSettingsTab('workspace') },
     ];
+    // V4-A: switch space (the sidebar switcher does the work, so both stay in sync).
+    const pickSpace = (value) => {
+      const sel = document.getElementById('spaceSwitcherSelect');
+      if (!sel) return;
+      sel.value = value;
+      sel.dispatchEvent(new Event('change'));
+    };
+    const spaceCommands = document.getElementById('spaceSwitcherSelect')
+      ? [
+        { id: 'space-all', group: 'spaces', title: t('spaces.switchAll'), keywords: ['space', 'all', 'filter'], run: () => pickSpace('') },
+        ...spaceList.filter((s) => !s.archived).map((s) => ({ id: `space-${s.id}`, group: 'spaces', title: t('spaces.switchTo').replace('{name}', s.name), keywords: ['space', 'switch', s.name], run: () => pickSpace(s.id) })),
+      ]
+      : [];
     const settings = [
       ['general', 'settings.tabGeneral'], ['appearance', 'settings.appearanceTitle'], ['planner', 'settings.tabPlanner'],
-      ['academics', 'settings3.tabAcademics'], ['notifications', 'notifications.title'], ['calendar', 'settings.calendarTitle'],
+      ['workspace', 'workspace.title'], ['academics', 'settings3.tabAcademics'], ['notifications', 'notifications.title'], ['calendar', 'settings.calendarTitle'],
       ['keyboard', 'settings3.tabKeyboard'], ['data', 'settings.tabData'], ['about', 'settings3.tabAbout'],
     ].filter(([key]) => document.getElementById(`settingsTab-${key}`))
       .map(([key, labelKey]) => ({ id: `settings-${key}`, group: 'settings', title: `${t('nav.settings')} · ${t(labelKey)}`, keywords: ['settings', 'preferences'], run: () => openSettingsTab(key) }));
@@ -1154,7 +1221,7 @@ async function init(session) {
       ...idx.boards.map((b) => ({ id: `board-${b.id}`, group: 'boards', title: b.title, keywords: ['board', 'project'], run: () => openBoard(b.id) })),
     ];
     // Without a query the palette shows actions and pages; typing searches everything.
-    return [...create, ...navigate, ...commands, ...settings, ...entities];
+    return [...create, ...navigate, ...commands, ...spaceCommands, ...settings, ...entities];
   }
 
   async function openTaskById(id) {
@@ -4656,7 +4723,7 @@ async function init(session) {
     onboardingApplying = true;
     let courseIds = [];
     try {
-      ({ courseIds } = await applyOnboardingAcademics(userId, academics));
+      ({ courseIds } = await applyOnboardingAcademics(userId, academics ? { ...academics, spaceId: onboardingSpaceId } : academics));
       if (academics && academics.weeklyClasses.length) await loadRecurringClassesData();
     } finally {
       onboardingApplying = false;
@@ -4693,8 +4760,29 @@ async function init(session) {
     output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 
+  // V4: "What do you want to use this for?" — saves the workspace mode and,
+  // for an account with no spaces yet, creates the matching space (School,
+  // Work…) as the default for new items.
+  let onboardingSpaceId = null;
+  async function applyOnboardingPurpose(purpose) {
+    let ws = withMode(workspace, purpose);
+    if (hasCapability('spaces') && MODE_SPACE[purpose] && spaceList.length === 0) {
+      try {
+        const def = MODE_SPACE[purpose];
+        const space = await createSpace(userId, { name: t(def.nameKey), icon: def.icon, color: def.color });
+        onboardingSpaceId = space.id;
+        ws = { ...ws, defaultSpaceId: space.id };
+      } catch (err) {
+        console.error('Could not create the first space', err);
+      }
+    }
+    workspace = await saveWorkspace(userId, ws);
+    applyNavigation(workspace);
+  }
+
   const onboarding = initOnboarding({
     t,
+    applyPurpose: applyOnboardingPurpose,
     isV3: () => hasCapability('courses'),
     today: () => todayDateStr(),
     applyPlan: applyOnboardingPlan,

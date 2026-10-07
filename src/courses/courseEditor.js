@@ -13,6 +13,7 @@ import { COURSE_COLORS, pickCourseColor, validateCourseFields } from '../academi
 import { listCourses, listSemesters, createCourse, updateCourse, deleteCourse } from '../academics/academicsData.js';
 import { pickCurrentSemester } from '../academics/semesterModel.js';
 import { todayStr } from '../shared/dates.js';
+import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
 
 function field(id, labelKey, control, { hint = '', span = false } = {}) {
   const wrap = h('div', { class: `field${span ? ' field-span' : ''}` });
@@ -86,6 +87,9 @@ export async function openCourseEditor({ course = null, onSaved } = {}) {
       const colorWrap = h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('courses.fieldColor')), colorPicker(color, (c) => { color = c; }));
       grid.appendChild(colorWrap);
       body.appendChild(grid);
+      // V4: which area of life this course belongs to (its tasks follow it).
+      const space = spaceSelect('ce-space', course ? course.space_id : defaultSpaceForNew());
+      if (space) body.appendChild(field('ce-space', 'spaces.field', space));
 
       const more = h('details', { class: 'disclosure' }, h('summary', {}, t('common.moreOptions')));
       const mb = h('div', { class: 'disclosure-body' });
@@ -161,6 +165,8 @@ export async function openCourseEditor({ course = null, onSaved } = {}) {
             return;
           }
           if (!semesters.length) delete fields.semester_id;
+          const spaceSel = b.querySelector('#ce-space');
+          if (spaceSel) fields.space_id = spaceSel.value || null;
           btn.textContent = t('common.saving');
           api.setBusy(true);
           try {

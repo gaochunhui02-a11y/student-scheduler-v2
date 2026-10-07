@@ -28,76 +28,82 @@
       </button>
     </div>
 
+    <div class="space-switcher" id="spaceSwitcher" hidden></div>
+
     <nav class="sidebar-nav" id="sidebarNav" data-i18n-aria-label="nav.mainLabel" aria-label="Main">
-      <div class="nav-section">
+      <div class="nav-section" data-nav-section="home">
         <span class="nav-section-label" data-i18n="nav.sectionHome">Home</span>
-        <button type="button" class="nav-item active" data-view-target="analyticsView" aria-current="page">
+        <button type="button" data-module="home" class="nav-item active" data-view-target="analyticsView" aria-current="page">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/></svg>
           <span data-i18n="nav.home">Dashboard</span>
         </button>
       </div>
 
-      <div class="nav-section">
-        <span class="nav-section-label" data-i18n="nav.sectionAcademics">Academics</span>
-        <button type="button" class="nav-item" data-view-target="coursesView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 5.5A1.5 1.5 0 0 1 6 4h11.5v14H6a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M4.5 19.5A1.5 1.5 0 0 0 6 21h11.5v-3"/><path d="M8.5 8h5"/></svg>
-          <span data-i18n="nav.courses">Courses</span>
-        </button>
-        <button type="button" class="nav-item" data-view-target="tasksView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 7 1.6 1.6L9 5.8"/><path d="m4.5 13 1.6 1.6L9 11.8"/><path d="M12 7.2h7.5M12 13.2h7.5M12 18.7h7.5M5 18.7h3"/></svg>
-          <span data-i18n="nav.tasks">Tasks</span>
-        </button>
-        <button type="button" class="nav-item" data-view-target="gradesView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 4 7.5l8 4 8-4z"/><path d="M7 9.2v4.6c0 1.5 2.2 3 5 3s5-1.5 5-3V9.2"/><path d="M20 7.5v5.5"/></svg>
-          <span data-i18n="nav.grades">Grades</span>
-        </button>
-        <button type="button" class="nav-item" data-view-target="examsView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16" rx="2"/><path d="M9 3.5h6v2.5H9z"/><path d="m9 13 2 2 4-4.5"/></svg>
-          <span data-i18n="nav.exams">Exams</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
+      <div class="nav-section" data-nav-section="plan">
         <span class="nav-section-label" data-i18n="nav.sectionPlan">Plan</span>
-        <button type="button" class="nav-item" data-scroll-target="plannerForm">
+        <button type="button" data-module="planner" class="nav-item" data-scroll-target="plannerForm">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16.5h4"/></svg>
           <span data-i18n="nav.planner">Planner</span>
         </button>
-        <button type="button" class="nav-item" data-view-target="weekView">
+        <button type="button" data-module="week" class="nav-item" data-view-target="weekView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/><path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2"/></svg>
           <span data-i18n="nav.week">Week</span>
         </button>
-        <button type="button" class="nav-item" data-view-target="semesterView">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18.5V9M8 18.5V6M12 18.5v-8M16 18.5V5M20 18.5v-6"/></svg>
-          <span data-i18n="nav.semester">Semester</span>
-        </button>
-        <button type="button" class="nav-item" data-view-target="calendarView">
+        <button type="button" data-module="calendar" class="nav-item" data-view-target="calendarView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14.5" rx="2"/><path d="M4.5 9.5h15M8.5 3v3.5M15.5 3v3.5"/></svg>
           <span data-i18n="nav.calendar">Calendar</span>
         </button>
+        <button type="button" data-module="semester" class="nav-item" data-view-target="semesterView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 18.5V9M8 18.5V6M12 18.5v-8M16 18.5V5M20 18.5v-6"/></svg>
+          <span data-i18n="nav.semester">Semester</span>
+        </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" data-nav-section="work">
+        <span class="nav-section-label" data-i18n="nav.sectionWork">Tasks &amp; goals</span>
+        <button type="button" data-module="tasks" class="nav-item" data-view-target="tasksView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 7 1.6 1.6L9 5.8"/><path d="m4.5 13 1.6 1.6L9 11.8"/><path d="M12 7.2h7.5M12 13.2h7.5M12 18.7h7.5M5 18.7h3"/></svg>
+          <span data-i18n="nav.tasks">Tasks</span>
+        </button>
+      </div>
+
+      <div class="nav-section" data-nav-section="academics">
+        <span class="nav-section-label" data-i18n="nav.sectionAcademics">Academics</span>
+        <button type="button" data-module="courses" class="nav-item" data-view-target="coursesView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 5.5A1.5 1.5 0 0 1 6 4h11.5v14H6a1.5 1.5 0 0 0-1.5 1.5z"/><path d="M4.5 19.5A1.5 1.5 0 0 0 6 21h11.5v-3"/><path d="M8.5 8h5"/></svg>
+          <span data-i18n="nav.courses">Courses</span>
+        </button>
+        <button type="button" data-module="exams" class="nav-item" data-view-target="examsView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16" rx="2"/><path d="M9 3.5h6v2.5H9z"/><path d="m9 13 2 2 4-4.5"/></svg>
+          <span data-i18n="nav.exams">Exams</span>
+        </button>
+        <button type="button" data-module="grades" class="nav-item" data-view-target="gradesView">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 4 7.5l8 4 8-4z"/><path d="M7 9.2v4.6c0 1.5 2.2 3 5 3s5-1.5 5-3V9.2"/><path d="M20 7.5v5.5"/></svg>
+          <span data-i18n="nav.grades">Grades</span>
+        </button>
+      </div>
+
+      <div class="nav-section" data-nav-section="organize">
         <span class="nav-section-label" data-i18n="nav.sectionOrganize">Organize</span>
-        <button type="button" class="nav-item" data-view-target="boardView">
+        <button type="button" data-module="board" class="nav-item" data-view-target="boardView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6.5" r="2.2"/><circle cx="18" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M7.6 8 10.7 15.7M16.4 8 13.3 15.7"/></svg>
           <span data-i18n="nav.boards">Boards</span>
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" data-nav-section="review">
         <span class="nav-section-label" data-i18n="nav.sectionReview">Review</span>
-        <button type="button" class="nav-item" data-view-target="historyView">
+        <button type="button" data-module="history" class="nav-item" data-view-target="historyView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12.5" r="7.5"/><path d="M12 8.2v4.6l3 2.2"/><path d="M8.6 3.6 5 5.6"/></svg>
           <span data-i18n="nav.history">History</span>
         </button>
-        <button type="button" class="nav-item" data-view-target="insightsView">
+        <button type="button" data-module="insights" class="nav-item" data-view-target="insightsView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h15"/><path d="M7.5 16V11M12 16V6.5M16.5 16v-7"/></svg>
           <span data-i18n="nav.insights">Insights</span>
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" data-nav-section="system">
         <span class="nav-section-label" data-i18n="nav.sectionSystem">System</span>
         <button type="button" class="nav-item" data-view-target="settingsView">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><path d="M12 4.2v1.9M12 17.9v1.9M19.8 12h-1.9M6.1 12H4.2M17.4 6.6l-1.35 1.35M7.95 16.05 6.6 17.4M17.4 17.4l-1.35-1.35M7.95 7.95 6.6 6.6"/></svg>
@@ -121,6 +127,9 @@
           <option value="zh">中文</option>
           <option value="ja">日本語</option>
         </select>
+        <button type="button" class="icon-btn" id="navCustomizeBtn" data-i18n-title="nav.customize" title="Customize sidebar" data-i18n-aria-label="nav.customize" aria-label="Customize sidebar">
+          <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="themeToggle" data-i18n-title="theme.dark" title="Dark mode">
           <svg class="icon-btn-icon icon-theme-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
           <span id="themeToggleLabel" class="sr-only">Dark mode</span>
@@ -866,6 +875,7 @@
 
         <div class="settings-tabs" role="tablist" id="settingsTabs" data-i18n-aria-label="settings.heading" aria-label="Settings">
           <button type="button" class="settings-tab active" role="tab" id="settingsTab-general" aria-controls="settingsPanel-general" aria-selected="true" data-settings-tab="general" data-i18n="settings.tabGeneral">General</button>
+          <button type="button" class="settings-tab" role="tab" id="settingsTab-workspace" aria-controls="settingsPanel-workspace" aria-selected="false" tabindex="-1" data-settings-tab="workspace" data-i18n="workspace.title">Workspace</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-appearance" aria-controls="settingsPanel-appearance" aria-selected="false" tabindex="-1" data-settings-tab="appearance" data-i18n="settings.appearanceTitle">Appearance</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-planner" aria-controls="settingsPanel-planner" aria-selected="false" tabindex="-1" data-settings-tab="planner" data-i18n="settings.tabPlanner">Planner</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-academics" aria-controls="settingsPanel-academics" aria-selected="false" tabindex="-1" data-settings-tab="academics" data-i18n="settings3.tabAcademics">Courses &amp; semester</button>
@@ -894,6 +904,8 @@
           <p class="hint settings-field-label" data-i18n="settings.shortcutsHint">Tip: press Ctrl K (⌘K on Mac) anywhere to jump to a page or add something.</p>
           <button type="button" class="btn-secondary settings-inline-btn" id="settingsReplayOnboardingBtn" hidden data-i18n="settings.replayOnboarding">Show the welcome setup again</button>
         </div>
+
+        <div class="card settings-panel" role="tabpanel" id="settingsPanel-workspace" aria-labelledby="settingsTab-workspace" hidden></div>
 
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-appearance" aria-labelledby="settingsTab-appearance" hidden>
           <h2 data-i18n="settings.appearanceTitle">Appearance</h2>

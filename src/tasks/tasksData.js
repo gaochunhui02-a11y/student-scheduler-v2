@@ -23,6 +23,7 @@ function unwrap({ data, error }) {
 export function capabilityFilter(fields) {
   const out = { ...fields };
   if (!has('courseLinks')) delete out.course_id;
+  if (!has('spaceLinks')) delete out.space_id; // V4 (0018)
   if (!has('taskExtensions')) {
     ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'].forEach((k) => delete out[k]);
   }

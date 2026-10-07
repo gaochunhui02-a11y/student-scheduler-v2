@@ -20,6 +20,16 @@ export function onboardingSteps({ courses = false } = {}) {
   return courses ? ONBOARDING_STEPS_V3 : ONBOARDING_STEPS;
 }
 
+// V4: first ask what the app is for; the rest of the setup follows from it.
+// School / Multiple areas (or no answer yet) keep the academic setup; Work,
+// Personal and Self-study skip courses and the class timetable.
+export const PURPOSES = ['school', 'work', 'personal', 'selfstudy', 'multiple'];
+export function onboardingStepsV4({ courses = false, purpose = null } = {}) {
+  const academic = !purpose || purpose === 'school' || purpose === 'multiple';
+  const rest = academic ? onboardingSteps({ courses }) : ['tasks', 'day', 'style'];
+  return ['purpose', ...rest];
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const STUDY_PERIODS = ['none', 'morning', 'afternoon', 'evening'];
 export const SESSION_LENGTHS = [25, 45, 60, 90];
@@ -82,6 +92,8 @@ export function validateOnboardingStep(step, answers = {}) {
       else if (toMinutes(c.end) <= toMinutes(c.start)) errors.push({ index, field: 'time', key: 'onboarding.errClassOrder' });
       if (c.weekly && !(Number.isInteger(Number(c.weekday)) && Number(c.weekday) >= 0 && Number(c.weekday) <= 6)) errors.push({ index, field: 'weekday', key: 'onboarding.errChoose' });
     });
+  } else if (step === 'purpose') {
+    if (!PURPOSES.includes(answers.purpose)) errors.push({ field: 'purpose', key: 'onboarding.errPurpose' });
   } else if (step === 'courses') {
     const sem = answers.semester || {};
     const semName = (sem.name || '').trim();

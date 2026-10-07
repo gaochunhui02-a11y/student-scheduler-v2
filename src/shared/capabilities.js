@@ -24,6 +24,9 @@ const PROBES = {
   resources: ['resources', 'id, url, kind'],
   focusSessions: ['focus_sessions', 'id, actual_minutes, outcome'],
   preferences: ['profiles', 'id, preferences'],
+  // V4
+  spaces: ['spaces', 'id, icon, archived'],
+  spaceLinks: ['study_subjects', 'id, space_id'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -41,6 +44,8 @@ export const FEATURE_MIGRATIONS = {
   resources: '0015_resources.sql',
   focusSessions: '0016_focus_sessions.sql',
   preferences: '0017_profile_preferences.sql',
+  spaces: '0018_spaces.sql',
+  spaceLinks: '0018_spaces.sql',
 };
 
 let state = null;

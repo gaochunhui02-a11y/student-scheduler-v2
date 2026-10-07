@@ -36,7 +36,11 @@ const v3 = files.filter((f) => Number(f.slice(0, 4)) >= 10);
 
 console.log('\n=== V3 migration inventory ===');
 check('0010–0017 exist, numbered without gaps', () => {
-  assert.deepEqual(v3.map((f) => f.slice(0, 4)), ['0010', '0011', '0012', '0013', '0014', '0015', '0016', '0017']);
+  // V3 = 0010-0017, V4 = 0018+; any number of files, but no gaps.
+  const nums = v3.map((f) => Number(f.slice(0, 4)));
+  assert.ok(nums.length >= 9, 'expected at least 0010-0018');
+  nums.forEach((n, i) => assert.equal(n, 10 + i, `gap before ${v3[i]}`));
+  assert.ok(v3.includes('0018_spaces.sql'));
 });
 
 console.log('\n=== additive only ===');
@@ -105,7 +109,7 @@ check('the ownership guard runs as the caller (security invoker) with a fixed se
   assert.match(sql, /function public\.v3_assert_owned_ref\(\) returns trigger language plpgsql security invoker set search_path = public/);
 });
 check('every V3 foreign key to a user-owned table has an ownership trigger', () => {
-  const OWNED = ['semesters', 'courses', 'exams', 'exam_topics', 'task_recurrence_rules', 'study_subjects', 'schedule_items', 'grade_categories'];
+  const OWNED = ['spaces', 'semesters', 'courses', 'exams', 'exam_topics', 'task_recurrence_rules', 'study_subjects', 'schedule_items', 'grade_categories'];
   v3.forEach((file) => {
     const sql = sqlOf(file);
     // "<col> uuid [not null] references public.<target>" (table bodies and add column)
