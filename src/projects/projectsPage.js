@@ -278,7 +278,7 @@ export function initProjectsPage() {
         toast(t('v3.saveError'), { kind: 'error' });
       }
     } else if (a === 'add-task' && project) {
-      openTaskEditor({ defaults: { projectId: project.id, spaceId: project.space_id || '', planDate: todayStr() }, onSaved: () => render() });
+      openTaskEditor({ defaults: { projectId: project.id, spaceId: project.space_id || '' }, onSaved: () => render() });
     } else if (a === 'add-milestone' && project) openMilestoneEditor({ projectId: project.id, onSaved: () => render() });
     else if (a === 'edit-milestone') {
       const m = data.milestones.find((x) => x.id === el.dataset.ms);

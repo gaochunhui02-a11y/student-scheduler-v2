@@ -6,7 +6,7 @@ import { todayStr, diffDays } from '../shared/dates.js';
 import { html, raw, safeColor } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { badge } from '../ui/components.js';
-import { fmtDue, fmtMinutes, fmtClockStr } from '../ui/format.js';
+import { fmtDue, fmtMinutes, fmtClockStr, fmtDate } from '../ui/format.js';
 import { statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { tagLabel } from './taskEditorSections.js';
 
@@ -15,7 +15,13 @@ export function taskStatusBadge(group, blockedInfo = null) {
   // V4-B explicit statuses (only set by the student; V3 tasks never have them)
   if (!group.done && group.statusOverride === 'deferred') return badge(t('tasks.status_deferred'), 'outline');
   if (!group.done && group.statusOverride === 'in_progress' && group.status === 'unscheduled') return badge(t('tasks.status_in_progress'), 'accent');
-  if (group.status === 'unscheduled') return badge(t('tasks.statusUnscheduled'), 'outline');
+  // V4-B.1: "Unscheduled" = no planned day (backlog); a planned day without
+  // a timed block yet shows that day instead of V3's ambiguous "Not scheduled".
+  if (group.status === 'unscheduled') {
+    if (!group.scheduledDate && group.firstDate == null) return badge(t('tasks.statusBacklog'), 'outline');
+    const day = group.scheduledDate || group.firstDate;
+    return badge(t('tasks.statusPlannedOn').replace('{date}', fmtDate(day)), 'outline');
+  }
   return raw(statusBadgeHtml(group.status, t(statusLabelKey(group.status)), { compact: true }));
 }
 

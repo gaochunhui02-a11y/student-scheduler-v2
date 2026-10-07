@@ -455,5 +455,16 @@ export function buildDemoSeed(now = new Date()) {
   ptask(addDays(today, 5), 'Choose hosting and deploy', 60, { due_date: addDays(today, 28), due_time: '18:00:00', project_milestone_id: msLaunch.id, project_sort: 40 });
   task(addDays(today, 7), 'Update résumé', 45, { project_id: internships.id, due_date: addDays(today, 14), project_sort: 10 });
 
+  // ---------------- backlog: tasks with no planned day (V4-B.1) ----------------
+  const backlogTask = (name, minutes, extra = {}) => db.study_subjects.push({
+    id: id(), schedule_id: null, user_id: U, name, minutes_requested: minutes, priority: 'medium', due_date: null, notes: '', tags: [],
+    origin_subject_id: null, sort_order: 0, course_id: null, actual_minutes: null, completed_at: null, dependency_override: false,
+    exam_topic_id: null, recurrence_rule_id: null, recurrence_date: null, space_id: null, project_id: null, project_milestone_id: null,
+    due_time: null, start_time: null, status_override: null, project_sort: 0, planned_by: null, ...extra,
+  });
+  backlogTask('Rewrite About page', 45, { project_id: portfolio.id, project_milestone_id: msLaunch.id, due_date: addDays(today, 23), project_sort: 35 });
+  backlogTask('Read “Deep Work”', 60, { space_id: personalSpace.id });
+  backlogTask('Renew library card', 15, { due_date: addDays(today, 2), priority: 'low' });
+
   return db;
 }

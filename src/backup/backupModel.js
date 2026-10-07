@@ -84,13 +84,14 @@ const S = {
     completed_minutes: ['int', false, [0, 20000]], status: ['enum', false, ['not_started', 'in_progress', 'done']], sort_order: ['int', false, [-1e6, 1e6]],
   },
   study_subjects: {
-    id: ['id', true], schedule_id: ['ref', true], name: ['text', true, 200], minutes_requested: ['int', true, [1, 1440]], sort_order: ['int', false, [-1e6, 1e6]], priority: ['enum', false, ['low', 'medium', 'high']],
+    id: ['id', true], schedule_id: ['ref'], name: ['text', true, 200], minutes_requested: ['int', true, [1, 1440]], sort_order: ['int', false, [-1e6, 1e6]], priority: ['enum', false, ['low', 'medium', 'high']],
     due_date: ['date'], notes: ['text', false, 5000], tags: ['tags'], origin_subject_id: ['ref'], course_id: ['ref'], completed_at: ['ts'], actual_minutes: ['int', false, [0, 10000]],
     dependency_override: ['bool'], exam_topic_id: ['ref'], recurrence_rule_id: ['ref'], recurrence_date: ['date'],
     space_id: ['ref'],
     // V4-B (0019, 0020)
     project_id: ['ref'], project_milestone_id: ['ref'], due_time: ['time'], start_time: ['time'],
     status_override: ['enum', false, ['in_progress', 'deferred']], project_sort: ['int', false, [-1e6, 1e6]],
+    planned_by: ['enum', false, ['user', 'planner']], // V4-B.1 (0021)
   },
   study_subject_subtasks: { id: ['id', true], subject_id: ['ref', true], title: ['text', false, 200], completed: ['bool'], sort_order: ['int', false, [-1e6, 1e6]] },
   task_dependencies: { id: ['id', true], task_id: ['ref', true], depends_on_id: ['ref', true] },
@@ -283,6 +284,7 @@ export const CAPABILITY_COLUMNS = {
   spaceLinks: { courses: ['space_id'], study_subjects: ['space_id'], boards: ['space_id'] },
   projectLinks: { study_subjects: ['project_id', 'project_milestone_id'] },
   taskFieldsV4: { study_subjects: ['due_time', 'start_time', 'status_override', 'project_sort'] },
+  unscheduledTasks: { study_subjects: ['planned_by'] },
 };
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
@@ -291,13 +293,14 @@ export const TABLE_CAPABILITY = {
 };
 
 export function restoreAvailability(caps) {
+  const allowUnscheduled = Boolean(caps.unscheduledTasks);
   const availableTables = BACKUP_TABLES.filter((tbl) => !TABLE_CAPABILITY[tbl] || caps[TABLE_CAPABILITY[tbl]]);
   const unavailableColumns = {};
   Object.entries(CAPABILITY_COLUMNS).forEach(([cap, byTable]) => {
     if (caps[cap]) return;
     Object.entries(byTable).forEach(([tbl, cols]) => { unavailableColumns[tbl] = [...(unavailableColumns[tbl] || []), ...cols]; });
   });
-  return { availableTables, unavailableColumns };
+  return { availableTables, unavailableColumns, allowUnscheduled };
 }
 
 // ---------------- 3. plan ----------------
@@ -311,7 +314,7 @@ export function restoreAvailability(caps) {
  * @param {string} p.userId
  * @returns {{ inserts:Object<string,Array>, counts:Object, conflicts:{days:number, courses:number, semesters:number}, skipped:Object<string,number>, unavailable:string[] }}
  */
-export function planRestore({ tables, existing, availableTables, unavailableColumns = {}, newId, userId }) {
+export function planRestore({ tables, existing, availableTables, unavailableColumns = {}, newId, userId, allowUnscheduled = true }) {
   const available = new Set(availableTables);
   const idMap = Object.fromEntries(BACKUP_TABLES.map((t) => [t, new Map()]));
   const inserts = {};
@@ -387,6 +390,13 @@ export function planRestore({ tables, existing, availableTables, unavailableColu
       // current semester stays as it is.
       if (table === 'semesters') next.is_current = false;
       if (table === 'task_dependencies' && next.task_id === next.depends_on_id) drop = true;
+      // V4-B.1: a task whose day was skipped (conflict) is dropped with that
+      // day — never turned into an unscheduled copy. A task that had no day
+      // in the backup stays unscheduled, if this database allows it (0021).
+      if (table === 'study_subjects') {
+        if (row.schedule_id && !idMap.schedules.get(row.schedule_id)) drop = true;
+        if (!row.schedule_id && !allowUnscheduled) drop = true;
+      }
       if (drop) {
         skipped[table] = (skipped[table] || 0) + 1;
         return;

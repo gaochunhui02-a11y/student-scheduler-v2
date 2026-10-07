@@ -26,6 +26,7 @@ export function capabilityFilter(fields) {
   if (!has('spaceLinks')) delete out.space_id; // V4 (0018)
   if (!has('projectLinks')) { delete out.project_id; delete out.project_milestone_id; } // V4 (0019)
   if (!has('taskFieldsV4')) ['due_time', 'start_time', 'status_override', 'project_sort'].forEach((k) => delete out[k]); // V4 (0020)
+  if (!has('unscheduledTasks')) delete out.planned_by; // V4 (0021)
   if (!has('taskExtensions')) {
     ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'].forEach((k) => delete out[k]);
   }
@@ -41,7 +42,31 @@ function afterTaskWrite(planDate) {
   if (!planDate || ctx.plannerDate() === planDate) ctx.refreshPlanner();
 }
 
-export async function createTask(userId, { planDate, fields }) {
+/** Can a task be left without a planned day on this database (0021)? */
+export function canLeaveUnscheduled() {
+  return has('unscheduledTasks');
+}
+
+/**
+ * Creates a task. planDate = the day to work on it; null/empty = unscheduled
+ * (backlog) when the database supports it (0021). Without 0021 a day is
+ * required, exactly as in V3 — callers check canLeaveUnscheduled() first.
+ * Creating a task never creates a study block.
+ */
+export async function createTask(userId, { planDate, fields, plannedBy = 'user' }) {
+  if (!planDate) {
+    if (!has('unscheduledTasks')) throw Object.assign(new Error('a planned day is required before migration 0021'), { code: 'needs_migration' });
+    const row = unwrap(await supabase.from('study_subjects').insert(capabilityFilter({
+      schedule_id: null,
+      user_id: userId,
+      sort_order: 0,
+      tags: [],
+      planned_by: null,
+      ...fields,
+    })).select().single());
+    afterTaskWrite(null);
+    return { ...row, for_date: null };
+  }
   const schedule = await getOrCreateScheduleForDate(userId, planDate);
   const countRes = await supabase.from('study_subjects').select('id', { count: 'exact', head: true }).eq('schedule_id', schedule.id);
   const sortOrder = countRes.count || 0;
@@ -50,10 +75,19 @@ export async function createTask(userId, { planDate, fields }) {
     user_id: userId,
     sort_order: sortOrder,
     tags: [],
+    planned_by: plannedBy,
     ...fields,
   })).select().single());
   afterTaskWrite(planDate);
   return { ...row, for_date: planDate };
+}
+
+/** Takes a task off its day and back to the backlog (its existing blocks stay on that day, as with a move). */
+export async function unscheduleTask(id, oldPlanDate) {
+  if (!has('unscheduledTasks')) throw Object.assign(new Error('needs migration 0021'), { code: 'needs_migration' });
+  unwrap(await supabase.from('study_subjects').update({ schedule_id: null, planned_by: null }).eq('id', id));
+  afterTaskWrite(null);
+  if (oldPlanDate) afterTaskWrite(oldPlanDate);
 }
 
 export async function updateTask(id, fields, { planDate = null, refresh = true } = {}) {
@@ -68,9 +102,9 @@ export async function updateTask(id, fields, { planDate = null, refresh = true }
 // Moves the root row to another day's schedule (the "work on it on" date).
 // Its generated study blocks stay where they were; the student regenerates
 // the new day when ready, same as editing a task in the Planner.
-export async function moveTaskToDate(userId, id, newPlanDate, oldPlanDate) {
+export async function moveTaskToDate(userId, id, newPlanDate, oldPlanDate, { plannedBy = 'user' } = {}) {
   const schedule = await getOrCreateScheduleForDate(userId, newPlanDate);
-  unwrap(await supabase.from('study_subjects').update({ schedule_id: schedule.id }).eq('id', id));
+  unwrap(await supabase.from('study_subjects').update(capabilityFilter({ schedule_id: schedule.id, planned_by: plannedBy })).eq('id', id));
   afterTaskWrite(null);
   if (oldPlanDate) afterTaskWrite(oldPlanDate);
 }
@@ -169,4 +203,10 @@ export async function listSubtasksFor(subjectId) {
   const res = await supabase.from('study_subject_subtasks').select('*').eq('subject_id', subjectId).order('sort_order', { ascending: true });
   if (res.error) return [];
   return res.data || [];
+}
+
+/** V4-B.1: open tasks with no planned day (the backlog). */
+export async function listBacklogRows(userId) {
+  if (!has('unscheduledTasks')) return [];
+  return unwrap(await supabase.from('study_subjects').select('*').eq('user_id', userId).is('schedule_id', null).is('completed_at', null));
 }

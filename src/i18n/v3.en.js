@@ -209,7 +209,7 @@ export default {
   'semester.openWeek': "Open week",
   'tasks.addTask': "Add task",
   'tasks.newTitle': "New task",
-  'tasks.newSubtitle': "It's added to your Planner on the day you choose.",
+  'tasks.newSubtitle': "Give it a day now, or leave it in your backlog to plan later.",
   'tasks.editTitle': "Edit task",
   'tasks.create': "Add task",
   'tasks.created': "Task added.",

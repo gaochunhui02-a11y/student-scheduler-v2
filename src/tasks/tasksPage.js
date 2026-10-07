@@ -3,7 +3,7 @@
 // ("Waiting on Outline"), subtasks, links and recurring academic tasks.
 // Tasks are still study_subjects rows that live on a Planner day.
 
-import { t } from '../shared/i18n.js';
+import { t, tCount } from '../shared/i18n.js';
 import { has } from '../shared/capabilities.js';
 import { todayStr, addDays, diffDays, startOfWeek, minutesOfDay } from '../shared/dates.js';
 import { app, onChange } from '../app/context.js';
@@ -22,11 +22,14 @@ import { listDependencies, setTaskDone, listRecurrenceRules, saveRecurrenceRule,
 import { openTaskEditor } from './taskEditor.js';
 import { taskRowHtml } from './taskRow.js';
 import { tagLabel } from './taskEditorSections.js';
+import { VIEWS, BUCKET_ORDER, dueBucket, filterTaskGroups } from './taskFilters.js';
+
+// Kept for existing importers.
+export { dueBucket, filterTaskGroups };
 import { matchesSpace, effectiveSpaceId } from '../workspace/spacesModel.js';
 import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
 import { listProjects, listProjectTaskRows } from '../projects/projectsData.js';
 
-const VIEWS = ['today', 'upcoming', 'overdue', 'open', 'done'];
 const FILTER_KEY = 'student-scheduler-tasks-filters';
 
 function loadFilters() {
@@ -42,46 +45,6 @@ function saveFilters(f) {
   try {
     localStorage.setItem(FILTER_KEY, JSON.stringify({ view: f.view, course: f.course, project: f.project, tag: f.tag, priority: f.priority }));
   } catch { /* per-viewer convenience only */ }
-}
-
-// Which due-date bucket a task falls into.
-export function dueBucket(group, today) {
-  if (group.done) return 'done';
-  if (!group.dueDate) return 'noDate';
-  const d = diffDays(today, group.dueDate);
-  if (d < 0) return 'overdue';
-  if (d === 0) return 'today';
-  if (d === 1) return 'tomorrow';
-  if (group.dueDate <= addDays(startOfWeek(today), 6)) return 'thisWeek';
-  if (d <= 14) return 'nextTwoWeeks';
-  return 'later';
-}
-const BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'thisWeek', 'nextTwoWeeks', 'later', 'noDate', 'done'];
-
-export function filterTaskGroups(groups, filters, today, courseById = new Map(), projectById = new Map()) {
-  const q = (filters.search || '').trim().toLowerCase();
-  return groups.filter((g) => {
-    // V4: the sidebar's space switcher (a task inherits its project's, then its course's space).
-    if (filters.space && !matchesSpace(effectiveSpaceId(g, courseById, projectById), filters.space)) return false;
-    if (filters.project === '__none' && g.projectId) return false;
-    if (filters.project && filters.project !== '__none' && g.projectId !== filters.project) return false;
-    if (filters.view === 'done' && !g.done) return false;
-    if (filters.view !== 'done' && g.done) return false;
-    if (filters.view === 'today' && !(g.dueDate === today || g.dates.includes(today) || g.overdue)) return false;
-    if (filters.view === 'overdue' && !g.overdue) return false;
-    if (filters.view === 'upcoming' && !(g.dueDate && g.dueDate > today && g.dueDate <= addDays(today, 14))) return false;
-    if (filters.course === '__none' && g.courseId) return false;
-    if (filters.course && filters.course !== '__none' && g.courseId !== filters.course) return false;
-    if (filters.tag && !g.tags.includes(filters.tag)) return false;
-    if (filters.priority && g.priority !== filters.priority) return false;
-    if (q) {
-      const course = courseById.get(g.courseId);
-      const project = projectById.get(g.projectId);
-      const hay = [g.name, g.notes, ...(g.tags || []), course ? course.name : '', course ? course.code : '', project ? project.title : ''].join(' ').toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
 }
 
 export function initTasksPage() {
@@ -160,8 +123,11 @@ export function initTasksPage() {
     const tags = [...new Set(data.groups.flatMap((g) => g.tags))].sort();
     const remaining = filtered.filter((g) => !g.done).reduce((s, g) => s + g.remainingMinutes, 0);
 
-    const toolbar = html`<div class="toolbar tasks-toolbar">
-      ${segmented('taskView', VIEWS.map((v) => ({ value: v, label: `${t(`tasks.view_${v}`)}${counts[v] ? ` ${counts[v]}` : ''}` })), filters.view, { label: t('tasks.filterLabel') })}
+    // V4-B.1: the backlog view offers "Plan my backlog" (preview first).
+    const backlogOpen = filters.view === 'unscheduled' ? filtered.filter((g) => !g.done && !g.scheduledDate) : [];
+    const toolbar = html`${backlogOpen.length ? html`<div class="notice notice--info backlog-notice">${raw(icon('calendar'))}<div style="flex:1"><p class="notice-title">${tCount('backlog.count', backlogOpen.length)}</p><p>${t('backlog.explain')}</p></div>${button(t('backlog.planButton'), { variant: 'primary', size: 'sm', action: 'plan-backlog', iconName: 'wand' })}</div>` : ''}
+    <div class="toolbar tasks-toolbar">
+      ${segmented('taskView', VIEWS.filter((v) => v !== 'unscheduled' || has('unscheduledTasks')).map((v) => ({ value: v, label: `${t(`tasks.view_${v}`)}${counts[v] ? ` ${counts[v]}` : ''}` })), filters.view, { label: t('tasks.filterLabel') })}
       <span class="toolbar-spacer"></span>
       <label class="sr-only" for="tasksSearch">${t('tasks.search')}</label>
       <input type="search" id="tasksSearch" class="search-input" placeholder="${t('tasks.search')}" value="${filters.search}" autocomplete="off">
@@ -342,7 +308,11 @@ export function initTasksPage() {
   on(root, 'click', '[data-action]', async (e, el) => {
     const action = el.dataset.action;
     if (action === 'retry') render();
-    else if (action === 'add-task') openTaskEditor({ defaults: { courseId: filters.course && filters.course !== '__none' ? filters.course : null, projectId: filters.project && filters.project !== '__none' ? filters.project : null }, onSaved: () => render() });
+    else if (action === 'plan-backlog') {
+      const scoped = filterTaskGroups(last.groups, { ...filters, view: 'unscheduled', space: currentSpaceFilter() }, last.today, new Map(last.courses.map((c) => [c.id, c])), new Map(last.projects.map((p) => [p.id, p])));
+      const { openPlanBacklog } = await import('../planner/backlogUI.js');
+      openPlanBacklog(scoped.filter((g) => !g.done && !g.scheduledDate), () => render());
+    } else if (action === 'add-task') openTaskEditor({ defaults: { courseId: filters.course && filters.course !== '__none' ? filters.course : null, projectId: filters.project && filters.project !== '__none' ? filters.project : null }, onSaved: () => render() });
     else if (action === 'manage-rules') openRulesDrawer();
     else if (action === 'open-task' || action === 'toggle-done') {
       const id = el.closest('[data-task-id]').dataset.taskId;

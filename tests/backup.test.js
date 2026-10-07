@@ -185,6 +185,21 @@ check('a bad project status / task status override is rejected', () => {
   assert.ok(problems.includes('projects.status'));
   assert.ok(problems.includes('study_subjects.status_override'));
 });
+check('V4-B.1: backlog tasks restore unscheduled; tasks on a conflicting day are still dropped', () => {
+  const s = { id: uid(), for_date: '2026-10-07' };
+  const onDay = { id: uid(), schedule_id: s.id, name: 'On the day', minutes_requested: 30 };
+  const backlog = { id: uid(), schedule_id: null, name: 'Backlog', minutes_requested: 30, planned_by: null };
+  const v = validateBackup({ ...backup, tables: { schedules: [s], study_subjects: [onDay, backlog] } });
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const fresh = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  assert.equal(fresh.inserts.study_subjects.length, 2);
+  assert.equal('schedule_id' in fresh.inserts.study_subjects.find((r) => r.name === 'Backlog'), false); // omitted -> NULL
+  const conflict = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(['2026-10-07']), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  assert.deepEqual(conflict.inserts.study_subjects.map((r) => r.name), ['Backlog']);
+  const oldDb = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, ...restoreAvailability({}), newId: newIds(), userId: 'me' });
+  assert.deepEqual(oldDb.inserts.study_subjects.map((r) => r.name), ['On the day']);
+  assert.equal(restoreAvailability({ unscheduledTasks: 1 }).allowUnscheduled, true);
+});
 check('a bad space icon is rejected', () => {
   const bad = validateBackup({ ...backup, tables: { spaces: [{ id: uid(), name: 'x', icon: '<svg onload=1>' }] } });
   assert.ok(bad.errors.some((e) => e.table === 'spaces' && e.column === 'icon'));

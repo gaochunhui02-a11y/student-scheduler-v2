@@ -6,6 +6,7 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { cached, invalidate } from '../app/store.js';
 import { emitChange } from '../app/context.js';
+import { has } from '../shared/capabilities.js';
 
 function nowIso() {
   return new Date().toISOString();
@@ -182,11 +183,13 @@ export async function listAllCourseTaskRows(userId) {
 // page, workload, semester and search.
 export async function listTaskRowsInWindow(userId, fromDate, toDate) {
   return cached(`tasks:window:${fromDate}:${toDate}`, async () => {
-    const [due, scheduled] = await Promise.all([
+    const [due, scheduled, backlog] = await Promise.all([
       supabase.from('study_subjects').select('*, schedules(for_date)').eq('user_id', userId).gte('due_date', fromDate).lte('due_date', toDate),
       supabase.from('schedules').select('id, for_date').eq('user_id', userId).gte('for_date', fromDate).lte('for_date', toDate),
+      // V4-B.1: unscheduled (backlog) tasks have no day, so no window applies.
+      has('unscheduledTasks') ? supabase.from('study_subjects').select('*, schedules(for_date)').eq('user_id', userId).is('schedule_id', null) : Promise.resolve({ data: [], error: null }),
     ]);
-    const dueRows = withDate(unwrap(due));
+    const dueRows = [...withDate(unwrap(due)), ...withDate(unwrap(backlog))];
     const scheduleIds = (unwrap(scheduled) || []).map((s) => s.id);
     let scheduledRows = [];
     if (scheduleIds.length) {

@@ -113,6 +113,10 @@ export function buildTaskGroups(rows = [], blocks = [], ctx = {}) {
       startTime: root.start_time ? String(root.start_time).slice(0, 5) : null,
       statusOverride: root.status_override || null,
       projectSort: Number.isFinite(root.project_sort) ? root.project_sort : 0,
+      // V4-B.1: the day the task is planned on (null = unscheduled backlog);
+      // separate from dueDate. See tasks/taskDates.js.
+      scheduledDate: root.schedule_id ? root.for_date || null : null,
+      plannedBy: root.planned_by || null,
     });
   });
   return groups;
@@ -165,4 +169,15 @@ export function validateTaskFields(input = {}) {
       notes: typeof input.notes === 'string' ? input.notes.slice(0, TASK_LIMITS.notes) : '',
     },
   };
+}
+
+/**
+ * V4-B.1: the scheduled date is optional; a start time needs one. An empty
+ * or invalid date means "unscheduled" — never silently today.
+ * @returns {{ ok: boolean, error: string|null, planDate: string|null }}
+ */
+export function validateTaskSchedule({ planDate, startTime }) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(planDate || '') ? planDate : null;
+  if (startTime && !date) return { ok: false, error: 'tasks.errStartNeedsDate', planDate: null };
+  return { ok: true, error: null, planDate: date };
 }

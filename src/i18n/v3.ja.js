@@ -206,7 +206,7 @@ export default {
   'semester.openWeek': "この週を開く",
   'tasks.addTask': "タスクを追加",
   'tasks.newTitle': "新しいタスク",
-  'tasks.newSubtitle': "選んだ日のプランナーに追加されます。",
+  'tasks.newSubtitle': "今すぐ日付を決めるか、バックログに残してあとで計画できます。",
   'tasks.editTitle': "タスクを編集",
   'tasks.create': "タスクを追加",
   'tasks.created': "タスクを追加しました。",

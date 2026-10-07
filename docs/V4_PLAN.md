@@ -55,12 +55,13 @@ read this one table.
 | `0018_spaces.sql` | A | `spaces`; nullable `space_id` on `courses`, `study_subjects`, `boards`; ownership triggers |
 | `0019_projects.sql` | B | `projects`, `project_milestones`; nullable `project_id`, `project_milestone_id` on `study_subjects`; `boards.project_id` |
 | `0020_task_fields.sql` | B | `study_subjects.due_time`, `start_time`, `status_override` (in_progress/deferred), `project_sort`; nullable/defaulted only (effort moves to V4-E) |
-| `0021_goals.sql` | C | `goals`, `goal_milestones`, `goal_progress_log`; nullable `goal_id` on `study_subjects`, `projects` |
-| `0022_routines.sql` | C | `routines`, `routine_completions` (unique per routine+date) |
-| `0023_attendance.sql` | G | `attendance_records` (unique per course/series + date) |
+| `0021_unscheduled_tasks.sql` | B.1 | `study_subjects.schedule_id` nullable (unscheduled/backlog), `planned_by`, backlog index, schedule ownership trigger |
+| `0022_goals.sql` | C | `goals`, `goal_milestones`, `goal_progress_log`; nullable `goal_id` on `study_subjects`, `projects` |
+| `0023_routines.sql` | C | `routines`, `routine_completions` (unique per routine+date) |
+| `0024_attendance.sql` | G | `attendance_records` (unique per course/series + date) |
 | `0024_notes.sql` | H | `notes` (one optional parent per kind, ownership-checked) |
 | `0025_resources_v4.sql` | H | resource links to project/goal/exam/space, `tags`, `favorite`, wider `kind` check |
-| `0026_share_links.sql` | I (optional) | read-only share links with random tokens — **only if it stays small; otherwise V4.1** |
+| `0027_share_links.sql` | I (optional) | read-only share links with random tokens — **only if it stays small; otherwise V4.1** |
 
 Rules, enforced by `tests/migrations-v3.test.js` (extended to 0018+) and the
 PGlite database test: additive, idempotent, RLS + four own-row policies on
@@ -178,7 +179,7 @@ Default modules per mode (only built ones are shown):
   `project_id`; it appears in Tasks, the Planner, Week, Calendar, the
   Dashboard and search with no duplication. Neither course nor project is
   required.
-- Tasks still live on a planned day (`schedule_id` NOT NULL) — "optional
+- *(Superseded by V4-B.1 below.)* Tasks still live on a planned day (`schedule_id` NOT NULL) — "optional
   scheduled date" means the editor defaults to today; nothing in V3 had to
   change, and a rollback to V3 still reads every V4 task.
 - Status: To Do / In Progress / Done / Missed / Deferred. Done is still
@@ -212,3 +213,63 @@ Default modules per mode (only built ones are shown):
   (single-user scale; no pagination).
 - Demo mode can now simulate missing V4 tables *and* columns
   (`?premigration=v4|v3`) — still not a substitute for the real database.
+
+### V4-B.1 — True unscheduled (backlog) tasks (done, awaiting review)
+
+Supersedes the V4-B decision "tasks still live on a planned day".
+
+**Date concepts (kept separate, `src/tasks/taskDates.js`):** due date (must
+be finished by) · scheduled date (the day the student plans to work on it;
+the task's `schedule_id`) · start time (optional time on the scheduled day).
+Any combination is valid. Overdue depends only on the due date.
+
+**Migration `0021_unscheduled_tasks.sql` (file only, not applied):**
+- `study_subjects.schedule_id` DROP NOT NULL — NULL = unscheduled. Only a
+  relaxation: every existing row keeps its schedule; every insert that was
+  valid before is still valid. The FK and its cascade are unchanged.
+- `study_subjects.planned_by` ('user' | 'planner', NULL for existing and
+  unscheduled tasks) — who gave the task its day.
+- Partial index for the backlog query (`user_id where schedule_id is null`).
+- Ownership trigger on `schedule_id` (closes a V2 gap: a task could
+  reference another user's schedule id). RLS unchanged (user_id-based).
+- The migration safety test now allowlists exactly this one
+  `drop not null`; any other relaxation fails the test.
+
+**Behaviour:**
+- New tasks (task editor, Quick Add, project "Add task", course page, Home)
+  start unscheduled; the editor shows "Scheduled date (optional)" next to
+  the due date with a Today button. Callers that pass a day (Planner, exam
+  revision plan, recurring tasks, board) are unchanged.
+- Clearing a scheduled task's date returns it to the backlog (its existing
+  blocks stay on that day, as with a move).
+- A start time requires a scheduled date: the editor refuses and focuses the
+  date field; today is never filled in. Pinning only happens with a date.
+- Creating a task never creates a block.
+- Tasks page: new "Unscheduled" view with a count notice and "Plan my
+  backlog"; rows say "Unscheduled" (no day) or "Planned Oct 21" (day, no
+  session yet) instead of V3's ambiguous "Not scheduled".
+- Planner: "Add from backlog" pulls chosen tasks onto the day being planned
+  (planned_by = user). "Plan my backlog" (`src/planner/backlogPlanner.js`)
+  assigns days deterministically — earliest deadline first, then priority,
+  size, name — into each day's free capacity (daily limit minus planned study
+  and exam prep, from the workload forecast) over the next 14 days, before
+  each due date; too big for any day → the roomiest day, marked "Tight"; no
+  room → stays unscheduled and is listed. A preview is shown; nothing moves
+  until the student confirms (planned_by = planner). Sessions are then built
+  by the Planner's normal Generate on that day.
+- Today page (V4-D) contract: `splitForDay()` returns tasks scheduled on the
+  day and, separately, tasks only due that day; an unscheduled task is never
+  a "today" task.
+- Without 0021 the app behaves exactly as V3: a day is required (defaults to
+  today), the Unscheduled view and backlog actions are hidden.
+- Backup: unscheduled tasks restore unscheduled; a task whose day was skipped
+  (conflict) is still dropped with that day; restoring onto a database
+  without 0021 leaves backlog tasks out and reports them as skipped.
+
+**Known limitations (V4-B.1):**
+- "Plan my backlog" assigns whole tasks to single days; a task larger than a
+  day's room is marked Tight (V2 multi-day planning can still spread it).
+- Plan my backlog looks 14 days ahead.
+- Unscheduling a task leaves any already-generated blocks on their day.
+- Rolling back to V3 after creating backlog tasks: V3 shows them without a
+  planned date and can edit them, but cannot create new ones.

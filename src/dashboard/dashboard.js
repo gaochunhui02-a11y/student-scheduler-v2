@@ -1766,6 +1766,17 @@ async function init(session) {
 
   document.getElementById('addClassBtn').addEventListener('click', () => addClassRow());
 
+  // V4-B.1: pull unscheduled (backlog) tasks onto the day being planned.
+  const addFromBacklogBtn = document.getElementById('addFromBacklogBtn');
+  if (addFromBacklogBtn && hasCapability('unscheduledTasks')) {
+    addFromBacklogBtn.hidden = false;
+    addFromBacklogBtn.addEventListener('click', async () => {
+      if (!schedule) return;
+      const { openBacklogPicker } = await import('../planner/backlogUI.js');
+      openBacklogPicker(schedule.for_date, () => loadScheduleForDate(schedule.for_date));
+    });
+  }
+
   // ---------------- Recurring Classes (V2-B) ----------------
   // class_series/class_series_exceptions are user-scoped, not tied to any
   // one schedule_id (a series spans many dates) — loaded once here and

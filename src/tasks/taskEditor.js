@@ -14,7 +14,8 @@ import { fmtClockStr } from '../ui/format.js';
 import { listCourses } from '../academics/academicsData.js';
 import { sortCourses } from '../academics/courseModel.js';
 import { validateTaskFields } from './taskModel.js';
-import { createTask, updateTask, moveTaskToDate, deleteTaskGroup } from './tasksData.js';
+import { createTask, updateTask, moveTaskToDate, deleteTaskGroup, unscheduleTask, canLeaveUnscheduled } from './tasksData.js';
+import { validateTaskSchedule } from './taskModel.js';
 import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
 import { listProjects, listMilestones } from '../projects/projectsData.js';
 import { SETTABLE_STATUSES, universalStatus, overrideForStatus } from './universalStatus.js';
@@ -75,12 +76,18 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
   }
   const v4Fields = has('taskFieldsV4');
   const root = task ? task.root : null;
-  const planDateInitial = task ? (root.for_date || task.firstDate || todayStr()) : (defaults.planDate || todayStr());
+  // V4-B.1: the scheduled (planned) date is optional. A new task starts
+  // unscheduled unless a caller passes a day; without migration 0021 a day
+  // is still required, exactly as in V3.
+  const backlogOk = canLeaveUnscheduled();
+  const planDateInitial = task
+    ? (task.scheduledDate || (backlogOk ? '' : root.for_date || task.firstDate || todayStr()))
+    : (defaults.planDate || (backlogOk ? '' : todayStr()));
   const sectionHandles = [];
 
   openDrawer({
     title: isNew ? t('tasks.newTitle') : t('tasks.editTitle'),
-    subtitle: isNew ? t('tasks.newSubtitle') : '',
+    subtitle: isNew ? t(backlogOk ? 'tasks.newSubtitle' : 'tasks.newSubtitleDay') : '',
     render: (body) => {
       const name = h('input', { type: 'text', id: 'te-name', maxlength: '200', autocomplete: 'off', 'data-autofocus': true, value: root ? root.name : defaults.name || '' });
       const minutes = h('input', { type: 'number', id: 'te-minutes', min: '5', max: '1440', step: '5', inputmode: 'numeric', value: String(root ? root.minutes_requested : defaults.minutes || 60) });
@@ -92,6 +99,22 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
       grid.appendChild(field('te-minutes', 'tasks.fieldMinutes', minutes));
       grid.appendChild(field('te-due', 'tasks.fieldDue', due));
       body.appendChild(grid);
+
+      // Scheduled date (when to work on it) — separate from the due date.
+      const planWrap = h('div', { class: 'te-plan-row' }, plan,
+        h('button', { type: 'button', class: 'btn btn--secondary btn--sm', 'data-action': 'plan-today' }, t('tasks.planToday')));
+      body.appendChild(field('te-plan', backlogOk ? 'tasks.fieldScheduled' : 'tasks.fieldPlanDate', planWrap, {
+        hint: backlogOk ? t('tasks.fieldScheduledHint') : t('tasks.fieldPlanDateHint'),
+      }));
+      // The describedby belongs on the date input, not its wrapper.
+      plan.setAttribute('aria-describedby', planWrap.getAttribute('aria-describedby'));
+      planWrap.removeAttribute('aria-describedby');
+      planWrap.querySelector('[data-action="plan-today"]').addEventListener('click', () => {
+        plan.value = todayStr();
+        plan.dispatchEvent(new Event('change'));
+        plan.focus();
+      });
+      if (!backlogOk) plan.required = true;
 
       // Course and project side by side; a task needs neither.
       const where = h('div', { class: 'field-grid' });
@@ -120,7 +143,6 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
         h('option', { value: 'low' }, t('taskFilter.priorityLow')));
       priority.value = root ? root.priority || 'medium' : 'medium';
       const moreGrid = h('div', { class: 'field-grid' });
-      moreGrid.appendChild(field('te-plan', 'tasks.fieldPlanDate', plan, { hint: t('tasks.fieldPlanDateHint') }));
       moreGrid.appendChild(field('te-priority', 'tasks.fieldPriority', priority));
       if (v4Fields) {
         moreGrid.appendChild(field('te-due-time', 'tasks.fieldDueTime', h('input', { type: 'time', id: 'te-due-time', value: task ? task.dueTime || '' : '' })));
@@ -224,7 +246,20 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
             if (!st.disabled && st.value !== 'missed') fields.status_override = overrideForStatus(st.value);
           }
           sectionHandles.forEach((hd) => { if (hd.collect) Object.assign(fields, hd.collect()); });
-          const planDate = body.querySelector('#te-plan').value || todayStr();
+          // V4-B.1: no date = unscheduled; a start time needs a date (never today by default).
+          const sched = validateTaskSchedule({ planDate: body.querySelector('#te-plan').value, startTime });
+          setError(body, 'te-plan', null);
+          if (!sched.ok) {
+            setError(body, 'te-plan', sched.error);
+            body.querySelector('#te-plan').focus();
+            return;
+          }
+          if (!sched.planDate && !backlogOk) {
+            setError(body, 'te-plan', 'tasks.errDateRequired');
+            body.querySelector('#te-plan').focus();
+            return;
+          }
+          const planDate = sched.planDate;
           const formErr = body.querySelector('#te-form-error');
           formErr.textContent = '';
           btn.textContent = t('common.saving');
@@ -236,7 +271,11 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
               taskId = row.id;
             } else {
               await updateTask(root.id, fields, { planDate: root.for_date });
-              if (root.for_date && planDate !== root.for_date) await moveTaskToDate(ctx.userId, root.id, planDate, root.for_date);
+              const oldDate = task.scheduledDate || null;
+              if (planDate !== oldDate) {
+                if (planDate) await moveTaskToDate(ctx.userId, root.id, planDate, oldDate);
+                else await unscheduleTask(root.id, oldDate);
+              }
               taskId = root.id;
             }
             for (const hd of sectionHandles) {
@@ -246,7 +285,7 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
             // V4-B: a start time pins a study block at that time on the planned
             // day (once — not if the task already has a block that day).
             let pinNote = null;
-            if (startTime && (isNew || startTime !== task.startTime)) {
+            if (startTime && planDate && (isNew || startTime !== task.startTime || planDate !== (task.scheduledDate || null))) {
               const start = clockToMinutes(startTime);
               const minutes = Math.min(Number(fields.minutes_requested) || 30, 240);
               if (start !== null && start + minutes <= 1440 && !(await taskHasBlockOn(taskId, planDate, ctx.userId).catch(() => true))) {

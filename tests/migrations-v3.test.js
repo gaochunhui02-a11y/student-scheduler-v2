@@ -65,6 +65,14 @@ v3.forEach((file) => {
     assert.doesNotMatch(sql, /alter column \w+ (set data )?type\b/);
     assert.doesNotMatch(sql, /alter column \w+ set not null/);
   });
+  check(`${file}: NOT NULL is only relaxed where reviewed (study_subjects.schedule_id, 0021)`, () => {
+    // Relaxing a constraint keeps every existing row and insert valid, but
+    // each one changes what the app may store, so each is allowlisted.
+    const ALLOWED = ['alter table public.study_subjects alter column schedule_id drop not null'];
+    const found = [...sql.matchAll(/alter table [\w.]+ alter column \w+ drop not null/g)].map((m) => m[0]);
+    found.forEach((stmt) => assert.ok(ALLOWED.includes(stmt), `unreviewed: ${stmt}`));
+    if (file.startsWith('0021')) assert.deepEqual(found, ALLOWED);
+  });
   check(`${file}: added columns are nullable or have a default`, () => {
     const adds = [...sql.matchAll(/add column if not exists (\w+) ([^,;]+)/g)];
     adds.forEach(([, col, def]) => {

@@ -110,3 +110,20 @@
 .project-tasks > .card-head,
 .project-milestones > .card-head { margin: 0; padding: var(--space-4) var(--space-4) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
 .project-tasks > .empty-state, .project-milestones > .empty-state { padding: var(--space-5) var(--space-4); }
+
+/* V4-B.1: task editor scheduled date + Today button */
+.te-plan-row { display: flex; align-items: center; gap: var(--space-2); }
+.te-plan-row input { flex: 1 1 auto; min-width: 0; }
+.te-plan-row .btn { flex: none; }
+
+/* V4-B.1 backlog */
+.backlog-notice { margin-bottom: var(--space-4); align-items: center; }
+.backlog-plan { list-style: none; margin: var(--space-2) 0 var(--space-3); padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); }
+.backlog-plan li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-3); padding: 8px var(--space-3); font-size: var(--text-sm); }
+.backlog-plan li + li { border-top: 1px solid var(--border-subtle); }
+.backlog-plan-name { flex: 1 1 160px; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.backlog-plan-day { color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.backlog-pick { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.backlog-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-3); min-height: 44px; padding: 6px 2px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
+.backlog-pick-row input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.add-btn--secondary { margin-top: 6px; }

@@ -192,6 +192,29 @@ afterProj.length === 1 && afterProj[0].project_id === null && afterProj[0].proje
 const msLeft = (await rows(`select count(*)::int n from public.project_milestones where project_id = $1`, [projA]))[0].n;
 msLeft === 0 ? ok("deleting a project removes its milestones") : bad('milestones remain', String(msLeft));
 
+console.log('\n=== V4-B.1 unscheduled (backlog) tasks (0021) ===');
+await as(A);
+const proj3 = await ins('A project for backlog tasks', `insert into public.projects (user_id, title) values ($1, 'Portfolio 2')`, [A]);
+const bl1 = await ins('generic task with NO scheduled date and NO due date', `insert into public.study_subjects (user_id, name, minutes_requested) values ($1, 'Read Deep Work', 60)`, [A]);
+const bl2 = await ins('project task with a due date but NO scheduled date', `insert into public.study_subjects (user_id, name, minutes_requested, project_id, due_date) values ($1, 'Rewrite About page', 45, $2, '2026-10-30')`, [A, proj3]);
+const blRows = await rows(`select schedule_id, planned_by from public.study_subjects where id in ($1, $2)`, [bl1, bl2]);
+blRows.every((r) => r.schedule_id === null && r.planned_by === null) ? ok('backlog tasks have schedule_id NULL and planned_by NULL') : bad('backlog rows', JSON.stringify(blRows));
+const v3still = await rows(`select schedule_id from public.study_subjects where id = $1`, [taskA2]);
+v3still[0].schedule_id === schedA ? ok('existing scheduled (V3) task keeps its schedule') : bad('V3 task changed', JSON.stringify(v3still));
+const schedLater = await ins('A future day', `insert into public.schedules (user_id, for_date) values ($1, '2026-10-24')`, [A]);
+await expectOk('the backlog task can be scheduled later (by the planner)', `update public.study_subjects set schedule_id = $2, planned_by = 'planner' where id = $1`, [bl2, schedLater]);
+await expectOk('and unscheduled again', `update public.study_subjects set schedule_id = null, planned_by = null where id = $1`, [bl2]);
+await expectErr('planned_by limited to user/planner', `update public.study_subjects set planned_by = 'robot' where id = $1`, [bl1], /check/);
+const projTaskCount = (await rows(`select count(*)::int n from public.study_subjects where project_id = $1`, [proj3]))[0].n;
+projTaskCount === 1 ? ok('unscheduled project task is still found by its project') : bad('project lookup', String(projTaskCount));
+await as(B);
+const bSees = (await rows(`select count(*)::int n from public.study_subjects where schedule_id is null`))[0].n;
+bSees === 0 ? ok("B sees none of A's backlog tasks") : bad('B sees A backlog', String(bSees));
+await expectErr("B task on A's schedule rejected (schedule ownership, 0021)", `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested) values ($1, $2, 'x', 30)`, [B, schedA], /42501|does not belong/);
+await expectErr("B can't move own task onto A's schedule", `update public.study_subjects set schedule_id = $2 where id = $1`, [taskB, schedA], /42501|does not belong/);
+await expectOk('B creates own backlog task', `insert into public.study_subjects (user_id, name, minutes_requested) values ($1, 'B backlog', 20)`, [B]);
+await as(A);
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);
@@ -206,7 +229,7 @@ await expectOk('deleting user A cascades everything of A', `delete from auth.use
 const left = (await rows(`select (select count(*) from public.study_subjects where user_id = $1) + (select count(*) from public.exams where user_id = $1) + (select count(*) from public.task_recurrence_rules where user_id = $1) as n`, [A]))[0].n;
 Number(left) === 0 ? ok('no rows of A remain') : bad('rows of A remain', String(left));
 const bLeft = (await rows(`select count(*)::int n from public.study_subjects where user_id = $1`, [B]))[0].n;
-bLeft === 1 ? ok("B's data untouched") : bad("B's data changed", String(bLeft));
+bLeft === 2 ? ok("B's data untouched (its task + backlog task)") : bad("B's data changed", String(bLeft));
 
 console.log(`\n------------------------\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

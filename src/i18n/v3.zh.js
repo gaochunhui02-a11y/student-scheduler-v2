@@ -206,7 +206,7 @@ export default {
   'semester.openWeek': "打开这一周",
   'tasks.addTask': "添加任务",
   'tasks.newTitle': "新建任务",
-  'tasks.newSubtitle': "它会被添加到你选择的那天的计划中。",
+  'tasks.newSubtitle': "现在为它指定日期，或留在待办清单中稍后安排。",
   'tasks.editTitle': "编辑任务",
   'tasks.create': "添加任务",
   'tasks.created': "任务已添加。",

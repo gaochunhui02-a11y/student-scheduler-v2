@@ -27,7 +27,7 @@ export const TABLE_DEFAULTS = {
   }),
   classes: () => ({ sort_order: 0, source: 'manual', course_id: null }),
   study_subjects: () => ({
-    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null, project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0,
+    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null, project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0, planned_by: null,
     actual_minutes: null, completed_at: null, dependency_override: false, exam_topic_id: null, recurrence_rule_id: null, recurrence_date: null,
   }),
   schedule_items: () => ({ sort_order: 0, locked: false, completed: false, completed_minutes: 0, missed: false, carried_over_minutes: 0, source_subject_id: null }),
