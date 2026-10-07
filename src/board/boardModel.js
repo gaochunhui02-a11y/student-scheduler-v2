@@ -724,3 +724,36 @@ export function classifyNodeDue(node, todayDateStr, plannerStatusMap) {
   return 'upcoming';
 }
 
+
+// V3-J: project summary for the Board header — done / in progress /
+// planned counts over task + milestone nodes, estimated time still to do,
+// overdue work and the next milestone. Pure; same status rules as above.
+export function computeProjectSummary(nodes, plannerStatusMap, todayDateStr) {
+  const work = (nodes || []).filter((n) => n && PROGRESS_NODE_TYPES.includes(n.node_type));
+  let done = 0;
+  let inProgress = 0;
+  let remainingMinutes = 0;
+  let overdue = 0;
+  work.forEach((n) => {
+    const st = effectiveNodeStatus(n, plannerStatusMap);
+    if (st === 'done') done += 1;
+    else {
+      if (st === 'in_progress' || st === 'partial') inProgress += 1;
+      const est = normalizeNodeEstimate(n.estimated_minutes);
+      if (est) remainingMinutes += est;
+      if (classifyNodeDue(n, todayDateStr, plannerStatusMap) === 'overdue') overdue += 1;
+    }
+  });
+  const milestones = work
+    .filter((n) => n.node_type === 'milestone' && effectiveNodeStatus(n, plannerStatusMap) !== 'done' && normalizeNodeDueDate(n.due_date))
+    .sort((a, b) => normalizeNodeDueDate(a.due_date).localeCompare(normalizeNodeDueDate(b.due_date)));
+  return {
+    total: work.length,
+    done,
+    inProgress,
+    planned: work.length - done - inProgress,
+    remainingMinutes,
+    overdue,
+    nextMilestone: milestones[0] ? { id: milestones[0].id, title: milestones[0].title, dueDate: normalizeNodeDueDate(milestones[0].due_date) } : null,
+  };
+}

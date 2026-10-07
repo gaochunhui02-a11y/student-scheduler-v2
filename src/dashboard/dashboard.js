@@ -114,7 +114,8 @@ import { detectScheduleConflicts, classesToMinutes } from './conflictModel.js';
 import { shouldShowOnboarding } from './onboardingModel.js';
 import { IS_DEMO } from '../lib/supabaseClient.js';
 import { exitDemoMode } from '../demo/demoMode.js';
-import { probeCapabilities } from '../shared/capabilities.js';
+import { probeCapabilities, has as hasCapability } from '../shared/capabilities.js';
+import { capabilityFilter } from '../tasks/tasksData.js';
 import { setAppContext } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
@@ -468,7 +469,7 @@ async function init(session) {
     createStudyTaskFromBoard: async (fields) => {
       if (!schedule) throw new Error('No active schedule to attach the study task to.');
       const sortOrder = studyList.children.length;
-      const created = await insertStudySubject(schedule.id, userId, fields, sortOrder);
+      const created = await insertStudySubject(schedule.id, userId, capabilityFilter(fields), sortOrder);
       addStudyRow(created);
       refreshHistoryList();
       return created;
@@ -477,6 +478,24 @@ async function init(session) {
     // V2-D: read-only. Lets the Board show each linked node's Planner
     // status; nothing on this path writes to either side.
     getLinkedScheduleItems: (subjectIds) => loadLinkedScheduleItems(subjectIds),
+    // V3-J: completion set in Tasks, the board's course, course choices.
+    getLinkedTaskDoneIds: async (subjectIds) => {
+      if (!hasCapability('taskExtensions') || !subjectIds.length) return [];
+      const { data, error } = await supabase.from('study_subjects').select('id, completed_at').in('id', subjectIds);
+      if (error) return [];
+      return (data || []).filter((r) => r.completed_at).map((r) => r.id);
+    },
+    listCoursesForBoards: async () => {
+      if (!hasCapability('courses') || !hasCapability('boardCourseLinks')) return null;
+      const { data, error } = await supabase.from('courses').select('id, name, code, archived').eq('user_id', userId).order('sort_order', { ascending: true });
+      if (error) return null;
+      return (data || []).filter((c) => !c.archived);
+    },
+    setBoardCourse: async (boardId, courseId) => {
+      const { error } = await supabase.from('boards').update({ course_id: courseId, updated_at: new Date().toISOString() }).eq('id', boardId);
+      if (error) throw error;
+      invalidateCache('boards');
+    },
   };
   const boardSection = initBoardSection(userId, boardHostApi);
 

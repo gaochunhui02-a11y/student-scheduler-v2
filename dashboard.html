@@ -582,13 +582,16 @@
             <p class="board-subtitle" data-i18n="board.subtitle">Plan projects and break work into connected steps.</p>
             <div class="board-progress" id="boardProgress" hidden>
               <div class="board-progress-text" id="boardProgressText"></div>
-              <div class="board-progress-bar" aria-hidden="true"><span id="boardProgressFill"></span></div>
+              <div class="board-progress-bar" aria-hidden="true"><span id="boardProgressFill"></span><span id="boardProgressActive" class="board-progress-active"></span></div>
+              <div class="board-progress-detail" id="boardProgressDetail" hidden></div>
             </div>
           </div>
 
           <div class="board-selector-row" id="boardSelectorRow" hidden>
             <label for="boardSelect" class="sr-only" data-i18n="board.boardsLabel">Boards</label>
             <select id="boardSelect" class="board-select" data-i18n-aria-label="board.boardsLabel" aria-label="Boards"></select>
+            <label for="boardCourseSelect" class="sr-only" data-i18n="board3.courseLabel">Course</label>
+            <select id="boardCourseSelect" class="board-select board-course-select" data-i18n-aria-label="board3.courseLabel" aria-label="Course" hidden></select>
             <input type="text" id="boardTitleInput" class="board-title-input" data-i18n-aria-label="board.titleLabel" aria-label="Board title" data-i18n-placeholder="board.titleLabel" placeholder="Board title" hidden>
             <button type="button" class="btn-primary board-new-btn" id="boardNewBtn">+ <span data-i18n="board.newBoard">New Board</span></button>
             <details class="board-more-menu">

@@ -425,4 +425,12 @@ export default {
   'conflicts.actionEditPrefs': "上限を調整",
   'calendar3.providerIcs': "カレンダーファイル（.ics）",
   'calendar3.providerGoogle': "Google カレンダー",
+  'board3.courseLabel': "科目",
+  'board3.noCourse': "科目なし",
+  'board3.courseSaved': "ボードを科目に関連付けました。",
+  'board3.inProgressN': "進行中 {n} 件",
+  'board3.remaining': "残り約 {time}",
+  'board3.overdueN': "期限切れ {n} 件",
+  'board3.nextMilestone': "次のマイルストーン：{name}（{date}）",
+  'board3.courseBoards': "プロジェクトとボード",
 };

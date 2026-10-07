@@ -44,6 +44,7 @@ import {
   removeEdgesForNode,
   removeEdgeById,
   studyTaskDefaultsFromNode,
+  computeProjectSummary,
   buildStudyTaskFields,
   isStudyTaskFieldsValid,
   isNodeConverted,
@@ -360,7 +361,8 @@ export function initBoardSection(userId, hostApi = {}) {
 
       submitBtn.disabled = true;
       try {
-        const created = await hostApi.createStudyTaskFromBoard(fields);
+        // V3-J: tasks created from a course's board belong to that course.
+        const created = await hostApi.createStudyTaskFromBoard(currentBoard && currentBoard.course_id ? { ...fields, course_id: currentBoard.course_id } : fields);
         await updateNode(userId, node.id, { linkedStudySubjectId: created.id });
         const index = nodes.findIndex((n) => n.id === node.id);
         if (index !== -1) nodes[index] = linkNodeToStudyTask(nodes[index], created.id);
@@ -560,6 +562,59 @@ export function initBoardSection(userId, hostApi = {}) {
   // never write back into board_nodes, and nothing here writes to the
   // Planner. That one-way shape is what rules out a sync loop.
 
+  // ---------------- V3-J: board <-> course ----------------
+  const boardCourseSelect = document.getElementById('boardCourseSelect');
+  let courseOptionsLoaded = false;
+  async function syncBoardCourse() {
+    if (!boardCourseSelect) return;
+    if (typeof hostApi.listCoursesForBoards !== 'function') {
+      boardCourseSelect.hidden = true;
+      return;
+    }
+    try {
+      if (!courseOptionsLoaded) {
+        const courses = await hostApi.listCoursesForBoards();
+        if (!courses) {
+          boardCourseSelect.hidden = true;
+          return;
+        }
+        boardCourseSelect.innerHTML = '';
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = t('board3.noCourse');
+        boardCourseSelect.appendChild(none);
+        courses.forEach((c) => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.code ? `${c.code} — ${c.name}` : c.name;
+          boardCourseSelect.appendChild(opt);
+        });
+        courseOptionsLoaded = true;
+      }
+      boardCourseSelect.hidden = !currentBoard;
+      boardCourseSelect.value = currentBoard && currentBoard.course_id ? currentBoard.course_id : '';
+    } catch (err) {
+      console.error('Could not load courses for the board', err);
+      boardCourseSelect.hidden = true;
+    }
+  }
+  if (boardCourseSelect) {
+    boardCourseSelect.addEventListener('change', async () => {
+      if (!currentBoard || typeof hostApi.setBoardCourse !== 'function') return;
+      const value = boardCourseSelect.value || null;
+      const previous = currentBoard.course_id || null;
+      try {
+        await hostApi.setBoardCourse(currentBoard.id, value);
+        currentBoard = { ...currentBoard, course_id: value };
+        showBoardStatus(t('board3.courseSaved'));
+      } catch (err) {
+        console.error(err);
+        boardCourseSelect.value = previous || '';
+        showBoardStatus(t('v3.saveError'));
+      }
+    });
+  }
+
   async function refreshPlannerStatuses() {
     const token = switchToken;
     const linkedIds = Array.from(new Set(nodes.map((n) => n.linked_study_subject_id).filter(Boolean)));
@@ -575,6 +630,13 @@ export function initBoardSection(userId, hostApi = {}) {
       if (token !== switchToken) return; // board switched while loading
       const now = new Date();
       plannerStatusMap = buildPlannerStatusMap(nodes, items, { nowMinutes: now.getHours() * 60 + now.getMinutes() });
+      // V3-J: a linked task marked done in Tasks (completed_at) counts as
+      // done here even without study blocks. Still read-only: no writes.
+      if (typeof hostApi.getLinkedTaskDoneIds === 'function') {
+        const doneIds = await hostApi.getLinkedTaskDoneIds(linkedIds);
+        if (token !== switchToken) return;
+        doneIds.forEach((id) => plannerStatusMap.set(id, 'done'));
+      }
       renderNodes();
       renderEdges();
     } catch (err) {
@@ -612,6 +674,20 @@ export function initBoardSection(userId, hostApi = {}) {
     if (progressEl.hidden) return;
     progressTextEl.textContent = progressText(p);
     progressFillEl.style.width = `${p.percent}%`;
+    // V3-J: in-progress share + remaining time, overdue and next milestone.
+    const summary = computeProjectSummary(nodes, plannerStatusMap, localTodayStr());
+    const activeEl = document.getElementById('boardProgressActive');
+    if (activeEl) activeEl.style.width = `${summary.total ? Math.round((summary.inProgress / summary.total) * 100) : 0}%`;
+    const detailEl = document.getElementById('boardProgressDetail');
+    if (detailEl) {
+      const parts = [];
+      if (summary.inProgress) parts.push(t('board3.inProgressN').replace('{n}', String(summary.inProgress)));
+      if (summary.remainingMinutes) parts.push(t('board3.remaining').replace('{time}', formatMinutesShort(summary.remainingMinutes)));
+      if (summary.overdue) parts.push(t('board3.overdueN').replace('{n}', String(summary.overdue)));
+      if (summary.nextMilestone) parts.push(t('board3.nextMilestone').replace('{name}', summary.nextMilestone.title || t('nodeType.milestone')).replace('{date}', formatDueShort(summary.nextMilestone.dueDate)));
+      detailEl.textContent = parts.join(' · ');
+      detailEl.hidden = parts.length === 0;
+    }
   }
 
   // Goal/subject nodes: progress of the task/milestone nodes beneath them.
@@ -1476,6 +1552,7 @@ export function initBoardSection(userId, hostApi = {}) {
         return;
       }
       currentBoard = data.board;
+      syncBoardCourse();
       nodes = filterNodesByBoard(data.nodes, currentBoard.id);
       edges = filterEdgesByBoard(data.edges, currentBoard.id);
       if (titleInput) titleInput.value = currentBoard.title;

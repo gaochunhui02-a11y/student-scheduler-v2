@@ -425,4 +425,12 @@ export default {
   'conflicts.actionEditPrefs': "Adjust limits",
   'calendar3.providerIcs': "Calendar files (.ics)",
   'calendar3.providerGoogle': "Google Calendar",
+  'board3.courseLabel': "Course",
+  'board3.noCourse': "No course",
+  'board3.courseSaved': "Board linked to the course.",
+  'board3.inProgressN': "{n} in progress",
+  'board3.remaining': "about {time} left",
+  'board3.overdueN': "{n} overdue",
+  'board3.nextMilestone': "next milestone: {name} ({date})",
+  'board3.courseBoards': "Projects & boards",
 };

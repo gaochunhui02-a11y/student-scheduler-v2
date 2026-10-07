@@ -425,4 +425,12 @@ export default {
   'conflicts.actionEditPrefs': "调整上限",
   'calendar3.providerIcs': "日历文件（.ics）",
   'calendar3.providerGoogle': "Google 日历",
+  'board3.courseLabel': "课程",
+  'board3.noCourse': "不属于任何课程",
+  'board3.courseSaved': "看板已关联到课程。",
+  'board3.inProgressN': "{n} 项进行中",
+  'board3.remaining': "大约还剩 {time}",
+  'board3.overdueN': "{n} 项逾期",
+  'board3.nextMilestone': "下一个里程碑：{name}（{date}）",
+  'board3.courseBoards': "项目与看板",
 };

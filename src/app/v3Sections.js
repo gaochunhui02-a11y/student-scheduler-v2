@@ -12,6 +12,7 @@ import { initExamsPage } from '../exams/examsPage.js';
 import { initTasksPage } from '../tasks/tasksPage.js';
 import '../tasks/taskEditorSections.js';
 import '../resources/resourcesUI.js';
+import '../board/boardCourseWidget.js';
 
 function placeholderSection(viewId, titleKey) {
   const root = document.getElementById(viewId);

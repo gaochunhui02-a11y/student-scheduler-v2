@@ -169,3 +169,10 @@
 .edit-move-btn:hover { border-color: var(--border-strong); }
 .cal3-ev.is-short { flex-direction: row; align-items: center; gap: 6px; padding-top: 1px; padding-bottom: 1px; }
 .cal3-ev.is-short .cal3-ev-time { flex: none; }
+
+/* ---------------- Board additions (V3-J) ---------------- */
+.board-progress-bar { position: relative; display: flex; }
+.board-progress-bar .board-progress-active { display: block; height: 100%; background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.board-header .board-progress { max-width: 460px; }
+.board-progress-detail { margin-top: 4px; font-size: var(--text-xs); color: var(--muted); }
+.board-course-select { max-width: 200px; }
