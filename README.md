@@ -403,6 +403,22 @@ pure logic those functions call internally.
 
 Run this (and `npm run build`) before shipping any change.
 
+### Database test (optional, not part of `npm test`)
+
+`tests/db/migrations-pglite.mjs` applies `schema.sql` and every migration to
+a throwaway in-memory Postgres 17 (PGlite) with a small Supabase auth shim,
+re-applies 0010–0017 to prove they are idempotent, then acts as two users to
+check RLS isolation, cross-user ownership triggers, the dependency-cycle
+guard, CHECK constraints, unique indexes and delete cascades (93 checks).
+It never connects to any real database:
+
+```
+npm i --no-save @electric-sql/pglite && node tests/db/migrations-pglite.mjs
+```
+
+It is stock Postgres, not Supabase, so a run on a Supabase staging project is
+still the final check.
+
 ## Screenshots
 
 > Screenshots have not been captured yet. Run the app locally (see
