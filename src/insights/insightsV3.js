@@ -101,7 +101,7 @@ export function initInsightsV3() {
     const courseColor = (id) => safeColor(id && courseById.get(id) ? courseById.get(id).color : '', '#8a91a0');
 
     // A. study time by course (last 30 days)
-    const byCourse = studyMinutesByCourse({ schedules: d.range.schedules, items: d.range.items, subjectCourse: d.subjectCourse, from: addDays(d.today, -29), to: d.today });
+    const byCourse = studyMinutesByCourse({ schedules: d.range.schedules, items: d.range.items, subjectCourse: d.subjectCourse, from: addDays(d.today, -29), to: d.today, knownCourseIds: new Set(courseById.keys()) });
     const totalStudy = byCourse.reduce((s, x) => s + x.minutes, 0);
     const maxCourse = Math.max(1, ...byCourse.map((x) => x.minutes));
     const studyCard = card('insights3.timeTitle', 'insights3.timeQ', byCourse.length

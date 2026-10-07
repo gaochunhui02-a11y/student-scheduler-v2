@@ -10,9 +10,11 @@ export const MIN_FOCUS_SESSIONS = 5;
 /**
  * "Where does my study time go?" — completed study minutes per course in
  * [from, to], from study blocks (block date = its schedule's date).
+ * Course ids not in `knownCourseIds` (deleted, or courses not readable)
+ * fall into the single null-course bucket instead of one row each.
  * @returns {Array<{courseId, minutes}>} sorted by minutes, plus a null-course bucket
  */
-export function studyMinutesByCourse({ schedules, items, subjectCourse, from, to }) {
+export function studyMinutesByCourse({ schedules, items, subjectCourse, from, to, knownCourseIds = null }) {
   const dateById = new Map(schedules.map((s) => [s.id, s.for_date]));
   const totals = new Map();
   items.filter((i) => i.item_type === 'study').forEach((i) => {
@@ -20,7 +22,8 @@ export function studyMinutesByCourse({ schedules, items, subjectCourse, from, to
     if (!d || d < from || d > to) return;
     const mins = blockCompletedMinutes(i);
     if (!mins) return;
-    const course = subjectCourse.get(i.source_subject_id) || null;
+    let course = subjectCourse.get(i.source_subject_id) || null;
+    if (course && knownCourseIds && !knownCourseIds.has(course)) course = null;
     totals.set(course, (totals.get(course) || 0) + mins);
   });
   return [...totals.entries()].map(([courseId, minutes]) => ({ courseId, minutes })).sort((a, b) => b.minutes - a.minutes);

@@ -58,6 +58,14 @@ check('recent sessions and overdue lists', () => {
   assert.deepEqual(overdueTasks(groups, '2026-10-07').map((g) => g.id), ['x']);
 });
 
+check('unknown course ids merge into one "no course" bucket', () => {
+  const sc = new Map([['s1', 'gone-1'], ['s2', 'gone-2'], ['s3', 'c1']]);
+  const sch = [{ id: 'd', for_date: '2026-10-01' }];
+  const its = ['s1', 's2', 's3'].map((sid, k) => ({ id: 'i' + k, schedule_id: 'd', item_type: 'study', source_subject_id: sid, start_minutes: 600, end_minutes: 630, completed: true }));
+  const r = studyMinutesByCourse({ schedules: sch, items: its, subjectCourse: sc, from: '2026-09-01', to: '2026-10-07', knownCourseIds: new Set(['c1']) });
+  assert.deepEqual(r.map((x) => [x.courseId, x.minutes]), [[null, 60], ['c1', 30]]);
+});
+
 console.log('\n------------------------');
 if (failures > 0) {
   console.log(`${failures} check(s) FAILED`);
