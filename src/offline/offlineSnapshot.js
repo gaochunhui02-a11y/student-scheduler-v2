@@ -1,0 +1,74 @@
+// Offline read mode (V3-P). After the Dashboard loads, a small read-only
+// snapshot (today's timeline, open tasks, courses, upcoming exams) is kept
+// in localStorage under the signed-in user's id. If the app is opened or
+// reloaded without a connection, the Dashboard shows that snapshot,
+// clearly labelled, instead of an error. Nothing is written back from it.
+// Snapshots are removed on sign-out. The service worker never caches
+// Supabase responses — this is the only offline copy of user data, it
+// stays on this device, and it is deliberately small.
+
+const PREFIX = 'student-scheduler-offline:';
+const MAX_TASKS = 25;
+const MAX_EXAMS = 8;
+const MAX_COURSES = 30;
+
+const str = (v, max = 200) => String(v ?? '').slice(0, max);
+
+/** Pure: reduce the Dashboard's loaded data to the snapshot shape. */
+export function buildOfflineSnapshot(d, savedAt) {
+  const courses = (d.courses || []).slice(0, MAX_COURSES).map((c) => ({ id: c.id, name: str(c.name, 120), code: str(c.code, 32), color: /^#[0-9a-fA-F]{6}$/.test(c.color || '') ? c.color : null }));
+  const known = new Set(courses.map((c) => c.id));
+  const tasks = (d.groups || [])
+    .filter((g) => !g.done)
+    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))
+    .slice(0, MAX_TASKS)
+    .map((g) => ({ name: str(g.name), dueDate: g.dueDate || null, remainingMinutes: Number(g.remainingMinutes) || 0, courseId: known.has(g.courseId) ? g.courseId : null }));
+  const timeline = (d.todayEvents || [])
+    .slice()
+    .sort((a, b) => a.start - b.start)
+    .map((e) => ({ kind: e.kind, title: str(e.title), start: e.start, end: e.end, completed: Boolean(e.completed), courseId: known.has(e.courseId) ? e.courseId : null }));
+  const exams = (d.exams || [])
+    .filter((x) => x.exam_date >= d.today)
+    .sort((a, b) => a.exam_date.localeCompare(b.exam_date))
+    .slice(0, MAX_EXAMS)
+    .map((x) => ({ name: str(x.name, 120), date: x.exam_date, courseId: known.has(x.course_id) ? x.course_id : null }));
+  return { v: 1, savedAt, date: d.today, timeline, tasks, courses, exams };
+}
+
+/** Pure: is a stored value a usable snapshot? */
+export function isValidSnapshot(s) {
+  return Boolean(s && s.v === 1 && typeof s.savedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date || '')
+    && Array.isArray(s.timeline) && Array.isArray(s.tasks) && Array.isArray(s.courses) && Array.isArray(s.exams));
+}
+
+export function saveOfflineSnapshot(userId, snapshot) {
+  if (!userId) return;
+  try {
+    localStorage.setItem(PREFIX + userId, JSON.stringify(snapshot));
+  } catch {
+    // storage full or blocked — offline mode just won't have a snapshot
+  }
+}
+
+export function loadOfflineSnapshot(userId) {
+  if (!userId) return null;
+  try {
+    const s = JSON.parse(localStorage.getItem(PREFIX + userId));
+    return isValidSnapshot(s) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+// Sign-out: remove every user's snapshot from this device.
+export function clearOfflineSnapshots() {
+  try {
+    Object.keys(localStorage).filter((k) => k.startsWith(PREFIX)).forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // nothing stored
+  }
+}
+
+export function isOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}

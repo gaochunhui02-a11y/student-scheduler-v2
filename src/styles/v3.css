@@ -8,6 +8,7 @@
 @import "./v3-insights.css";
 @import "./v3-home.css";
 @import "./v3-quickadd.css";
+@import "./v3-settings.css";
 
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:

@@ -1,0 +1,68 @@
+/* ==========================================================================
+   Settings V3 (Courses & semester, Keyboard, About, Backup & restore)
+   and the offline banner (V3-P).
+   ========================================================================== */
+
+.settings3-subhead { margin: var(--space-6) 0 var(--space-1); font-size: var(--text-md); font-weight: 650; }
+.settings-panel > .settings3-subhead:first-child,
+#settingsBackupV3 > .settings3-subhead:first-child { margin-top: var(--space-2); }
+
+.settings3-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-3); margin: var(--space-3) 0 var(--space-4); }
+.settings3-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.settings3-stat strong { font-size: var(--text-lg); overflow-wrap: anywhere; }
+.settings3-stat .muted { font-size: var(--text-xs); }
+.settings3-stat-label { font-size: var(--text-2xs); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+
+.settings3-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.settings3-inline-form .settings3-num { width: 110px; flex: none; }
+
+.settings3-about { margin: var(--space-3) 0 0; display: flex; flex-direction: column; }
+.settings3-about > div { display: grid; grid-template-columns: minmax(110px, 160px) 1fr; gap: var(--space-3); padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+.settings3-about dt { font-size: var(--text-sm); color: var(--muted); }
+.settings3-about dd { margin: 0; font-size: var(--text-sm); color: var(--text); overflow-wrap: anywhere; }
+
+.settings3-ok { display: inline-flex; align-items: center; gap: 6px; margin: var(--space-2) 0; font-size: var(--text-sm); color: var(--success); font-weight: 600; }
+.settings3-ok svg { width: 16px; height: 16px; }
+.settings3-migrations { margin: 6px 0 0; padding-left: 18px; font-size: var(--text-sm); }
+.settings3-migrations code { font-family: var(--font-mono); font-size: var(--text-xs); }
+
+.settings3-features { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px var(--space-4); }
+.settings3-features li { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: var(--text-sm); min-width: 0; }
+.settings3-features li > span:nth-child(2) { flex: 1; min-width: 0; }
+.settings3-features .muted { font-size: var(--text-xs); }
+.settings3-feature-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--success); }
+.settings3-features li.is-off .settings3-feature-dot { background: transparent; border: 1.5px solid var(--muted-2); }
+
+#settingsPanel-keyboard .kbd-list { margin-top: var(--space-3); }
+
+/* Restore drawer */
+.restore-status { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.restore-status .settings3-subhead { margin: 0; }
+.restore-file { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.restore-file svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.restore-counts { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); overflow: hidden; }
+.restore-counts li { display: flex; justify-content: space-between; gap: var(--space-3); padding: 8px var(--space-3); font-size: var(--text-sm); }
+.restore-counts li + li { border-top: 1px solid var(--border-subtle); }
+.restore-counts strong { font-variant-numeric: tabular-nums; }
+.restore-notes, .restore-errors { margin: 4px 0 0; padding-left: 18px; font-size: var(--text-sm); }
+.restore-notes li + li, .restore-errors li + li { margin-top: 4px; }
+
+/* ---------------- Offline (V3-P) ---------------- */
+/* The V2 #offlineBanner stays the indicator; while offline, save actions in
+   drawers and forms are dimmed and unclickable (writes would fail anyway). */
+body.is-offline .drawer-foot .btn--primary,
+body.is-offline .workspace form button[type="submit"],
+body.is-offline .workspace .btn--primary { opacity: .5; pointer-events: none; }
+.offline-snapshot { display: flex; flex-direction: column; gap: var(--space-4); }
+.offline-snapshot h3 { margin: 0 0 var(--space-2); font-size: var(--text-md); }
+.offline-snapshot ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--surface-1); }
+.offline-snapshot li { display: flex; gap: var(--space-3); justify-content: space-between; padding: 8px var(--space-3); font-size: var(--text-sm); }
+.offline-snapshot li + li { border-top: 1px solid var(--border-subtle); }
+.offline-snapshot .muted { font-size: var(--text-xs); }

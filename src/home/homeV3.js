@@ -31,6 +31,8 @@ import { computeEstimateAccuracy, estimateStatement } from '../insights/estimate
 import { buildCalendarEvents } from '../calendar/calendarEvents.js';
 import { listClassesForScheduleIds } from '../dashboard/data.js';
 import { listAllClassSeries, listAllClassSeriesExceptions } from '../academics/academicsData.js';
+import { buildOfflineSnapshot, saveOfflineSnapshot, loadOfflineSnapshot, isOffline } from '../offline/offlineSnapshot.js';
+import { offlineSnapshotView } from '../offline/offlineView.js';
 
 function greetingKey(now = new Date()) {
   const hour = now.getHours();
@@ -106,12 +108,17 @@ export function initHomeV3() {
       d = await load();
     } catch (err) {
       console.error('Could not load the dashboard', err);
-      if (my === token) setHtml(root, errorNotice('', { retryAction: 'home-retry' }));
+      if (my !== token) return;
+      // V3-P: offline → show the last saved read-only snapshot instead of an error.
+      const snap = isOffline() ? loadOfflineSnapshot(app().userId) : null;
+      if (snap) setHtml(root, offlineSnapshotView(snap, { today: todayStr(), retryAction: 'home-retry' }));
+      else setHtml(root, errorNotice('', { retryAction: 'home-retry' }));
       return;
     }
     if (my !== token) return;
     last = d;
     draw(d);
+    if (!app().isDemo) saveOfflineSnapshot(app().userId, buildOfflineSnapshot(d, new Date().toISOString()));
   }
 
   function draw(d) {

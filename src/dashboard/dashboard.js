@@ -105,6 +105,8 @@ import { initCalendarSection } from '../calendar/calendar.js';
 import { initAgendaSection } from '../calendar/agenda.js';
 import { initCommandPalette } from '../shared/commandPaletteView.js';
 import { isPaletteShortcut } from '../shared/commandPalette.js';
+import { initSettingsV3 } from '../settings/settingsV3.js';
+import { clearOfflineSnapshots } from '../offline/offlineSnapshot.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 import { initOnboarding } from './onboarding.js';
 import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
@@ -190,14 +192,16 @@ initOfflineIndicator({
       offlineBannerEl.hidden = false;
     }
     if (offlineBannerTextEl) {
-      offlineBannerTextEl.dataset.i18n = 'notifications.offline';
-      offlineBannerTextEl.textContent = t('notifications.offline');
+      offlineBannerTextEl.dataset.i18n = 'offline.banner';
+      offlineBannerTextEl.textContent = t('offline.banner');
     }
+    document.body.classList.add('is-offline');
   },
   onOnline: () => {
     // Only flash "Back Online" if the banner was actually showing "Offline"
     // — this callback also fires once on page load, when there was never
     // anything to announce.
+    document.body.classList.remove('is-offline');
     if (!offlineBannerEl || offlineBannerEl.hidden) return;
     offlineBannerEl.classList.add('offline-banner-online');
     if (offlineBannerTextEl) {
@@ -272,6 +276,7 @@ async function init(session) {
       window.location.href = 'login.html';
       return;
     }
+    clearOfflineSnapshots();
     await supabase.auth.signOut();
     window.location.href = 'login.html';
   });
@@ -788,6 +793,8 @@ async function init(session) {
   // One panel visible at a time (progressive disclosure, not one long page).
   // Arrow keys move between tabs per the WAI-ARIA tabs pattern.
   const settingsTabButtons = Array.from(document.querySelectorAll('.settings-tab'));
+  // V3: Courses & semester, Keyboard, About and the full backup / restore.
+  const settingsV3 = initSettingsV3();
   function selectSettingsTab(key, { focus = false } = {}) {
     settingsTabButtons.forEach((tab) => {
       const on = tab.dataset.settingsTab === key;
@@ -799,6 +806,7 @@ async function init(session) {
       if (panel) panel.hidden = !on;
     });
     if (key === 'planner') renderSettingsPrefsSummary();
+    if (settingsV3) settingsV3.onTab(key);
   }
   settingsTabButtons.forEach((tab, index) => {
     tab.addEventListener('click', () => selectSettingsTab(tab.dataset.settingsTab));

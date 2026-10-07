@@ -868,9 +868,12 @@
           <button type="button" class="settings-tab active" role="tab" id="settingsTab-general" aria-controls="settingsPanel-general" aria-selected="true" data-settings-tab="general" data-i18n="settings.tabGeneral">General</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-appearance" aria-controls="settingsPanel-appearance" aria-selected="false" tabindex="-1" data-settings-tab="appearance" data-i18n="settings.appearanceTitle">Appearance</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-planner" aria-controls="settingsPanel-planner" aria-selected="false" tabindex="-1" data-settings-tab="planner" data-i18n="settings.tabPlanner">Planner</button>
+          <button type="button" class="settings-tab" role="tab" id="settingsTab-academics" aria-controls="settingsPanel-academics" aria-selected="false" tabindex="-1" data-settings-tab="academics" data-i18n="settings3.tabAcademics">Courses &amp; semester</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-notifications" aria-controls="settingsPanel-notifications" aria-selected="false" tabindex="-1" data-settings-tab="notifications" data-i18n="notifications.title">Notifications</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-calendar" aria-controls="settingsPanel-calendar" aria-selected="false" tabindex="-1" data-settings-tab="calendar" data-i18n="settings.calendarTitle">Calendar</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-data" aria-controls="settingsPanel-data" aria-selected="false" tabindex="-1" data-settings-tab="data" data-i18n="settings.tabData">Data</button>
+          <button type="button" class="settings-tab" role="tab" id="settingsTab-keyboard" aria-controls="settingsPanel-keyboard" aria-selected="false" tabindex="-1" data-settings-tab="keyboard" data-i18n="settings3.tabKeyboard">Keyboard</button>
+          <button type="button" class="settings-tab" role="tab" id="settingsTab-about" aria-controls="settingsPanel-about" aria-selected="false" tabindex="-1" data-settings-tab="about" data-i18n="settings3.tabAbout">About</button>
         </div>
 
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-general" aria-labelledby="settingsTab-general">
@@ -921,6 +924,8 @@
           </div>
         </div>
 
+        <div class="card settings-panel" role="tabpanel" id="settingsPanel-academics" aria-labelledby="settingsTab-academics" hidden></div>
+
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-notifications" aria-labelledby="settingsTab-notifications" hidden>
           <div id="notificationSettingsCard">
             <h2 data-i18n="notifications.title">Notifications</h2>
@@ -969,6 +974,14 @@
               <p class="hint settings-suboptions" data-i18n="notifications.missedReminderHint">Once, about 15 minutes after a study session ends without being logged.</p>
             </div>
 
+            <div class="settings-toggle-group">
+              <div class="checkbox-row">
+                <input type="checkbox" id="examReminderToggle">
+                <label for="examReminderToggle" data-i18n="notifications.examReminder">Exam approaching</label>
+              </div>
+              <p class="hint settings-suboptions" data-i18n="notifications.examReminderHint">Three days before, the day before, and the morning of each exam.</p>
+            </div>
+
             <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
           </div>
         </div>
@@ -977,15 +990,23 @@
           <h2 data-i18n="settings.calendarTitle">Calendar</h2>
           <p class="hint" data-i18n="settings.calendarHintV2">Import events from a .ics file, or export your schedule to one — both are on the Calendar page.</p>
           <button type="button" class="btn-secondary settings-inline-btn" id="settingsOpenCalendarBtn" data-i18n="settings.openCalendarPage">Open Calendar</button>
+          <h3 class="settings3-subhead" data-i18n="settings3.googleTitle">Google Calendar</h3>
+          <p class="hint" data-i18n="settings3.googleNotConnected">Not connected. Direct Google Calendar sync isn't available in this version — use .ics import and export instead.</p>
         </div>
 
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-data" aria-labelledby="settingsTab-data" hidden>
           <h2 data-i18n="settings.tabData">Data</h2>
+          <div id="settingsBackupV3"></div>
+          <div class="v3-hidden">
           <p class="hint" data-i18n="settings.exportDataHint">Download everything you've saved — schedules, classes, tasks, study blocks, boards — as one JSON file. Nothing is changed or deleted.</p>
           <button type="button" class="btn-secondary settings-inline-btn" id="settingsExportDataBtn" data-i18n="settings.exportData">Export my data</button>
           <p class="hint" id="settingsExportStatus" hidden></p>
           <p class="hint settings-field-label" data-i18n="settings.importNotYet">Importing a data file isn't available yet.</p>
+          </div>
         </div>
+
+        <div class="card settings-panel" role="tabpanel" id="settingsPanel-keyboard" aria-labelledby="settingsTab-keyboard" hidden></div>
+        <div class="card settings-panel" role="tabpanel" id="settingsPanel-about" aria-labelledby="settingsTab-about" hidden></div>
       </section>
     </div>
   </main>

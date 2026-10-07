@@ -215,6 +215,7 @@ export function createMemoryClient({ seed, session, storageKey = 'student-schedu
     }
     order(col, opts = {}) { this.orders.push([col, opts.ascending !== false]); return this; }
     limit(n) { this.limitN = n; return this; }
+    range(from, to) { this.offsetN = from; this.limitN = to - from + 1; return this; }
     single() { this.mode = 'single'; return this; }
     maybeSingle() { this.mode = 'maybe'; return this; }
 
@@ -243,7 +244,7 @@ export function createMemoryClient({ seed, session, storageKey = 'student-schedu
         this.orders.slice().reverse().forEach(([col, asc]) => {
           result = result.slice().sort((a, b) => (asc ? cmp(a[col], b[col]) : cmp(b[col], a[col])));
         });
-        if (this.limitN !== null) result = result.slice(0, this.limitN);
+        if (this.limitN !== null) result = result.slice(this.offsetN || 0, (this.offsetN || 0) + this.limitN);
         if (this.head) return { data: null, error: null, count: result.length };
         result = result.map((r) => this.withEmbeds(r));
       } else if (this.op === 'insert') {

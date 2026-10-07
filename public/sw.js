@@ -9,7 +9,7 @@
 //
 // Bump CACHE_NAME whenever this file or the app-shell list changes, so
 // returning users pick up the new version instead of a stale cache.
-const CACHE_NAME = 'student-scheduler-shell-v1';
+const CACHE_NAME = 'student-scheduler-shell-v3';
 
 // Stable, unhashed paths only — the actual bundled JS/CSS files Vite
 // produces get hashed filenames that change on every build, so they
@@ -70,6 +70,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  // V3-P: page navigations are network-first, so a new deploy's HTML (and
+  // the hashed bundles it points to) is picked up right away when online.
+  // Offline, the cached copy of that page is served (ignoring ?demo=1 and
+  // similar query strings), then the cached dashboard as a last resort.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(url.pathname, copy));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches
+            .match(url.pathname, { ignoreSearch: true })
+            .then((hit) => hit || caches.match(req, { ignoreSearch: true }))
+            .then((hit) => hit || caches.match('/dashboard.html'))
+        )
+    );
+    return;
+  }
 
   // Cache-first for the app shell, falling back to network and caching
   // whatever comes back (this is how the hashed JS/CSS bundles end up
