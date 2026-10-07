@@ -133,6 +133,12 @@ export async function updateClassSeriesCourse(seriesId, courseId) {
   emitChange('classes');
 }
 
+// One-off class on a day (classes table) -> course. Used by onboarding.
+export async function setClassCourse(classId, courseId) {
+  unwrap(await supabase.from('classes').update({ course_id: courseId }).eq('id', classId));
+  invalidate('series');
+}
+
 export async function deleteCourseMeeting(seriesId) {
   unwrap(await supabase.from('class_series').delete().eq('id', seriesId));
   invalidate('series');

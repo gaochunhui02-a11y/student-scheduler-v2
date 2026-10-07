@@ -119,7 +119,7 @@ import { IS_DEMO } from '../lib/supabaseClient.js';
 import { exitDemoMode } from '../demo/demoMode.js';
 import { probeCapabilities, has as hasCapability } from '../shared/capabilities.js';
 import { capabilityFilter, updateTask } from '../tasks/tasksData.js';
-import { applyOnboardingAcademics } from '../onboarding/onboardingAcademics.js';
+import { applyOnboardingAcademics, linkOnboardingClasses } from '../onboarding/onboardingAcademics.js';
 import { setAppContext, onChange } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
@@ -4683,6 +4683,7 @@ async function init(session) {
     // save failed, so stop before generating a plan from unsaved tasks.
     if ([...classRows, ...taskRows].some((row) => !row.dataset.id)) throw new Error('onboarding_save_failed');
     if (academics) {
+      await linkOnboardingClasses(classRows.map((row) => row.dataset.id), academics, courseIds);
       await Promise.all(taskRows.map((row, i) => {
         const idx = academics.taskCourse[i];
         return idx !== null && idx !== undefined && courseIds[idx] ? updateTask(row.dataset.id, { course_id: courseIds[idx] }, { refresh: false }) : null;

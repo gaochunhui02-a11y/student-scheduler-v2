@@ -3,7 +3,7 @@
 // database feature is missing is skipped silently (the V2 steps still run).
 
 import { has } from '../shared/capabilities.js';
-import { createSemester, setCurrentSemester, createCourse, listCourses, createCourseMeeting } from '../academics/academicsData.js';
+import { createSemester, setCurrentSemester, createCourse, listCourses, createCourseMeeting, setClassCourse } from '../academics/academicsData.js';
 import { pickCourseColor } from '../academics/courseModel.js';
 
 /**
@@ -36,4 +36,16 @@ export async function applyOnboardingAcademics(userId, academics) {
     await createCourseMeeting(userId, { ...fields, ...(courseId && has('classCourseLinks') ? { course_id: courseId } : {}) });
   }
   return { courseIds };
+}
+
+/**
+ * After the Planner saved today's one-off classes: link each to the course
+ * picked for it. classIds line up with academics.classCourse.
+ */
+export async function linkOnboardingClasses(classIds, academics, courseIds) {
+  if (!academics || !has('classCourseLinks')) return;
+  await Promise.all(classIds.map((id, i) => {
+    const idx = academics.classCourse[i];
+    return id && idx !== null && idx !== undefined && courseIds[idx] ? setClassCourse(id, courseIds[idx]) : null;
+  }));
 }

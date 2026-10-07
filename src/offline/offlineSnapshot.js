@@ -11,6 +11,9 @@ const PREFIX = 'student-scheduler-offline:';
 const MAX_TASKS = 25;
 const MAX_EXAMS = 8;
 const MAX_COURSES = 30;
+// Older snapshots are discarded (and deleted) rather than shown: they would
+// be misleading, and there's no reason to keep personal data around.
+export const SNAPSHOT_MAX_AGE_DAYS = 14;
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 
@@ -41,6 +44,12 @@ export function isValidSnapshot(s) {
     && Array.isArray(s.timeline) && Array.isArray(s.tasks) && Array.isArray(s.courses) && Array.isArray(s.exams));
 }
 
+/** Pure: is the snapshot recent enough to show? */
+export function isFreshSnapshot(s, now = Date.now(), maxAgeDays = SNAPSHOT_MAX_AGE_DAYS) {
+  const t = Date.parse(s && s.savedAt);
+  return Number.isFinite(t) && t <= now + 60000 && now - t <= maxAgeDays * 86400000;
+}
+
 export function saveOfflineSnapshot(userId, snapshot) {
   if (!userId) return;
   try {
@@ -54,7 +63,12 @@ export function loadOfflineSnapshot(userId) {
   if (!userId) return null;
   try {
     const s = JSON.parse(localStorage.getItem(PREFIX + userId));
-    return isValidSnapshot(s) ? s : null;
+    if (!isValidSnapshot(s)) return null;
+    if (!isFreshSnapshot(s)) {
+      localStorage.removeItem(PREFIX + userId);
+      return null;
+    }
+    return s;
   } catch {
     return null;
   }

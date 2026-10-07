@@ -1,7 +1,7 @@
 // V3-P offline snapshot + exam reminders. Run: node tests/offline-reminders.test.js
 
 import assert from 'node:assert/strict';
-import { buildOfflineSnapshot, isValidSnapshot } from '../src/offline/offlineSnapshot.js';
+import { buildOfflineSnapshot, isValidSnapshot, isFreshSnapshot } from '../src/offline/offlineSnapshot.js';
 import { examReminderStage, examReminderKey } from '../src/notifications/examReminders.js';
 
 let failures = 0;
@@ -46,6 +46,14 @@ check('corrupted stored values are rejected', () => {
   assert.equal(isValidSnapshot(null), false);
   assert.equal(isValidSnapshot({ v: 1, savedAt: 'x', date: 'nope', timeline: [], tasks: [], courses: [], exams: [] }), false);
   assert.equal(isValidSnapshot({ ...snap, tasks: 'x' }), false);
+});
+
+check('snapshots older than 14 days (or dated in the future) are not shown', () => {
+  const now = Date.parse('2026-10-07T12:00:00Z');
+  assert.equal(isFreshSnapshot({ savedAt: '2026-10-01T08:00:00Z' }, now), true);
+  assert.equal(isFreshSnapshot({ savedAt: '2026-09-20T08:00:00Z' }, now), false);
+  assert.equal(isFreshSnapshot({ savedAt: '2027-01-01T00:00:00Z' }, now), false);
+  assert.equal(isFreshSnapshot({ savedAt: 'nope' }, now), false);
 });
 
 console.log('\n=== exam reminders ===');
