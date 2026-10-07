@@ -7,8 +7,9 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
-<meta name="theme-color" content="#4f56d3">
+<meta name="theme-color" content="#10131a">
 <link rel="stylesheet" href="/src/styles/main.css">
+<link rel="stylesheet" href="/src/styles/v3.css">
 </head>
 <body>
 <div class="auth-wrap">
@@ -31,6 +32,10 @@
 
     <p class="auth-links"><a href="forgot-password.html" data-i18n="auth.forgotPassword">Forgot password?</a></p>
     <p class="auth-links"><span data-i18n="auth.noAccount">Don't have an account?</span> <a href="signup.html" data-i18n="auth.signUpLink">Sign up</a></p>
+    <div class="auth-demo">
+      <a class="auth-demo-link" href="/dashboard.html?demo=1#/home" data-i18n="demo.tryDemo">Explore the demo</a>
+      <p class="auth-demo-hint" data-i18n="demo.tryDemoHint">No account needed — sample data only.</p>
+    </div>
   </div>
 </div>
 <script type="module" src="/src/auth/login.js"></script>

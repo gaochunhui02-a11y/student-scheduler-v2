@@ -12,6 +12,10 @@
 // User-created content (class names, study task names/notes, board node
 // text) is never touched by this module and never will be auto-translated.
 
+import v3en from '../i18n/v3.en.js';
+import v3zh from '../i18n/v3.zh.js';
+import v3ja from '../i18n/v3.ja.js';
+
 const STORAGE_KEY = 'student-scheduler-lang';
 
 const en = {
@@ -2527,7 +2531,8 @@ const ja = {
 };
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];
-const dictionaries = { en, zh, ja };
+// V3 strings live in src/i18n/v3.*.js and are merged over the V1/V2 ones.
+const dictionaries = { en: { ...en, ...v3en }, zh: { ...zh, ...v3zh }, ja: { ...ja, ...v3ja } };
 
 export function getLanguage() {
   try {

@@ -112,6 +112,13 @@ import { scrollBehavior } from '../shared/motion.js';
 import { validateBlockDuration, nudgeClock, NUDGE_MINUTES } from './manualEditModel.js';
 import { detectScheduleConflicts, classesToMinutes } from './conflictModel.js';
 import { shouldShowOnboarding } from './onboardingModel.js';
+import { IS_DEMO } from '../lib/supabaseClient.js';
+import { exitDemoMode } from '../demo/demoMode.js';
+import { probeCapabilities } from '../shared/capabilities.js';
+import { setAppContext } from '../app/context.js';
+import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
+import { initV3Sections } from '../app/v3Sections.js';
+import { toast } from '../ui/toast.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -241,9 +248,40 @@ async function init(session) {
   const saveStatus = document.getElementById('saveStatus');
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (IS_DEMO) {
+      exitDemoMode();
+      window.location.href = 'login.html';
+      return;
+    }
     await supabase.auth.signOut();
     window.location.href = 'login.html';
   });
+
+  // ---------------- Demo Mode banner (V3-T) ----------------
+  if (IS_DEMO) {
+    document.body.classList.add('is-demo');
+    const demoBanner = document.getElementById('demoBanner');
+    if (demoBanner) demoBanner.hidden = false;
+    document.getElementById('demoExitBtn')?.addEventListener('click', () => {
+      exitDemoMode();
+      window.location.href = 'login.html';
+    });
+    document.getElementById('demoResetBtn')?.addEventListener('click', () => {
+      if (supabase.__demo) supabase.__demo.reset();
+      try { sessionStorage.setItem('student-scheduler-demo-reset', '1'); } catch { /* ignore */ }
+      window.location.reload();
+    });
+    document.getElementById('demoSignupLink')?.addEventListener('click', () => exitDemoMode());
+    try {
+      if (sessionStorage.getItem('student-scheduler-demo-reset') === '1') {
+        sessionStorage.removeItem('student-scheduler-demo-reset');
+        setTimeout(() => toast(t('demo.resetDone'), { kind: 'success' }), 600);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Which V3 tables/columns exist yet (migrations 0010+ are applied by hand).
+  await probeCapabilities();
 
   const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
   nameEl.textContent = `Hi, ${profile?.name || session.user.email}`;
@@ -297,6 +335,8 @@ async function init(session) {
         if (onInsights) analyticsSection.onShowInsights();
         else analyticsSection.onShow();
       }
+      // V3 pages render their text through t() — repaint the visible one.
+      if (typeof rerenderCurrentView === 'function') rerenderCurrentView();
     });
   }
 
@@ -318,18 +358,49 @@ async function init(session) {
     document.getElementById('analyticsView'),
     document.getElementById('insightsView'),
     document.getElementById('settingsView'),
+    // V3 pages
+    document.getElementById('historyView'),
+    document.getElementById('coursesView'),
+    document.getElementById('tasksView'),
+    document.getElementById('gradesView'),
+    document.getElementById('examsView'),
+    document.getElementById('semesterView'),
   ].filter(Boolean);
+
+  // V3: the mobile bottom bar mirrors the sidebar's active item, and the
+  // active item carries aria-current for screen readers.
+  let currentViewKey = 'analyticsView';
+  function syncNavState() {
+    const active = document.querySelector('.sidebar .nav-item.active');
+    const target = active ? active.dataset.viewTarget || active.dataset.scrollTarget : null;
+    document.querySelectorAll('.nav-item').forEach((b) => {
+      if (b.classList.contains('active')) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.bottom-nav-item').forEach((b) => {
+      const key = b.dataset.viewTarget || b.dataset.scrollTarget;
+      b.classList.toggle('active', Boolean(target) && key === target);
+    });
+  }
   function showPlannerView() {
     altViewEls.forEach((el) => {
       el.hidden = true;
     });
     plannerForm.style.display = '';
+    currentViewKey = 'plannerForm';
+    syncNavState();
+    pushRoute('plannerForm');
   }
-  function showAltView(viewEl) {
+  function showAltView(viewEl, param = null) {
     plannerForm.style.display = 'none';
     altViewEls.forEach((el) => {
       el.hidden = el !== viewEl;
     });
+    if (viewEl) {
+      currentViewKey = viewEl.id;
+      pushRoute(viewEl.id, param);
+    }
+    syncNavState();
   }
 
   // Shared by Board's/Analytics' "go to Planner" bridges — switches back to
@@ -779,6 +850,7 @@ async function init(session) {
 
   const settingsSection = { onShow: () => syncSettingsControls() };
 
+  const v3Sections = initV3Sections();
   const altViewSections = {
     boardView: boardSection,
     weekView: weekSection,
@@ -786,17 +858,58 @@ async function init(session) {
     analyticsView: analyticsSection,
     insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
     settingsView: settingsSection,
+    historyView: { onShow: () => refreshHistoryList() },
+    ...v3Sections,
   };
-  async function activateView(key) {
+  async function activateView(key, param = null) {
+    if (key === 'plannerForm') {
+      activatePlannerScroll('plannerForm');
+      return;
+    }
     document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
     const navBtn = document.querySelector(`.nav-item[data-view-target="${key}"]`);
     if (navBtn) navBtn.classList.add('active');
-    showAltView(document.getElementById(key));
+    const viewEl = document.getElementById(key);
+    if (!viewEl) return;
+    const switching = viewEl.hidden;
+    showAltView(viewEl, param);
+    if (switching) window.scrollTo(0, 0);
     const section = altViewSections[key];
-    if (section && typeof section.onShow === 'function') await section.onShow();
+    if (section && typeof section.onShow === 'function') await section.onShow(param);
   }
-  document.querySelectorAll('.nav-item[data-view-target]').forEach((btn) => {
-    btn.addEventListener('click', () => activateView(btn.dataset.viewTarget));
+  document.querySelectorAll('.nav-item[data-view-target], .bottom-nav-item[data-view-target]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activateView(btn.dataset.viewTarget);
+      document.getElementById('mainContent')?.focus({ preventScroll: true });
+    });
+  });
+  document.querySelectorAll('.bottom-nav-item[data-scroll-target]').forEach((btn) => {
+    btn.addEventListener('click', () => activatePlannerScroll(btn.dataset.scrollTarget));
+  });
+
+  // Browser Back/Forward between pages (V3 hash routes).
+  onRouteChange((route) => activateView(route.view, route.param));
+
+  // Re-render whichever page is showing (used after a language switch).
+  function rerenderCurrentView() {
+    if (currentViewKey === 'plannerForm') return;
+    const section = altViewSections[currentViewKey];
+    const route = parseHash(location.hash);
+    if (section && typeof section.onShow === 'function') section.onShow(route && route.view === currentViewKey ? route.param : null);
+  }
+
+  setAppContext({
+    userId,
+    displayName,
+    isDemo: IS_DEMO,
+    navigate: (view, param = null) => activateView(view, param),
+    openCourse: (courseId) => activateView('coursesView', courseId),
+    openPlannerForDate: (dateStr) => openPlannerForDate(dateStr),
+    plannerDate: () => (schedule ? schedule.for_date : null),
+    refreshPlanner: () => {
+      if (schedule) loadScheduleForDate(schedule.for_date);
+    },
+    openQuickAdd: () => commandPalette.open('create'),
   });
 
   // ---------------- mobile sidebar toggle (Checkpoint B) ----------------
@@ -823,6 +936,14 @@ async function init(session) {
     });
   }
   if (sidebarScrim) sidebarScrim.addEventListener('click', closeSidebar);
+  document.getElementById('bottomNavMore')?.addEventListener('click', () => {
+    if (sidebarEl) sidebarEl.classList.add('sidebar-open');
+    if (sidebarScrim) sidebarScrim.hidden = false;
+    sidebarEl?.querySelector('.nav-item')?.focus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebarEl && sidebarEl.classList.contains('sidebar-open')) closeSidebar();
+  });
   document.querySelectorAll('.nav-item').forEach((btn) => btn.addEventListener('click', closeSidebar));
 
   // ---------------- Home Quick Actions (Checkpoint B) ----------------
@@ -925,7 +1046,7 @@ async function init(session) {
       go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
       go('open-calendar', 'palette.openCalendar', () => activateView('calendarView'), ['agenda', 'events']),
       go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics', 'google']),
-      go('open-history', 'palette.openHistory', () => activatePlannerScroll('historyCard'), ['past']),
+      go('open-history', 'palette.openHistory', () => activateView('historyView'), ['past']),
       go('open-insights', 'palette.openInsights', () => activateView('insightsView'), ['analytics', 'stats']),
       go('open-settings', 'palette.openSettings', () => activateView('settingsView'), ['preferences', 'theme', 'notifications']),
     ];
@@ -956,6 +1077,16 @@ async function init(session) {
       commandPalette.open(btn.dataset.openPalette === 'create' ? 'create' : 'all');
     });
   });
+  document.querySelectorAll('[data-open-quickadd]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      closeSidebar();
+      appContextQuickAdd();
+    });
+  });
+  function appContextQuickAdd() {
+    // Replaced by the V3 Quick Add sheet once it is registered (V3-R).
+    commandPalette.open('create');
+  }
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
   // whenever the user navigates to a different date. Every async operation that
@@ -4132,11 +4263,18 @@ async function init(session) {
   await loadRecurringClassesData();
   await loadScheduleForDate(initialDate);
 
-  // Home (analyticsView) is the default landing view now, matching the
-  // "active" nav-item already marked in dashboard.html — the Planner's own
-  // data is still loaded above regardless, so switching to it is instant.
-  showAltView(document.getElementById('analyticsView'));
-  if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
+  // Home (analyticsView) is the default landing view; a #/route in the URL
+  // (bookmark, reload, shared link) opens that page instead. The Planner's
+  // own data is loaded above regardless, so switching to it is instant.
+  const initialRoute = parseHash(location.hash);
+  if (initialRoute && initialRoute.view === 'plannerForm') activatePlannerScroll('plannerForm');
+  else if (initialRoute) await activateView(initialRoute.view, initialRoute.param);
+  else {
+    showAltView(document.getElementById('analyticsView'));
+    history.replaceState(null, '', '#/home');
+    if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
+  }
+  document.body.dataset.appReady = '1';
 
   // ---------------- First-run onboarding (V2-F) ----------------
   // "Build my first plan" fills the REAL Planner inputs and fires their own

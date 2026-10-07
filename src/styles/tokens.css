@@ -1,0 +1,257 @@
+/* ==========================================================================
+   V3 design tokens — "Ink & Signal".
+   One source of truth for colour, type, spacing, radius, elevation and
+   motion. Legacy variable names (--bg, --card, --accent, …) are kept so
+   every V1/V2 component picks up the new identity automatically; new V3
+   components use the semantic names (--surface-*, --text-*, --space-*).
+
+   Identity: a cool, quiet canvas; a deep-ink navigation rail; one cobalt
+   signal colour for actions; amber reserved for "now"/today; course
+   colours carry the rest of the colour in the product.
+   ========================================================================== */
+:root {
+  /* ---- type ---- */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Microsoft YaHei", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --leading-tight: 1.2;
+  --leading: 1.5;
+
+  /* ---- spacing (4px grid) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- radius ---- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---- control sizes (one height per size, everywhere) ---- */
+  --control-sm: 30px;
+  --control-md: 36px;
+  --control-lg: 42px;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur: 160ms;
+  --dur-slow: 260ms;
+
+  /* ---- light palette ---- */
+  --bg: #f3f4f7;
+  --canvas-glow: radial-gradient(1200px 400px at 70% -120px, rgba(51, 92, 255, 0.07), transparent 70%);
+  --card: #ffffff;
+  --surface-1: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef0f4;
+  --surface-raised: #ffffff;
+  --border: #e3e6ec;
+  --border-strong: #cfd4de;
+  --border-subtle: #edf0f4;
+  --text: #11141b;
+  --text-soft: #3a404d;
+  --muted: #646b7a;
+  --muted-2: #8a91a0;
+
+  --accent: #335cff;
+  --accent-strong: #2547d9;
+  --accent-soft: #edf1ff;
+  --accent-soft-strong: #dbe3ff;
+  --on-accent: #ffffff;
+  --focus-ring: 0 0 0 3px rgba(51, 92, 255, 0.28);
+
+  --now: #f29d0c;
+  --now-soft: #fff4dd;
+
+  --danger: #c93a2b;
+  --danger-soft: #fdecea;
+  --danger-border: #f2c3bd;
+  --success: #198754;
+  --success-soft: #e6f5ed;
+  --success-border: #b9e2cc;
+  --warning: #a2660a;
+  --warning-soft: #fdf3e1;
+  --warning-border: #f0d7a5;
+  --info: #2563c9;
+  --info-soft: #e8f0fc;
+
+  /* workload levels (light → overloaded) */
+  --load-0: #eef0f4;
+  --load-light: #cfe9dc;
+  --load-balanced: #8fd0b0;
+  --load-busy: #f4c26b;
+  --load-over: #ec7a63;
+
+  /* navigation rail: ink in both themes */
+  --nav-bg: #10131a;
+  --nav-bg-2: #161a23;
+  --nav-border: rgba(255, 255, 255, 0.07);
+  --nav-text: #c5cad6;
+  --nav-muted: #7d8494;
+  --nav-hover: rgba(255, 255, 255, 0.06);
+  --nav-active: rgba(122, 150, 255, 0.16);
+  --nav-active-text: #ffffff;
+  --nav-accent: #8aa4ff;
+
+  --shadow-xs: 0 1px 1px rgba(16, 19, 26, 0.04);
+  --shadow-sm: 0 1px 2px rgba(16, 19, 26, 0.05), 0 1px 1px rgba(16, 19, 26, 0.03);
+  --shadow-md: 0 4px 14px -2px rgba(16, 19, 26, 0.08), 0 2px 4px rgba(16, 19, 26, 0.04);
+  --shadow-lg: 0 24px 60px -12px rgba(16, 19, 26, 0.28), 0 8px 20px -8px rgba(16, 19, 26, 0.12);
+
+  /* generated-schedule event colors */
+  --class-color: #4a5160;
+  --meal-color: #c27a2c;
+  --study-color: #335cff;
+  --break-color: #8b84b8;
+  --free-color: #a1a7b3;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0b0d12;
+    --canvas-glow: radial-gradient(1200px 420px at 70% -140px, rgba(110, 140, 255, 0.10), transparent 70%);
+    --card: #13161d;
+    --surface-1: #13161d;
+    --surface-2: #181c24;
+    --surface-3: #1f2430;
+    --surface-raised: #1a1e27;
+    --border: #252a36;
+    --border-strong: #343b4b;
+    --border-subtle: #1c212b;
+    --text: #e9ecf3;
+    --text-soft: #c4c9d4;
+    --muted: #949bab;
+    --muted-2: #6c7383;
+
+    --accent: #7d97ff;
+    --accent-strong: #9db0ff;
+    --accent-soft: rgba(125, 151, 255, 0.13);
+    --accent-soft-strong: rgba(125, 151, 255, 0.24);
+    --on-accent: #0b0d12;
+    --focus-ring: 0 0 0 3px rgba(125, 151, 255, 0.38);
+
+    --now: #f6b03c;
+    --now-soft: rgba(246, 176, 60, 0.14);
+
+    --danger: #f08a7c;
+    --danger-soft: rgba(240, 138, 124, 0.13);
+    --danger-border: rgba(240, 138, 124, 0.34);
+    --success: #5fd197;
+    --success-soft: rgba(95, 209, 151, 0.12);
+    --success-border: rgba(95, 209, 151, 0.3);
+    --warning: #e9b85b;
+    --warning-soft: rgba(233, 184, 91, 0.13);
+    --warning-border: rgba(233, 184, 91, 0.32);
+    --info: #79a8f5;
+    --info-soft: rgba(121, 168, 245, 0.13);
+
+    --load-0: #1b1f29;
+    --load-light: #1f4a3a;
+    --load-balanced: #2f7a5a;
+    --load-busy: #8a6a2a;
+    --load-over: #9a4436;
+
+    --nav-bg: #07090d;
+    --nav-bg-2: #0c0f15;
+    --nav-border: rgba(255, 255, 255, 0.06);
+
+    --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 6px 18px -4px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 28px 70px -12px rgba(0, 0, 0, 0.7), 0 10px 24px -8px rgba(0, 0, 0, 0.5);
+
+    --class-color: #aab1c0;
+    --meal-color: #e0a05a;
+    --study-color: #7d97ff;
+    --break-color: #a79fd6;
+    --free-color: #5f6676;
+  }
+}
+
+/* explicit toggle wins over the OS preference in both directions */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0d12;
+  --canvas-glow: radial-gradient(1200px 420px at 70% -140px, rgba(110, 140, 255, 0.10), transparent 70%);
+  --card: #13161d;
+  --surface-1: #13161d;
+  --surface-2: #181c24;
+  --surface-3: #1f2430;
+  --surface-raised: #1a1e27;
+  --border: #252a36;
+  --border-strong: #343b4b;
+  --border-subtle: #1c212b;
+  --text: #e9ecf3;
+  --text-soft: #c4c9d4;
+  --muted: #949bab;
+  --muted-2: #6c7383;
+
+  --accent: #7d97ff;
+  --accent-strong: #9db0ff;
+  --accent-soft: rgba(125, 151, 255, 0.13);
+  --accent-soft-strong: rgba(125, 151, 255, 0.24);
+  --on-accent: #0b0d12;
+  --focus-ring: 0 0 0 3px rgba(125, 151, 255, 0.38);
+
+  --now: #f6b03c;
+  --now-soft: rgba(246, 176, 60, 0.14);
+
+  --danger: #f08a7c;
+  --danger-soft: rgba(240, 138, 124, 0.13);
+  --danger-border: rgba(240, 138, 124, 0.34);
+  --success: #5fd197;
+  --success-soft: rgba(95, 209, 151, 0.12);
+  --success-border: rgba(95, 209, 151, 0.3);
+  --warning: #e9b85b;
+  --warning-soft: rgba(233, 184, 91, 0.13);
+  --warning-border: rgba(233, 184, 91, 0.32);
+  --info: #79a8f5;
+  --info-soft: rgba(121, 168, 245, 0.13);
+
+  --load-0: #1b1f29;
+  --load-light: #1f4a3a;
+  --load-balanced: #2f7a5a;
+  --load-busy: #8a6a2a;
+  --load-over: #9a4436;
+
+  --nav-bg: #07090d;
+  --nav-bg-2: #0c0f15;
+  --nav-border: rgba(255, 255, 255, 0.06);
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 18px -4px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 28px 70px -12px rgba(0, 0, 0, 0.7), 0 10px 24px -8px rgba(0, 0, 0, 0.5);
+
+  --class-color: #aab1c0;
+  --meal-color: #e0a05a;
+  --study-color: #7d97ff;
+  --break-color: #a79fd6;
+  --free-color: #5f6676;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0ms; --dur-slow: 0ms; }
+}
