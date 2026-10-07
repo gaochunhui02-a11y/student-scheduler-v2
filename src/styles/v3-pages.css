@@ -202,7 +202,10 @@
 .semester-weeks { list-style: none; margin: var(--space-3) 0 0; padding: 0; }
 .semester-week { border-top: 1px solid var(--border-subtle); }
 .semester-week.is-current { background: color-mix(in srgb, var(--now) 7%, transparent); box-shadow: inset 3px 0 0 var(--now); }
-.semester-week.is-past .semester-week-head { opacity: 0.6; }
+/* Past weeks recede by colour, not opacity, so their text stays readable (AA). */
+.semester-week.is-past .semester-week-head,
+.semester-week.is-past .semester-week-level,
+.semester-week.is-past .semester-week-dates { color: var(--muted); }
 .semester-week-head {
   display: grid;
   grid-template-columns: 64px 140px minmax(80px, 1fr) 150px auto;
@@ -252,3 +255,7 @@
 @media (max-width: 1240px) { .week-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .week-grid { grid-template-columns: 1fr; } }
+
+/* Board connections are keyboard-focusable buttons (V3 a11y pass). */
+.board-edge-hit:focus { outline: none; }
+.board-edge-hit:focus-visible { stroke: var(--accent); stroke-opacity: 0.35; }

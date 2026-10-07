@@ -281,7 +281,7 @@ body {
   border-radius: var(--radius-pill);
   font-size: var(--text-2xs);
   font-weight: 600;
-  color: color-mix(in srgb, var(--c, var(--muted)) 78%, var(--text));
+  color: color-mix(in srgb, var(--c, var(--muted)) 65%, var(--text));
   background: color-mix(in srgb, var(--c, var(--muted)) 12%, transparent);
   white-space: nowrap;
   overflow: hidden;

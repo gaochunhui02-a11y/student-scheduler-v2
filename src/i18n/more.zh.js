@@ -180,7 +180,7 @@ export default {
   'exams.conf5': "很有把握",
   'exams.estimate': "所需时间（分钟）",
   'exams.revised': "已复习（分钟）",
-  'exams.log30Label': "为「{name}」记录 30 分钟",
+  'exams.log30Label': "+30m：为「{name}」记录 30 分钟",
   'exams.logged': "已为「{name}」记录 {time}。",
   'exams.noCourseExams': "这门课没有考试",
   'exams.noCourseExamsBody': "添加期中、期末考试，即可查看倒计时并安排复习。",
@@ -740,4 +740,5 @@ export default {
   'onboarding.errSemesterOrder': "学期结束日期必须晚于开始日期。",
   'onboarding.errCourseName': "请填写课程名称，或清空代码。",
   'onboarding.errCourseLong': "名称或代码太长。",
+
 };

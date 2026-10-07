@@ -180,7 +180,7 @@ export default {
   'exams.conf5': "自信あり",
   'exams.estimate': "必要な時間（分）",
   'exams.revised': "復習済み（分）",
-  'exams.log30Label': "「{name}」に 30 分記録",
+  'exams.log30Label': "+30m：「{name}」に 30 分記録",
   'exams.logged': "「{name}」に {time} 記録しました。",
   'exams.noCourseExams': "この科目の試験はありません",
   'exams.noCourseExamsBody': "中間・期末試験を追加すると、カウントダウンと復習計画が使えます。",
@@ -740,4 +740,5 @@ export default {
   'onboarding.errSemesterOrder': "学期の終了日は開始日より後にしてください。",
   'onboarding.errCourseName': "科目名を入力するか、コードを消してください。",
   'onboarding.errCourseLong': "名前またはコードが長すぎます。",
+
 };

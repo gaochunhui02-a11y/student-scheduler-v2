@@ -1167,9 +1167,19 @@ export function initBoardSection(userId, hostApi = {}) {
       const hit = svgEl('path');
       hit.setAttribute('class', 'board-edge-hit');
       hit.setAttribute('d', d);
+      // A real (keyboard-reachable) button: Tab to a connection, Enter or
+      // Space selects it, which shows its delete control.
+      hit.setAttribute('role', 'button');
+      hit.setAttribute('tabindex', '0');
       hit.setAttribute('aria-label', t('board.connectionLabel'));
       hit.dataset.i18nAriaLabel = 'board.connectionLabel';
       hit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectEdge(edge.id);
+      });
+      hit.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
         e.stopPropagation();
         selectEdge(edge.id);
       });
@@ -1441,8 +1451,9 @@ export function initBoardSection(userId, hostApi = {}) {
 
     const handle = document.createElement('div');
     handle.className = 'board-node-handle';
-    handle.setAttribute('aria-label', t('board.dragToConnect'));
-    handle.dataset.i18nAriaLabel = 'board.dragToConnect';
+    // Pointer-only affordance (drag to another card); hidden from assistive
+    // tech rather than announced as a control it can't operate.
+    handle.setAttribute('aria-hidden', 'true');
     handle.setAttribute('title', t('board.dragToConnect'));
     handle.dataset.i18nTitle = 'board.dragToConnect';
     wireConnectHandle(handle, node);

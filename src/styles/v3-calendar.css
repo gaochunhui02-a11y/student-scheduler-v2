@@ -65,7 +65,7 @@
 .cal3-mchip--exam { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
 .cal3-mchip--deadline { background: var(--warning-soft); box-shadow: inset 3px 0 0 var(--warning); }
 .cal3-mchip--external { box-shadow: inset 3px 0 0 var(--info); }
-.cal3-mchip.is-done { text-decoration: line-through; opacity: 0.6; }
+.cal3-mchip.is-done { text-decoration: line-through; filter: saturate(0.35); }
 .cal3-more { background: none; box-shadow: none; color: var(--accent); }
 .cal3-mstudy { margin-top: auto; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
@@ -118,7 +118,8 @@
 .cal3-ev--study { background: color-mix(in srgb, var(--c, var(--study-color)) 20%, var(--surface-1)); box-shadow: inset 3px 0 0 var(--c, var(--study-color)), 0 1px 2px rgba(0, 0, 0, 0.06); }
 .cal3-ev--exam { background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
 .cal3-ev--external { background: var(--info-soft); box-shadow: inset 3px 0 0 var(--info); }
-.cal3-ev.is-done { opacity: 0.55; }
+.cal3-ev.is-done { filter: saturate(0.35); }
+.cal3-ev.is-done .cal3-ev-time { color: var(--text-soft); }
 .cal3-ev.is-done .cal3-ev-title { text-decoration: line-through; }
 .cal3-ev.is-missed { background-image: repeating-linear-gradient(135deg, var(--danger-soft) 0 4px, transparent 4px 8px); }
 .cal3-ev.is-draggable { cursor: grab; }

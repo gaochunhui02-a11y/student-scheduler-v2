@@ -25,12 +25,12 @@
   height: 64px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--c, var(--accent)) 12%, var(--surface-2));
-  color: color-mix(in srgb, var(--c, var(--accent)) 80%, var(--text));
+  color: color-mix(in srgb, var(--c, var(--accent)) 62%, var(--text));
 }
 .exam-card.is-compact .exam-card-count { height: 48px; }
 .exam-card-count.is-soon { background: var(--now-soft); color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-border); }
 .exam-card-days { font-size: var(--text-xl); font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
-.exam-card-days-label { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 3px; opacity: 0.85; }
+.exam-card-days-label { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 3px; }
 .exam-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .exam-card-name { font-size: var(--text-md); font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exam-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); font-size: var(--text-xs); color: var(--muted); }

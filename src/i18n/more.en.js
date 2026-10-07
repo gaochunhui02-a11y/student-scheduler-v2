@@ -180,7 +180,7 @@ export default {
   'exams.conf5': "Solid",
   'exams.estimate': "Time needed (min)",
   'exams.revised': "Already revised (min)",
-  'exams.log30Label': "Log 30 minutes on {name}",
+  'exams.log30Label': "+30m: log 30 minutes on {name}",
   'exams.logged': "Logged {time} on {name}.",
   'exams.noCourseExams': "No exams for this course",
   'exams.noCourseExamsBody': "Add midterms and finals to see countdowns and plan revision.",
@@ -750,4 +750,5 @@ export default {
   'onboarding.errSemesterOrder': "The semester has to end after it starts.",
   'onboarding.errCourseName': "Add a name for this course, or clear its code.",
   'onboarding.errCourseLong': "That name or code is too long.",
+
 };
