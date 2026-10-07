@@ -593,8 +593,11 @@ export function initCoursesPage() {
   return {
     onShow(param) {
       if (param) {
-        if (current.courseId !== param) state.detailTab = 'overview';
-        renderDetail(param);
+        // "<courseId>" or "<courseId>:<tab>" (e.g. from the Grades page)
+        const [courseId, tab] = String(param).split(':');
+        if (tab) state.detailTab = tab;
+        else if (current.courseId !== courseId) state.detailTab = 'overview';
+        renderDetail(courseId);
       } else {
         current.courseId = null;
         renderList();

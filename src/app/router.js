@@ -32,7 +32,8 @@ export function parseHash(hash) {
   const view = ROUTES[slug];
   if (!view) return null;
   const param = rest.length ? decodeURIComponent(rest.join('/')) : null;
-  return { view, slug, param: param && /^[\w-]{1,64}$/.test(param) ? param : null };
+  // Params are ids, dates or "<id>:<tab>" — nothing else is accepted.
+  return { view, slug, param: param && /^[\w:-]{1,80}$/.test(param) ? param : null };
 }
 
 export function buildHash(view, param = null) {

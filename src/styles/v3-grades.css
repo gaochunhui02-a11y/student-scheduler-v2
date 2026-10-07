@@ -1,0 +1,94 @@
+/* ---------------- Grades (V3-C) ---------------- */
+.grade-summary {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(260px, 1.6fr) minmax(190px, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.grade-summary > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.grade-summary-range, .grade-summary-need { padding-left: var(--space-5); border-left: 1px solid var(--border-subtle); }
+.grade-big { font-size: var(--text-3xl); font-weight: 750; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); }
+.grade-need-figure { font-size: var(--text-2xl); font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--accent-strong); display: inline-flex; }
+.grade-need-figure.is-danger { color: var(--danger); }
+.grade-need-figure.is-success { color: var(--success); }
+.grade-need-figure svg { width: 28px; height: 28px; }
+@media (max-width: 900px) {
+  .grade-summary { grid-template-columns: 1fr; gap: var(--space-4); }
+  .grade-summary-range, .grade-summary-need { padding-left: 0; border-left: none; padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
+}
+
+.grade-range { margin: var(--space-2) 0 var(--space-1); }
+.grade-range-track { position: relative; height: 12px; border-radius: var(--radius-pill); background: var(--surface-3); overflow: visible; }
+.grade-range-secured { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--radius-pill) 0 0 var(--radius-pill); background: var(--c, var(--accent)); }
+.grade-range-possible {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c, var(--accent)) 28%, transparent) 0 4px, color-mix(in srgb, var(--c, var(--accent)) 12%, transparent) 4px 8px);
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+}
+.grade-range-marker { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 2px; }
+.grade-range-projected { background: var(--text); }
+.grade-range-target { background: transparent; border-left: 2px dashed var(--now); width: 0; }
+.grade-range-scale { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.grade-range-legend { display: flex; flex-wrap: wrap; gap: 4px var(--space-3); font-size: var(--text-2xs); color: var(--muted); }
+.grade-range-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.grade-range-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.grade-range-legend .lg-secured { background: var(--accent); }
+.grade-range-legend .lg-possible { background: repeating-linear-gradient(135deg, var(--accent-soft-strong) 0 3px, var(--accent-soft) 3px 6px); }
+.grade-range-legend .lg-projected { width: 2px; height: 12px; background: var(--text); border-radius: 1px; }
+.grade-range-legend .lg-target { width: 0; height: 12px; border-left: 2px dashed var(--now); border-radius: 0; }
+
+.grade-category { display: flex; flex-direction: column; gap: var(--space-1); }
+.grade-category + .grade-category { padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
+.grade-category.is-muted { opacity: 0.75; }
+.grade-category-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.grade-category-name { margin: 0; font-size: var(--text-sm); font-weight: 700; }
+.grade-category-avg { font-size: var(--text-md); font-weight: 700; font-variant-numeric: tabular-nums; }
+.grade-category > .btn { align-self: flex-start; }
+.grade-item-row.is-pending .list-row-title { color: var(--text-soft); }
+.grade-score { gap: var(--space-3); color: var(--text-soft); }
+.grade-score strong { min-width: 52px; text-align: right; color: var(--text); }
+
+.grade-calc-result { margin-top: var(--space-4); }
+.grade-calc-answer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.grade-calc-answer--success { background: var(--success-soft); }
+.grade-calc-answer--danger { background: var(--danger-soft); }
+.grade-calc-figure { font-size: var(--text-2xl); font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--accent-strong); flex: none; }
+.grade-calc-answer--danger .grade-calc-figure { color: var(--danger); }
+.grade-calc-answer--success .grade-calc-figure { color: var(--success); }
+
+.grade-table { display: flex; flex-direction: column; }
+.grade-table-head, .grade-table-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.6fr) 110px minmax(110px, 1fr) 70px 140px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px var(--space-5);
+}
+.grade-table-head { font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
+.grade-table-row { color: inherit; text-decoration: none; font-size: var(--text-sm); border-bottom: 1px solid var(--border-subtle); }
+.grade-table-row:hover { background: var(--surface-2); }
+.grade-table-row:last-child { border-bottom: none; }
+.grade-table-course { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.grade-table-course > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.grade-table-course strong, .grade-table-course .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grade-table-grade { font-weight: 700; font-size: var(--text-md); }
+.grade-table-progress { display: flex; align-items: center; gap: var(--space-2); }
+.grade-table-progress .bar { flex: 1; }
+.grade-table-progress .bar > span { background: var(--c); }
+@media (max-width: 760px) {
+  .grade-table-head { display: none; }
+  .grade-table-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .grade-table-progress { grid-column: 1 / -1; }
+  .grade-table-row > span:nth-child(4) { display: none; }
+}
