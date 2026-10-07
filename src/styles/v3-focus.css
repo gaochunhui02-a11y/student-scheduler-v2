@@ -1,0 +1,63 @@
+/* ---------------- Focus Mode additions (V3-K) ---------------- */
+.focus-notes { margin-top: var(--space-4); text-align: left; width: 100%; max-width: 420px; margin-left: auto; margin-right: auto; }
+.focus-notes-summary { cursor: pointer; font-size: var(--text-xs); font-weight: 600; color: var(--muted); list-style: none; text-align: center; }
+.focus-notes-summary::-webkit-details-marker { display: none; }
+.focus-notes-summary:hover { color: var(--text); }
+.focus-notes-input {
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+.focus-confirm {
+  margin: var(--space-4) auto 0;
+  max-width: 420px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  text-align: center;
+}
+.focus-confirm-text { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text); }
+.focus-confirm-actions { display: flex; justify-content: center; gap: var(--space-2); flex-wrap: wrap; }
+.focus-confirm-actions .btn-secondary { width: auto; height: var(--control-md); }
+.focus-confirm-discard {
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.focus-panel.is-summary > :not(.focus-summary):not(.focus-eyebrow):not(.focus-task) { display: none !important; }
+.focus-summary { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
+.focus-summary-check {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 800;
+  background: var(--success-soft);
+  color: var(--success);
+}
+.focus-summary-title { margin: 0; font-size: var(--text-xl); font-weight: 700; }
+.focus-summary-title:focus { outline: none; }
+.focus-summary-stats { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: var(--space-2); width: 100%; max-width: 380px; }
+.focus-summary-stats > div { padding: var(--space-3); border-radius: var(--radius); background: var(--surface-2); text-align: left; }
+.focus-summary-stats dt { font-size: var(--text-2xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.focus-summary-stats dd { margin: 2px 0 0; font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+.focus-summary-note { margin: 0; font-size: var(--text-sm); color: var(--muted); }
+.focus-summary-done { min-width: 160px; }
+.focus-summary-title:focus-visible { box-shadow: none; }
+.focus-summary .focus-summary-done { height: var(--control-lg); padding: 0 var(--space-6); border-radius: var(--radius-sm); font-size: var(--text-md); }

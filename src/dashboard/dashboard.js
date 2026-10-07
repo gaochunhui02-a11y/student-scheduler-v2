@@ -65,6 +65,7 @@ import { computeRemainingMinutes, isFullyCompletedByMinutes, validateCompletedMi
 import {
   createFocusSession,
   isPaused,
+  getElapsedMs,
   getRemainingMs,
   isTimeUp,
   pauseSession,
@@ -125,6 +126,7 @@ import { findBlockedSubjects } from '../tasks/dependencyGate.js';
 import { initForecastPanel } from '../workload/forecastPanel.js';
 import { planSingleMove, applyRebalanceMoves } from '../workload/workloadData.js';
 import { initCalendarV3 } from '../calendar/calendarView3.js';
+import { recordFocusSession, focusOutcome, taskTimeSummary } from '../focus/focusHistory.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -2796,7 +2798,26 @@ async function init(session) {
           <button type="button" class="focus-link-btn focus-stop-btn"></button>
           <button type="button" class="focus-link-btn focus-exit-btn"></button>
         </div>
+        <details class="focus-notes">
+          <summary class="focus-notes-summary"></summary>
+          <label class="sr-only focus-notes-label" for="focusNotesInput"></label>
+          <textarea class="focus-notes-input" id="focusNotesInput" rows="3" maxlength="2000"></textarea>
+        </details>
+        <div class="focus-confirm" hidden role="alertdialog" aria-labelledby="focusConfirmText">
+          <p class="focus-confirm-text" id="focusConfirmText"></p>
+          <div class="focus-confirm-actions">
+            <button type="button" class="btn-secondary focus-confirm-keep"></button>
+            <button type="button" class="focus-confirm-discard"></button>
+          </div>
+        </div>
         <div class="focus-error hint-error"></div>
+        <div class="focus-summary" hidden>
+          <div class="focus-summary-check" aria-hidden="true">✓</div>
+          <h3 class="focus-summary-title" tabindex="-1"></h3>
+          <dl class="focus-summary-stats"></dl>
+          <p class="focus-summary-note"></p>
+          <button type="button" class="focus-complete-btn focus-summary-done"></button>
+        </div>
         <div class="focus-progress">
           <div class="focus-progress-label"></div>
           <div class="focus-progress-value"></div>
@@ -2823,6 +2844,20 @@ async function init(session) {
       progressLabel: q('.focus-progress-label'),
       progressValue: q('.focus-progress-value'),
       progressDots: q('.focus-progress-dots'),
+      panel: q('.focus-panel'),
+      notes: q('.focus-notes'),
+      notesSummary: q('.focus-notes-summary'),
+      notesLabel: q('.focus-notes-label'),
+      notesInput: q('.focus-notes-input'),
+      confirm: q('.focus-confirm'),
+      confirmText: q('.focus-confirm-text'),
+      confirmKeep: q('.focus-confirm-keep'),
+      confirmDiscard: q('.focus-confirm-discard'),
+      summary: q('.focus-summary'),
+      summaryTitle: q('.focus-summary-title'),
+      summaryStats: q('.focus-summary-stats'),
+      summaryNote: q('.focus-summary-note'),
+      summaryDone: q('.focus-summary-done'),
     };
 
     els.pauseBtn.addEventListener('click', () => {
@@ -2836,9 +2871,22 @@ async function init(session) {
     els.stopBtn.addEventListener('click', () => endFocusSession('stop'));
     els.exitBtn.addEventListener('click', () => {
       if (focusSaving) return;
-      if (!window.confirm(t('focus.exitConfirm'))) return;
+      els.confirm.hidden = false;
+      els.confirmKeep.focus();
+    });
+    els.confirmKeep.addEventListener('click', () => {
+      els.confirm.hidden = true;
+      els.exitBtn.focus();
+    });
+    els.confirmDiscard.addEventListener('click', () => {
+      els.confirm.hidden = true;
       closeFocusOverlay();
     });
+    els.notesInput.addEventListener('input', () => {
+      focusMeta.notes = els.notesInput.value;
+      storeFocusMeta();
+    });
+    els.summaryDone.addEventListener('click', () => closeFocusOverlay());
     // A tab returning from the background re-renders immediately rather
     // than waiting for the next (possibly throttled) tick.
     document.addEventListener('visibilitychange', () => {
@@ -2876,12 +2924,18 @@ async function init(session) {
 
     setFocusText(els.pauseBtn, paused ? t('focus.resume') : t('focus.pause'));
     els.pauseBtn.disabled = focusSaving || timeUp;
-    setFocusText(els.completeBtn, t('focus.complete'));
+    setFocusText(els.completeBtn, t('focus3.finish'));
     els.completeBtn.disabled = focusSaving;
-    setFocusText(els.stopBtn, t('focus.stopEarly'));
+    setFocusText(els.stopBtn, t('focus3.finishEarly'));
     els.stopBtn.disabled = focusSaving;
-    setFocusText(els.exitBtn, t('focus.exit'));
+    setFocusText(els.exitBtn, t('focus3.cancel'));
     els.exitBtn.disabled = focusSaving;
+    setFocusText(els.notesSummary, focusMeta.notes ? t('focus3.notesEdit') : t('focus3.notesAdd'));
+    setFocusText(els.notesLabel, t('focus3.notesLabel'));
+    els.notesInput.placeholder = t('focus3.notesPlaceholder');
+    setFocusText(els.confirmText, t('focus3.cancelConfirm'));
+    setFocusText(els.confirmKeep, t('focus3.keepGoing'));
+    setFocusText(els.confirmDiscard, t('focus3.discard'));
 
     const isToday = schedule && schedule.for_date === addDaysToDateStr(tomorrowDateStr(), -1);
     const progress = computeTodaySessionProgress(currentScheduleItems);
@@ -2898,6 +2952,11 @@ async function init(session) {
   function openFocusOverlay() {
     if (!focusOverlay) focusOverlay = buildFocusOverlay();
     focusOverlay.error.textContent = '';
+    focusOverlay.panel.classList.remove('is-summary');
+    focusOverlay.summary.hidden = true;
+    focusOverlay.confirm.hidden = true;
+    focusOverlay.notesInput.value = focusMeta.notes || '';
+    focusOverlay.notes.open = Boolean(focusMeta.notes);
     if (focusOverlay.overlay.hidden) focusPrevTitle = document.title;
     focusOverlay.overlay.hidden = false;
     document.body.classList.add('focus-open');
@@ -2914,9 +2973,28 @@ async function init(session) {
     focusItem = null;
     focusSaving = false;
     storeFocusSession();
+    focusMeta = { startedAt: null, notes: '' };
+    storeFocusMeta();
     if (focusOverlay) focusOverlay.overlay.hidden = true;
     document.body.classList.remove('focus-open');
     if (focusPrevTitle) document.title = focusPrevTitle;
+  }
+
+  // V3-K: start time + notes for the session history, stored next to (not
+  // inside) the V2 session object so its stored format is unchanged.
+  let focusMeta = { startedAt: null, notes: '' };
+  function storeFocusMeta() {
+    try {
+      if (focusSession) localStorage.setItem(`${FOCUS_STORAGE_KEY}:meta`, JSON.stringify(focusMeta));
+      else localStorage.removeItem(`${FOCUS_STORAGE_KEY}:meta`);
+    } catch { /* per-viewer convenience only */ }
+  }
+  function readFocusMeta() {
+    try {
+      const m = JSON.parse(localStorage.getItem(`${FOCUS_STORAGE_KEY}:meta`) || 'null');
+      if (m && typeof m === 'object') return { startedAt: Number(m.startedAt) || null, notes: typeof m.notes === 'string' ? m.notes.slice(0, 2000) : '' };
+    } catch { /* ignore */ }
+    return { startedAt: null, notes: '' };
   }
 
   function startFocusSession(item) {
@@ -2930,6 +3008,8 @@ async function init(session) {
       now: Date.now(),
     });
     storeFocusSession();
+    focusMeta = { startedAt: Date.now(), notes: '' };
+    storeFocusMeta();
     openFocusOverlay();
   }
 
@@ -2948,6 +3028,7 @@ async function init(session) {
     }
     focusItem = item;
     focusSession = stored;
+    focusMeta = readFocusMeta();
     openFocusOverlay();
   }
 
@@ -2968,7 +3049,27 @@ async function init(session) {
     const token = activeToken;
     try {
       await setScheduleItemPartialCompletion(item.id, write.completedMinutes, write.completed);
-      closeFocusOverlay();
+      // V3-K: history row (real elapsed time, overtime included) — best
+      // effort; the block's progress above is already saved either way.
+      const endedAt = Date.now();
+      const actualMinutes = Math.round(getElapsedMs(focusSession, endedAt) / 60000);
+      const plannedMinutes = item.end - item.start;
+      const notes = focusMeta.notes || '';
+      try {
+        await recordFocusSession(userId, {
+          item, plannedMinutes, actualMinutes, notes,
+          outcome: focusOutcome(kind, write.completed),
+          startedAt: focusMeta.startedAt || endedAt - actualMinutes * 60000,
+          endedAt,
+        });
+      } catch (historyErr) {
+        console.error('Could not record focus session history:', historyErr);
+      }
+      let taskSummary = null;
+      try {
+        taskSummary = await taskTimeSummary(userId, item.sourceSubjectId);
+      } catch { /* summary is optional */ }
+      showFocusSummary({ kind, actualMinutes, plannedMinutes, completed: write.completed, taskSummary });
       if (token !== activeToken) return; // navigated away before this resolved
       item.completedMinutes = write.completedMinutes;
       item.completed = write.completed;
@@ -2983,6 +3084,35 @@ async function init(session) {
       if (focusOverlay) focusOverlay.error.textContent = t('errors.couldNotSave');
       renderFocusOverlay();
     }
+  }
+
+  function showFocusSummary({ kind, actualMinutes, plannedMinutes, completed, taskSummary }) {
+    clearInterval(focusTickTimer);
+    focusTickTimer = null;
+    const els = focusOverlay;
+    if (!els) return;
+    focusSession = null;
+    focusSaving = false;
+    storeFocusSession();
+    focusMeta = { startedAt: null, notes: '' };
+    storeFocusMeta();
+    els.panel.classList.add('is-summary');
+    els.summary.hidden = false;
+    els.summaryTitle.textContent = kind === 'complete' || completed ? t('focus3.summaryDone') : t('focus3.summarySaved');
+    const rows = [
+      [t('focus3.focused'), formatDuration(actualMinutes)],
+      [t('focus3.planned'), formatDuration(plannedMinutes)],
+    ];
+    if (taskSummary && taskSummary.estimate) {
+      rows.push([t('focus3.taskEstimate'), formatDuration(taskSummary.estimate)]);
+      rows.push([t('focus3.taskFocused'), formatDuration(taskSummary.focused)]);
+    }
+    els.summaryStats.innerHTML = rows.map(([k, v]) => `<div><dt>${escapeAttr(k)}</dt><dd>${escapeAttr(v)}</dd></div>`).join('');
+    const diff = actualMinutes - plannedMinutes;
+    els.summaryNote.textContent = Math.abs(diff) < 3 ? t('focus3.onTime') : diff > 0 ? t('focus3.over').replace('{time}', formatDuration(diff)) : t('focus3.under').replace('{time}', formatDuration(-diff));
+    els.summaryDone.textContent = t('common.done');
+    document.title = focusPrevTitle || document.title;
+    els.summaryTitle.focus();
   }
 
   function minutesToInputTime(mins) {
