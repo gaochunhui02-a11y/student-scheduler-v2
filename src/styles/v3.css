@@ -5,6 +5,7 @@
 @import "./v3-workload.css";
 @import "./v3-calendar.css";
 @import "./v3-focus.css";
+@import "./v3-insights.css";
 
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:

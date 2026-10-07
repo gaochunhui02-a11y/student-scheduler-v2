@@ -23,7 +23,7 @@ function makeIds() {
 const COURSE_DEFS = [
   { key: 'math', name: 'Calculus II', code: 'MATH 152', instructor: 'Dr. Ana Ruiz', color: '#3b6fe0', location: 'Hall B 204', target: 90, credits: 4 },
   { key: 'cs', name: 'Intro to Computer Science', code: 'CS 101', instructor: 'Prof. Sam Okafor', color: '#0f9488', location: 'Engineering 110', target: 92, credits: 4 },
-  { key: 'chem', name: 'General Chemistry', code: 'CHEM 110', instructor: 'Dr. Lee Park', color: '#d48a0c', location: 'Science Center 3', target: 85, credits: 4 },
+  { key: 'chem', name: 'General Chemistry', code: 'CHEM 110', instructor: 'Dr. Lee Park', color: '#c27c0a', location: 'Science Center 3', target: 85, credits: 4 },
   { key: 'hist', name: 'Modern World History', code: 'HIST 210', instructor: 'Prof. Iris Novak', color: '#d9466b', location: 'Humanities 12', target: 88, credits: 3 },
   { key: 'bio', name: 'Cell Biology', code: 'BIO 120', instructor: 'Dr. Priya Shah', color: '#2f9e57', location: 'Life Sciences 140', target: null, credits: 3 },
 ];

@@ -9,13 +9,13 @@ import { addDays, dayOfWeek, isValidDateStr, clockToMinutes } from '../shared/da
 export const COURSE_COLORS = [
   '#3b6fe0', // cobalt
   '#0f9488', // teal
-  '#d48a0c', // amber
+  '#c27c0a', // amber
   '#d9466b', // rose
   '#7c5ce0', // violet
   '#2f9e57', // green
   '#e06a2c', // orange
   '#0e93b8', // cyan
-  '#5b6b82', // slate
+  '#8a6a1c', // bronze (slate failed the chroma check)
   '#c94fa8', // magenta
 ];
 

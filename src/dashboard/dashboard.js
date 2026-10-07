@@ -127,6 +127,7 @@ import { initForecastPanel } from '../workload/forecastPanel.js';
 import { planSingleMove, applyRebalanceMoves } from '../workload/workloadData.js';
 import { initCalendarV3 } from '../calendar/calendarView3.js';
 import { recordFocusSession, focusOutcome, taskTimeSummary } from '../focus/focusHistory.js';
+import { initInsightsV3 } from '../insights/insightsV3.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -881,6 +882,7 @@ async function init(session) {
   const settingsSection = { onShow: () => syncSettingsControls() };
 
   const v3Sections = initV3Sections();
+  const insightsV3 = initInsightsV3();
   const altViewSections = {
     boardView: boardSection,
     weekView: {
@@ -891,7 +893,13 @@ async function init(session) {
     },
     calendarView: calendarV3 || agendaSection,
     analyticsView: analyticsSection,
-    insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
+    insightsView: {
+      onShow: () => {
+        if (insightsV3) insightsV3.onShow();
+        if (analyticsSection) return analyticsSection.onShowInsights();
+        return null;
+      },
+    },
     settingsView: settingsSection,
     historyView: { onShow: () => refreshHistoryList() },
     ...v3Sections,
