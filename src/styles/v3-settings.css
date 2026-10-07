@@ -66,3 +66,23 @@ body.is-offline .workspace .btn--primary { opacity: .5; pointer-events: none; }
 .offline-snapshot li { display: flex; gap: var(--space-3); justify-content: space-between; padding: 8px var(--space-3); font-size: var(--text-sm); }
 .offline-snapshot li + li { border-top: 1px solid var(--border-subtle); }
 .offline-snapshot .muted { font-size: var(--text-xs); }
+
+/* ---------------- Onboarding V3 (courses / weekly classes) ---------------- */
+.onboarding { max-width: 600px; }
+.onb-row-sem { grid-template-columns: minmax(0, 1fr) 140px 140px; }
+.onb-row-course { grid-template-columns: minmax(0, 1fr) 130px; }
+.onb-row-task3 { grid-template-columns: minmax(0, 1fr) 90px 150px; }
+.onb-row-class3 { grid-template-columns: minmax(0, 1fr) 92px 100px 100px; align-items: end; }
+.onb-row-class3 > .onb-field:nth-child(5) { grid-column: 1 / 3; }
+.onb-row-class3 > .onb-check { grid-column: 3 / -1; }
+.onb-row-class3 + .onb-row-class3 { padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.onb-field select { width: 100%; margin-bottom: 0 !important; }
+.onb-check { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; font-size: var(--text-sm); color: var(--text-soft); cursor: pointer; }
+.onb-check input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent); }
+@media (max-width: 600px) {
+  .onb-row-sem, .onb-row-class3, .onb-row-task3 { grid-template-columns: 1fr 1fr; }
+  .onb-row-sem > .onb-field:first-child,
+  .onb-row-class3 > .onb-field:first-child,
+  .onb-row-task3 > .onb-field:first-child { grid-column: 1 / -1; }
+  .onb-row-class3 > .onb-field:nth-child(5), .onb-row-class3 > .onb-check { grid-column: auto; }
+}

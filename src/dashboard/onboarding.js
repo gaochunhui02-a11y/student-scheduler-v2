@@ -5,7 +5,9 @@
 // them, then generates. Skip/finish call host.markComplete.
 
 import {
-  ONBOARDING_STEPS,
+  onboardingSteps,
+  buildOnboardingAcademics,
+  defaultOnboardingAnswersV3,
   STUDY_PERIODS,
   SESSION_LENGTHS,
   validateOnboardingStep,
@@ -18,11 +20,17 @@ import {
 // @param {(key:string) => string} host.t
 // @param {(plan:object) => Promise<void>} host.applyPlan
 // @param {() => Promise<void>|void} host.markComplete
+// @param {() => boolean} [host.isV3]   courses feature available (V3 steps)
+// @param {() => string} [host.today]   YYYY-MM-DD
+// V3: applyPlan(plan, academics) also receives buildOnboardingAcademics().
 export function initOnboarding(host) {
   const { t } = host;
   let overlay = null;
   let stepIndex = 0;
   let answers = defaultOnboardingAnswers();
+  let STEPS = onboardingSteps();
+  let v3 = false;
+  const WEEKDAY_KEYS = ['recurring.daySun', 'recurring.dayMon', 'recurring.dayTue', 'recurring.dayWed', 'recurring.dayThu', 'recurring.dayFri', 'recurring.daySat'];
   let busy = false;
   let returnFocusTo = null;
 
@@ -72,21 +80,36 @@ export function initOnboarding(host) {
   const q = (sel) => overlay.querySelector(sel);
 
   function readStep() {
-    const step = ONBOARDING_STEPS[stepIndex];
+    const step = STEPS[stepIndex];
     const body = q('.onboarding-body');
-    if (step === 'tasks') {
+    const courseOf = (row) => { const sel = row.querySelector('.onb-course'); return sel ? sel.value : ''; };
+    if (step === 'courses') {
+      answers.semester = { name: body.querySelector('.onb-sem-name').value, start: body.querySelector('.onb-sem-start').value, end: body.querySelector('.onb-sem-end').value };
+      answers.courses = Array.from(body.querySelectorAll('.onb-row-course')).map((row) => ({
+        name: row.querySelector('.onb-name').value,
+        code: row.querySelector('.onb-code').value,
+      }));
+    } else if (step === 'tasks') {
       answers.tasks = Array.from(body.querySelectorAll('.onb-row')).map((row) => ({
         name: row.querySelector('.onb-name').value,
         minutes: row.querySelector('.onb-minutes').value,
+        course: courseOf(row),
       }));
     } else if (step === 'day') {
       answers.day = { wake: body.querySelector('.onb-wake').value, sleep: body.querySelector('.onb-sleep').value };
     } else if (step === 'classes') {
-      answers.classes = Array.from(body.querySelectorAll('.onb-row')).map((row) => ({
-        name: row.querySelector('.onb-name').value,
-        start: row.querySelector('.onb-start').value,
-        end: row.querySelector('.onb-end').value,
-      }));
+      answers.classes = Array.from(body.querySelectorAll('.onb-row')).map((row) => {
+        const weekly = row.querySelector('.onb-weekly');
+        const weekday = row.querySelector('.onb-weekday');
+        return {
+          name: row.querySelector('.onb-name').value,
+          start: row.querySelector('.onb-start').value,
+          end: row.querySelector('.onb-end').value,
+          weekly: weekly ? weekly.checked : false,
+          weekday: weekday ? Number(weekday.value) : undefined,
+          course: courseOf(row),
+        };
+      });
     } else if (step === 'style') {
       const period = body.querySelector('input[name="onbPeriod"]:checked');
       const session = body.querySelector('input[name="onbSession"]:checked');
@@ -109,6 +132,24 @@ export function initOnboarding(host) {
     return node;
   }
 
+  function select(className, options, current) {
+    const node = el('select', className);
+    options.forEach(([value, label]) => {
+      const opt = el('option', null, label);
+      opt.value = String(value);
+      if (String(value) === String(current ?? '')) opt.selected = true;
+      node.appendChild(opt);
+    });
+    return node;
+  }
+
+  // Courses typed in the first step, offered on the class and task rows.
+  function courseSelect(current) {
+    const named = (answers.courses || []).map((c, i) => [i, (c.name || '').trim()]).filter(([, name]) => name);
+    if (!v3 || named.length === 0) return null;
+    return labeled(t('onboarding.course'), select('onb-course', [['', t('onboarding.noCourse')], ...named], current));
+  }
+
   function choiceGroup(name, options, current, labelFor) {
     const group = el('div', 'onb-choices');
     group.setAttribute('role', 'radiogroup');
@@ -126,11 +167,26 @@ export function initOnboarding(host) {
   function renderBody(step) {
     const body = q('.onboarding-body');
     body.innerHTML = '';
-    if (step === 'tasks') {
+    if (step === 'courses') {
+      const sem = el('div', 'onb-row onb-row-sem');
+      sem.appendChild(labeled(t('onboarding.semesterName'), input('text', 'onb-sem-name', answers.semester.name, { placeholder: t('onboarding.semesterExample'), maxlength: '120' })));
+      sem.appendChild(labeled(t('onboarding.semesterStart'), input('date', 'onb-sem-start', answers.semester.start)));
+      sem.appendChild(labeled(t('onboarding.semesterEnd'), input('date', 'onb-sem-end', answers.semester.end)));
+      body.appendChild(sem);
+      body.appendChild(el('p', 'onb-field-label onb-spaced', t('onboarding.coursesQuestion')));
+      answers.courses.forEach((c, i) => {
+        const row = el('div', 'onb-row onb-row-course');
+        row.appendChild(labeled(t('onboarding.courseName'), input('text', 'onb-name', c.name, { placeholder: t(`onboarding.courseExample${i + 1}`), maxlength: '120' })));
+        row.appendChild(labeled(t('onboarding.courseCode'), input('text', 'onb-code', c.code, { placeholder: t(`onboarding.codeExample${i + 1}`), maxlength: '32' })));
+        body.appendChild(row);
+      });
+    } else if (step === 'tasks') {
       answers.tasks.forEach((task, i) => {
-        const row = el('div', 'onb-row');
+        const row = el('div', v3 ? 'onb-row onb-row-task3' : 'onb-row');
         row.appendChild(labeled(t('onboarding.taskName'), input('text', 'onb-name', task.name, { placeholder: t(`onboarding.taskExample${i + 1}`), maxlength: '80' })));
         row.appendChild(labeled(t('onboarding.minutes'), input('number', 'onb-minutes', task.minutes, { min: '15', max: '600', step: '15', inputmode: 'numeric' })));
+        const cs = courseSelect(task.course);
+        if (cs) row.appendChild(cs);
         body.appendChild(row);
       });
     } else if (step === 'day') {
@@ -140,13 +196,28 @@ export function initOnboarding(host) {
       body.appendChild(row);
     } else if (step === 'classes') {
       answers.classes.forEach((c) => {
-        const row = el('div', 'onb-row onb-row-class');
+        const row = el('div', v3 ? 'onb-row onb-row-class3' : 'onb-row onb-row-class');
         row.appendChild(labeled(t('onboarding.className'), input('text', 'onb-name', c.name, { placeholder: t('onboarding.classExample'), maxlength: '80' })));
+        if (v3) row.appendChild(labeled(t('onboarding.weekday'), select('onb-weekday', WEEKDAY_KEYS.map((k, i) => [i, t(k)]), c.weekday)));
         row.appendChild(labeled(t('onboarding.start'), input('time', 'onb-start', c.start)));
         row.appendChild(labeled(t('onboarding.end'), input('time', 'onb-end', c.end)));
+        if (v3) {
+          const cs = courseSelect(c.course);
+          if (cs) row.appendChild(cs);
+          const weekly = el('label', 'onb-check');
+          const box = input('checkbox', 'onb-weekly', '');
+          box.checked = c.weekly !== false;
+          // A one-off class is today's; the weekday only matters for weekly ones.
+          const daySelect = row.querySelector('.onb-weekday');
+          daySelect.disabled = !box.checked;
+          box.addEventListener('change', () => { daySelect.disabled = !box.checked; });
+          weekly.appendChild(box);
+          weekly.appendChild(el('span', null, t('onboarding.everyWeek')));
+          row.appendChild(weekly);
+        }
         body.appendChild(row);
       });
-      body.appendChild(el('p', 'hint', t('onboarding.classesRecurringHint')));
+      body.appendChild(el('p', 'hint', t(v3 ? 'onboarding.classesWeeklyHint' : 'onboarding.classesRecurringHint')));
     } else if (step === 'style') {
       body.appendChild(el('p', 'onb-field-label', t('onboarding.periodQuestion')));
       body.appendChild(choiceGroup('onbPeriod', STUDY_PERIODS, answers.style.period, (v) => t(PERIOD_KEYS[v])));
@@ -156,14 +227,16 @@ export function initOnboarding(host) {
   }
 
   function render() {
-    const step = ONBOARDING_STEPS[stepIndex];
-    const isLast = stepIndex === ONBOARDING_STEPS.length - 1;
+    const step = STEPS[stepIndex];
+    const isLast = stepIndex === STEPS.length - 1;
     const steps = q('.onboarding-steps');
-    steps.innerHTML = ONBOARDING_STEPS.map((_, i) => `<li class="${i < stepIndex ? 'done' : i === stepIndex ? 'current' : ''}"></li>`).join('');
+    steps.innerHTML = STEPS.map((_, i) => `<li class="${i < stepIndex ? 'done' : i === stepIndex ? 'current' : ''}"></li>`).join('');
     q('.onboarding-skip').textContent = t('onboarding.skip');
-    q('.onboarding-eyebrow').textContent = t('onboarding.stepOf').replace('{n}', stepIndex + 1).replace('{total}', ONBOARDING_STEPS.length);
-    q('.onboarding-title').textContent = t(`onboarding.${step}Title`);
-    q('.onboarding-lead').textContent = t(`onboarding.${step}Lead`);
+    q('.onboarding-eyebrow').textContent = t('onboarding.stepOf').replace('{n}', stepIndex + 1).replace('{total}', STEPS.length);
+    // V3 rewords the classes step (a weekly timetable, not just today).
+    const copyKey = v3 && step === 'classes' ? 'classes3' : step;
+    q('.onboarding-title').textContent = t(`onboarding.${copyKey}Title`);
+    q('.onboarding-lead').textContent = t(`onboarding.${copyKey}Lead`);
     q('.onboarding-error').textContent = '';
     renderBody(step);
     const back = q('.onboarding-back');
@@ -179,15 +252,15 @@ export function initOnboarding(host) {
     }
     nextBtn.disabled = busy;
     back.disabled = busy;
-    const first = q('.onboarding-body input');
+    const first = q('.onboarding-body input, .onboarding-body select');
     if (first) first.focus();
   }
 
   // Point at the exact field(s) an error is about.
-  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep' };
+  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep', semName: '.onb-sem-name', semDates: '.onb-sem-start, .onb-sem-end', weekday: '.onb-weekday' };
   function markInvalid(errors) {
     const body = q('.onboarding-body');
-    const rows = body.querySelectorAll('.onb-row');
+    const rows = body.querySelectorAll(STEPS[stepIndex] === 'courses' ? '.onb-row-course' : '.onb-row');
     let first = null;
     errors.forEach((err) => {
       const scope = Number.isInteger(err.index) ? rows[err.index] : body;
@@ -204,7 +277,7 @@ export function initOnboarding(host) {
   async function next() {
     if (busy) return;
     readStep();
-    const step = ONBOARDING_STEPS[stepIndex];
+    const step = STEPS[stepIndex];
     const result = validateOnboardingStep(step, answers);
     q('.onboarding-body').querySelectorAll('[aria-invalid]').forEach((node) => node.removeAttribute('aria-invalid'));
     if (!result.ok) {
@@ -212,7 +285,7 @@ export function initOnboarding(host) {
       markInvalid(result.errors);
       return;
     }
-    if (stepIndex < ONBOARDING_STEPS.length - 1) {
+    if (stepIndex < STEPS.length - 1) {
       stepIndex += 1;
       render();
       return;
@@ -228,8 +301,10 @@ export function initOnboarding(host) {
     try {
       if (build) {
         const plan = buildOnboardingPlan(answers);
+        const academics = v3 ? buildOnboardingAcademics(answers, { today: host.today() }) : null;
         nextBtn.textContent = t('onboarding.building');
-        if (plan.day || plan.classes.length || plan.tasks.length) await host.applyPlan(plan);
+        const hasAcademics = academics && (academics.semester || academics.courses.length || academics.weeklyClasses.length);
+        if (plan.day || plan.classes.length || plan.tasks.length || hasAcademics) await host.applyPlan(plan, academics);
       }
       await host.markComplete();
       close();
@@ -246,7 +321,9 @@ export function initOnboarding(host) {
   function open() {
     if (!overlay) build();
     stepIndex = 0;
-    answers = defaultOnboardingAnswers();
+    v3 = Boolean(host.isV3 && host.isV3());
+    STEPS = onboardingSteps({ courses: v3 });
+    answers = v3 ? defaultOnboardingAnswersV3(host.today()) : defaultOnboardingAnswers();
     returnFocusTo = document.activeElement;
     overlay.hidden = false;
     document.body.classList.add('onboarding-open');

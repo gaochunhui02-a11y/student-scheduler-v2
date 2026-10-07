@@ -11,6 +11,16 @@
 // handlers persist it. Nothing here is a second way of saving anything.
 
 export const ONBOARDING_STEPS = ['tasks', 'day', 'classes', 'style'];
+// V3 (when the courses feature exists): set up the term first, then the
+// week, then the first tasks — each step still optional.
+export const ONBOARDING_STEPS_V3 = ['courses', 'classes', 'tasks', 'day', 'style'];
+export const MAX_ONBOARDING_COURSES = 4;
+
+export function onboardingSteps({ courses = false } = {}) {
+  return courses ? ONBOARDING_STEPS_V3 : ONBOARDING_STEPS;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const STUDY_PERIODS = ['none', 'morning', 'afternoon', 'evening'];
 export const SESSION_LENGTHS = [25, 45, 60, 90];
 export const MAX_ONBOARDING_ROWS = 3;
@@ -70,6 +80,23 @@ export function validateOnboardingStep(step, answers = {}) {
       if (!name) errors.push({ index, field: 'name', key: 'onboarding.errClassName' });
       if (!isValidClock(c.start) || !isValidClock(c.end)) errors.push({ index, field: 'time', key: 'onboarding.errTime' });
       else if (toMinutes(c.end) <= toMinutes(c.start)) errors.push({ index, field: 'time', key: 'onboarding.errClassOrder' });
+      if (c.weekly && !(Number.isInteger(Number(c.weekday)) && Number(c.weekday) >= 0 && Number(c.weekday) <= 6)) errors.push({ index, field: 'weekday', key: 'onboarding.errChoose' });
+    });
+  } else if (step === 'courses') {
+    const sem = answers.semester || {};
+    const semName = (sem.name || '').trim();
+    const anySem = semName || sem.start || sem.end;
+    if (anySem) {
+      if (!semName) errors.push({ field: 'semName', key: 'onboarding.errSemesterName' });
+      if (!DATE_RE.test(sem.start || '') || !DATE_RE.test(sem.end || '')) errors.push({ field: 'semDates', key: 'onboarding.errSemesterDates' });
+      else if (sem.end < sem.start) errors.push({ field: 'semDates', key: 'onboarding.errSemesterOrder' });
+    }
+    (answers.courses || []).forEach((c, index) => {
+      const name = (c.name || '').trim();
+      const code = (c.code || '').trim();
+      if (!name && !code) return;
+      if (!name) errors.push({ index, field: 'name', key: 'onboarding.errCourseName' });
+      if (name.length > 120 || code.length > 32) errors.push({ index, field: 'name', key: 'onboarding.errCourseLong' });
     });
   } else if (step === 'style') {
     const { period, sessionMinutes } = answers.style || {};
@@ -87,6 +114,7 @@ export function buildOnboardingPlan(answers = {}) {
     .filter((tk) => tk.name && Number.isFinite(tk.minutes_requested) && tk.minutes_requested > 0)
     .slice(0, MAX_ONBOARDING_ROWS);
   const classes = (answers.classes || [])
+    .filter((c) => !c.weekly)
     .map((c) => ({ name: (c.name || '').trim(), start_time: c.start, end_time: c.end }))
     .filter((c) => c.name && isValidClock(c.start_time) && isValidClock(c.end_time))
     .slice(0, MAX_ONBOARDING_ROWS);
@@ -114,5 +142,65 @@ export function defaultOnboardingAnswers() {
     day: { wake: '07:00', sleep: '23:00' },
     classes: [{ name: '', start: '', end: '' }, { name: '', start: '', end: '' }, { name: '', start: '', end: '' }],
     style: { period: 'none', sessionMinutes: 45 },
+  };
+}
+
+// V3: the academic part of the answers — semester, courses, weekly classes
+// and which course each one-off class / task belongs to. Indices in
+// classCourse / taskCourse line up with buildOnboardingPlan's classes /
+// tasks; a course is referred to by its index in `courses` (null = none).
+export function buildOnboardingAcademics(answers = {}, { today, defaultWeeks = 16 } = {}) {
+  const sem = answers.semester || {};
+  const semester = (sem.name || '').trim() && DATE_RE.test(sem.start || '') && DATE_RE.test(sem.end || '') && sem.end >= sem.start
+    ? { name: sem.name.trim().slice(0, 120), start_date: sem.start, end_date: sem.end }
+    : null;
+  // Course indices in the answers -> compacted indices after dropping empty rows.
+  const remap = new Map();
+  const courses = [];
+  (answers.courses || []).forEach((c, i) => {
+    const name = (c.name || '').trim();
+    if (!name || courses.length >= MAX_ONBOARDING_COURSES) return;
+    remap.set(i, courses.length);
+    courses.push({ name: name.slice(0, 120), code: (c.code || '').trim().slice(0, 32) || null });
+  });
+  const courseRef = (v) => (v === '' || v === null || v === undefined || !remap.has(Number(v)) ? null : remap.get(Number(v)));
+  const validClass = (c) => (c.name || '').trim() && isValidClock(c.start) && isValidClock(c.end);
+  const seriesEnd = semester ? semester.end_date : (today ? addDaysStr(today, defaultWeeks * 7 - 1) : null);
+  const seriesStart = semester && today && semester.start_date > today ? semester.start_date : today;
+  const weeklyClasses = (answers.classes || [])
+    .filter((c) => c.weekly && validClass(c))
+    .slice(0, MAX_ONBOARDING_ROWS)
+    .map((c) => ({
+      name: c.name.trim().slice(0, 100),
+      days_of_week: [Number(c.weekday)],
+      start_time: c.start,
+      end_time: c.end,
+      start_date: seriesStart,
+      end_date: seriesEnd && seriesStart && seriesEnd >= seriesStart ? seriesEnd : seriesStart,
+      courseIndex: courseRef(c.course),
+    }));
+  const classCourse = (answers.classes || []).filter((c) => !c.weekly && validClass(c)).slice(0, MAX_ONBOARDING_ROWS).map((c) => courseRef(c.course));
+  const taskCourse = (answers.tasks || [])
+    .filter((tk) => (tk.name || '').trim() && Number(tk.minutes) > 0)
+    .slice(0, MAX_ONBOARDING_ROWS)
+    .map((tk) => courseRef(tk.course));
+  return { semester, courses, weeklyClasses, classCourse, taskCourse };
+}
+
+function addDaysStr(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().slice(0, 10);
+}
+
+export function defaultOnboardingAnswersV3(today) {
+  const base = defaultOnboardingAnswers();
+  const weekday = today ? new Date(`${today}T00:00:00Z`).getUTCDay() : 1;
+  return {
+    ...base,
+    semester: { name: '', start: '', end: '' },
+    courses: [{ name: '', code: '' }, { name: '', code: '' }, { name: '', code: '' }],
+    classes: base.classes.map((c) => ({ ...c, weekly: true, weekday, course: '' })),
+    tasks: base.tasks.map((tk) => ({ ...tk, course: '' })),
   };
 }

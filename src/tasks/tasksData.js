@@ -53,9 +53,13 @@ export async function createTask(userId, { planDate, fields }) {
   return { ...row, for_date: planDate };
 }
 
-export async function updateTask(id, fields, { planDate = null } = {}) {
+export async function updateTask(id, fields, { planDate = null, refresh = true } = {}) {
   unwrap(await supabase.from('study_subjects').update(capabilityFilter(fields)).eq('id', id));
-  afterTaskWrite(planDate);
+  if (refresh) afterTaskWrite(planDate);
+  else {
+    invalidateTasks();
+    emitChange('tasks');
+  }
 }
 
 // Moves the root row to another day's schedule (the "work on it on" date).

@@ -118,8 +118,9 @@ import { shouldShowOnboarding } from './onboardingModel.js';
 import { IS_DEMO } from '../lib/supabaseClient.js';
 import { exitDemoMode } from '../demo/demoMode.js';
 import { probeCapabilities, has as hasCapability } from '../shared/capabilities.js';
-import { capabilityFilter } from '../tasks/tasksData.js';
-import { setAppContext } from '../app/context.js';
+import { capabilityFilter, updateTask } from '../tasks/tasksData.js';
+import { applyOnboardingAcademics } from '../onboarding/onboardingAcademics.js';
+import { setAppContext, onChange } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
 import { toast } from '../ui/toast.js';
@@ -4608,6 +4609,14 @@ async function init(session) {
   setClockLocale(getLocale()); // zh/ja show their own clock style (e.g. 19:35)
   await loadRecurringClassesData();
   await loadScheduleForDate(initialDate);
+  // V3: weekly classes created elsewhere (Course pages, Quick Add,
+  // onboarding) refresh the Planner's in-memory series and the open day.
+  let onboardingApplying = false;
+  onChange(async (topic) => {
+    if (topic !== 'classes' || onboardingApplying) return;
+    await loadRecurringClassesData();
+    if (schedule) await loadScheduleForDate(schedule.for_date);
+  });
 
   // Home (analyticsView) is the default landing view; a #/route in the URL
   // (bookmark, reload, shared link) opens that page instead. The Planner's
@@ -4639,8 +4648,20 @@ async function init(session) {
     }
   }
 
-  async function applyOnboardingPlan(plan) {
-    if (forDateEl.value !== todayDateStr()) await loadScheduleForDate(todayDateStr());
+  async function applyOnboardingPlan(plan, academics = null) {
+    // V3: semester, courses and weekly classes first (Semester/Courses data
+    // functions), so today's Planner below already shows the weekly classes.
+    // The "classes changed" listener stands down meanwhile: this function
+    // reloads the day itself, before it adds any rows.
+    onboardingApplying = true;
+    let courseIds = [];
+    try {
+      ({ courseIds } = await applyOnboardingAcademics(userId, academics));
+      if (academics && academics.weeklyClasses.length) await loadRecurringClassesData();
+    } finally {
+      onboardingApplying = false;
+    }
+    if (forDateEl.value !== todayDateStr() || (academics && academics.weeklyClasses.length)) await loadScheduleForDate(todayDateStr());
     activatePlannerScroll('plannerForm');
 
     if (plan.day) {
@@ -4661,12 +4682,20 @@ async function init(session) {
     // chainSave reports its own errors; a row without an id here means its
     // save failed, so stop before generating a plan from unsaved tasks.
     if ([...classRows, ...taskRows].some((row) => !row.dataset.id)) throw new Error('onboarding_save_failed');
+    if (academics) {
+      await Promise.all(taskRows.map((row, i) => {
+        const idx = academics.taskCourse[i];
+        return idx !== null && idx !== undefined && courseIds[idx] ? updateTask(row.dataset.id, { course_id: courseIds[idx] }, { refresh: false }) : null;
+      }));
+    }
     if (taskRows.length > 0) await handleGenerateClick(generateBtn.hidden ? regenerateBtn : generateBtn);
     output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 
   const onboarding = initOnboarding({
     t,
+    isV3: () => hasCapability('courses'),
+    today: () => todayDateStr(),
     applyPlan: applyOnboardingPlan,
     markComplete: async () => {
       try {
