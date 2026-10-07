@@ -130,6 +130,3 @@ body.is-offline .workspace .btn--primary { opacity: .5; pointer-events: none; }
     padding-right: 24px;
   }
 }
-/* Board's header rule right-aligns its stacked toolbar on phones; Settings
-   reuses the header markup but has no toolbar, so keep its title left. */
-.settings-view > .board-header { align-items: flex-start; }

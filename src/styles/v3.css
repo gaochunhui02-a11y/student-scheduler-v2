@@ -881,3 +881,9 @@ a.card-link:hover { text-decoration: underline; }
   .nav-item { min-height: 26px; padding-top: 3px; padding-bottom: 3px; }
   .sidebar { padding-top: var(--space-3); padding-bottom: var(--space-3); }
 }
+
+/* Phones: V2 stacks .board-header (title, then controls). The V3 header rule
+   above would otherwise right-align the stacked title (flex-end). */
+@media (max-width: 600px) {
+  .board-header { align-items: stretch; }
+}
