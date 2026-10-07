@@ -121,6 +121,7 @@ import { initV3Sections } from '../app/v3Sections.js';
 import { toast } from '../ui/toast.js';
 import { invalidate as invalidateCache } from '../app/store.js';
 import { findBlockedSubjects } from '../tasks/dependencyGate.js';
+import { initForecastPanel } from '../workload/forecastPanel.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -575,6 +576,8 @@ async function init(session) {
     openDateInPlanner: openPlannerForDate,
   };
   const weekSection = initWeekSection(userId, weekHostApi);
+  // V3-E: 'Workload forecast' mode inside the Week page.
+  const forecastPanel = initForecastPanel();
   // V2-E: the Calendar page's agenda needs exactly what Week View needs
   // (today, the week-range fetch, open-a-date), so it shares that bridge.
   const agendaSection = initAgendaSection(userId, weekHostApi);
@@ -855,7 +858,12 @@ async function init(session) {
   const v3Sections = initV3Sections();
   const altViewSections = {
     boardView: boardSection,
-    weekView: weekSection,
+    weekView: {
+      onShow: (param) => {
+        if (forecastPanel) forecastPanel.onShow();
+        return weekSection && weekSection.onShow(param);
+      },
+    },
     calendarView: agendaSection,
     analyticsView: analyticsSection,
     insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
