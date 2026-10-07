@@ -32,7 +32,7 @@ const TIME = /^\d{2}:\d{2}(:\d{2})?$/;
 // enum (values), json-array, json-object.
 const S = {
   semesters: {
-    id: ['id', true], name: ['text', true, 120], start_date: ['date', true], end_date: ['date', true], breaks: ['array'], is_current: ['bool'],
+    id: ['id', true], name: ['text', true, 120], start_date: ['date', true], end_date: ['date', true], breaks: ['breaks'], is_current: ['bool'],
   },
   courses: {
     id: ['id', true], semester_id: ['ref'], name: ['text', true, 120], code: ['text', false, 32], instructor: ['text', false, 120], color: ['color'],
@@ -49,13 +49,13 @@ const S = {
     source: ['enum', false, ['manual', 'imported', 'recurring']], course_id: ['ref'],
   },
   class_series: {
-    id: ['id', true], name: ['text', true, 100], days_of_week: ['array'], start_time: ['time', true], end_time: ['time', true], start_date: ['date', true], end_date: ['date', true], course_id: ['ref'],
+    id: ['id', true], name: ['text', true, 100], days_of_week: ['days'], start_time: ['time', true], end_time: ['time', true], start_date: ['date', true], end_date: ['date', true], course_id: ['ref'],
   },
   class_series_exceptions: {
     id: ['id', true], series_id: ['ref', true], exception_date: ['date', true], action: ['enum', true, ['skip', 'modify']], override_name: ['text', false, 100], override_start_time: ['time'], override_end_time: ['time'],
   },
   task_recurrence_rules: {
-    id: ['id', true], course_id: ['ref'], name: ['text', true, 200], minutes: ['int', true, [5, 1440]], priority: ['enum', false, ['low', 'medium', 'high']], tags: ['array'], days_of_week: ['array'],
+    id: ['id', true], course_id: ['ref'], name: ['text', true, 200], minutes: ['int', true, [5, 1440]], priority: ['enum', false, ['low', 'medium', 'high']], tags: ['tags'], days_of_week: ['days'],
     start_date: ['date', true], end_date: ['date', true], due_offset_days: ['int', false, [0, 30]], active: ['bool'],
   },
   exams: {
@@ -68,7 +68,7 @@ const S = {
   },
   study_subjects: {
     id: ['id', true], schedule_id: ['ref', true], name: ['text', true, 200], minutes_requested: ['int', true, [1, 1440]], sort_order: ['int', false, [-1e6, 1e6]], priority: ['enum', false, ['low', 'medium', 'high']],
-    due_date: ['date'], notes: ['text', false, 5000], tags: ['array'], origin_subject_id: ['ref'], course_id: ['ref'], completed_at: ['ts'], actual_minutes: ['int', false, [0, 10000]],
+    due_date: ['date'], notes: ['text', false, 5000], tags: ['tags'], origin_subject_id: ['ref'], course_id: ['ref'], completed_at: ['ts'], actual_minutes: ['int', false, [0, 10000]],
     dependency_override: ['bool'], exam_topic_id: ['ref'], recurrence_rule_id: ['ref'], recurrence_date: ['date'],
   },
   study_subject_subtasks: { id: ['id', true], subject_id: ['ref', true], title: ['text', false, 200], completed: ['bool'], sort_order: ['int', false, [-1e6, 1e6]] },
@@ -189,6 +189,11 @@ function checkValue(type, value, extra) {
     case 'bool': return typeof value === 'boolean';
     case 'enum': return extra.includes(value);
     case 'array': return Array.isArray(value) && value.length <= 200;
+    // jsonb arrays get their real shapes, not just "an array":
+    case 'tags': return Array.isArray(value) && value.length <= 50 && value.every((x) => typeof x === 'string' && x.length <= 60);
+    case 'days': return Array.isArray(value) && value.length <= 7 && value.every((x) => Number.isInteger(x) && x >= 0 && x <= 6);
+    case 'breaks': return Array.isArray(value) && value.length <= 50 && value.every((b) => b && typeof b === 'object' && !Array.isArray(b)
+      && DATE.test(b.start_date || '') && DATE.test(b.end_date || '') && (b.name === undefined || (typeof b.name === 'string' && b.name.length <= 80)));
     case 'color': return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
     case 'url': return typeof value === 'string' && value.length <= 2048 && /^https?:\/\/\S+$/i.test(value);
     default: return false;

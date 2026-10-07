@@ -73,6 +73,19 @@ check('bad types, missing required fields, bad ids and unsafe URLs fail validati
   assert.ok(problems.includes('schedule_items.item_type:invalid'));
   assert.ok(problems.includes('study_subjects.:not_a_list'));
 });
+check('jsonb arrays must have their real shapes (tags, weekdays, breaks)', () => {
+  const v1 = validateBackup({ ...backup, tables: {
+    study_subjects: [{ ...subj, tags: [{ evil: 1 }] }],
+    class_series: [{ id: uid(), name: 'x', days_of_week: [9], start_time: '09:00', end_time: '10:00', start_date: '2026-10-01', end_date: '2026-10-30' }],
+    semesters: [{ ...sem, breaks: [{ name: 'b', start_date: 'soon' }] }],
+  } });
+  const problems = v1.errors.map((e) => `${e.table}.${e.column}`);
+  assert.ok(problems.includes('study_subjects.tags'));
+  assert.ok(problems.includes('class_series.days_of_week'));
+  assert.ok(problems.includes('semesters.breaks'));
+  const ok = validateBackup({ ...backup, tables: { semesters: [{ ...sem, breaks: [{ name: 'Fall break', start_date: '2026-10-20', end_date: '2026-10-24' }] }], study_subjects: [{ ...subj, tags: ['exam', 'reading'] }] } });
+  assert.equal(ok.ok, true, JSON.stringify(ok.errors));
+});
 check('duplicate ids are caught', () => {
   const v = validateBackup({ ...backup, tables: { schedules: [sched, sched] } });
   assert.ok(v.errors.some((e) => e.problem === 'duplicate'));
