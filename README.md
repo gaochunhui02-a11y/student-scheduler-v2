@@ -25,6 +25,46 @@ all of that, a transparent scoring engine tells you what to work on next —
 using ordinary arithmetic on data you already entered, not a hosted AI
 model.
 
+## What's new in V3 (Academic OS) — beta
+
+V3 (`v3-academic-os` branch, version `3.0.0-beta.1`) turns the planner into a
+semester-level workspace. Everything from V2 still works, and every V3
+feature is **rule-based and runs in the browser — no AI service is called**.
+
+- **Courses & semesters** — a course page per class with its meetings,
+  tasks, grades, exams and resources; a semester view with week-by-week
+  intensity, breaks and big deadlines.
+- **Grades** — weighted categories, current grade per course, and "what do
+  I need on the final?" calculators.
+- **Exams** — countdowns, topics with confidence, and a deterministic
+  revision plan that fits around the days you already have planned.
+- **Tasks page** — every task across days, with dependencies (cycle-safe),
+  recurring task rules, subtasks, tags and links.
+- **Workload forecast, Smart Rebalance and What-if** — see overloaded days
+  coming and preview moves before applying them.
+- **Planner & Calendar** — edited blocks stay pinned, move a block to
+  another day, richer conflict warnings; Month / Week / Agenda calendar with
+  drag-and-resize.
+- **Focus history & estimate accuracy**, **Insights**, and a rebuilt
+  **Dashboard** around "today".
+- **Command palette** (Ctrl/⌘ K), **Quick Add** (N) and keyboard shortcuts (?).
+- **Settings** — Courses & semester, Keyboard and About sections (About shows
+  which database features are available and which migration file a missing
+  one needs); full **backup & restore** (restore always adds a copy, never
+  overwrites); opt-in exam reminders.
+- **Offline read mode** — the last Dashboard snapshot (today, open tasks,
+  courses, upcoming exams) is kept on this device per user and shown when
+  offline; it is cleared on sign-out.
+- **Onboarding** — courses → weekly classes → first tasks → day → study
+  style, all optional.
+- **Demo Mode** — `dashboard.html?demo=1` (or "Explore the demo" on the login
+  page) runs the whole app on sample data held in the browser tab. The real
+  Supabase client is never created in demo mode.
+- English, 简体中文 and 日本語 throughout; light and dark themes.
+
+V3 runs on a database **without** its migrations too: V3-only pages show a
+"needs a database update" note and everything from V2 keeps working.
+
 ## What's new in V2
 
 V2 keeps every v1 feature and adds more control without turning the app
@@ -292,6 +332,7 @@ Run each of these once, **in order**, in the Supabase dashboard's
 8. [`supabase/migrations/0007_max_daily_study_minutes.sql`](./supabase/migrations/0007_max_daily_study_minutes.sql)
 9. [`supabase/migrations/0008_board_node_status.sql`](./supabase/migrations/0008_board_node_status.sql)
 10. [`supabase/migrations/0009_onboarding.sql`](./supabase/migrations/0009_onboarding.sql)
+11. **V3 only, after review:** `0010_semesters.sql` → `0011_courses.sql` → `0012_grades.sql` → `0013_exams.sql` → `0014_task_extensions.sql` → `0015_resources.sql` → `0016_focus_sessions.sql` → `0017_profile_preferences.sql` (see [V3 migrations](#v3-migrations-0010-0017))
 
 See [Database structure](#database-structure) for what each one adds, and
 [V2 migrations](#v2-migrations-0005-0009) for the safety notes on 0005–0009.
@@ -329,7 +370,7 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 The scheduler, Smart Priority, Quick Templates, and every other piece of
 planning/analytics logic live in pure JS modules with **no DOM and no
 Supabase calls**, so they run and test independently of a browser or a
-live database — 18 test files, 765 individual checks, all passing as of
+live database — 50 test files, 1,497 individual checks, all passing as of
 this release.
 
 ```
@@ -453,6 +494,32 @@ backfill that marks every pre-existing profile as onboarded lives in
 It is **not required**, is not part of the migration sequence, and writes
 to every profile row — only run it after an explicit decision that even
 empty pre-existing accounts should skip onboarding.
+
+### V3 migrations 0010-0017
+
+**Not applied anywhere yet.** Run them by hand, in order, after review —
+only after 0001–0009. All eight are additive: new tables, nullable or
+defaulted columns, indexes, CHECK constraints, triggers and RLS. Nothing is
+dropped, renamed, retyped, updated or deleted. `tests/migrations-v3.test.js`
+enforces this, plus RLS (owner `user_id`, RLS on, select/insert/update/
+delete-own policies) on every new table and an ownership trigger on every
+V3 foreign key to a user-owned row (so a row can't point at someone else's
+course/exam/task). No storage bucket is created.
+
+| File | Adds | Used by |
+|---|---|---|
+| `0010_semesters.sql` | table `semesters`; function `v3_assert_owned_ref()` (security invoker ownership guard) | Semester page, current semester |
+| `0011_courses.sql` | table `courses`; nullable `course_id` on `study_subjects`, `classes`, `class_series`, `boards`, `board_nodes` (ON DELETE SET NULL) | Courses everywhere |
+| `0012_grades.sql` | tables `grade_categories`, `grade_items` | Grades |
+| `0013_exams.sql` | tables `exams`, `exam_topics` | Exams, revision planner |
+| `0014_task_extensions.sql` | table `task_recurrence_rules`, `task_dependencies` (no-cycle trigger); `study_subjects.completed_at`, `actual_minutes`, `dependency_override` (default false), `exam_topic_id`, `recurrence_rule_id`, `recurrence_date` | Tasks page, dependencies, recurring tasks |
+| `0015_resources.sql` | table `resources` (links only, http/https enforced) | Course/task resources |
+| `0016_focus_sessions.sql` | table `focus_sessions` | Focus history, estimate accuracy |
+| `0017_profile_preferences.sql` | `profiles.preferences` jsonb (default `{}`, must be an object) | Account-wide daily study limit |
+
+**Rollout order:** apply 0010 → 0017 in order, then deploy the V3 frontend.
+Deploying V3 first is also safe (features appear as their migrations land);
+the V2 (v1.x) frontend never reads any of these tables or columns.
 
 ## Deployment
 
