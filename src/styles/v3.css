@@ -3,6 +3,7 @@
 @import "./v3-exams.css";
 @import "./v3-tasks.css";
 @import "./v3-workload.css";
+@import "./v3-calendar.css";
 
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:

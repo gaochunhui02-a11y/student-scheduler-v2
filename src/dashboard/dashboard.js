@@ -122,6 +122,8 @@ import { toast } from '../ui/toast.js';
 import { invalidate as invalidateCache } from '../app/store.js';
 import { findBlockedSubjects } from '../tasks/dependencyGate.js';
 import { initForecastPanel } from '../workload/forecastPanel.js';
+import { planSingleMove, applyRebalanceMoves } from '../workload/workloadData.js';
+import { initCalendarV3 } from '../calendar/calendarView3.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -581,6 +583,8 @@ async function init(session) {
   // V2-E: the Calendar page's agenda needs exactly what Week View needs
   // (today, the week-range fetch, open-a-date), so it shares that bridge.
   const agendaSection = initAgendaSection(userId, weekHostApi);
+  // V3-M: Month / Week / Agenda calendar (replaces the V2 agenda list).
+  const calendarV3 = initCalendarV3();
 
   // ---------------- Notifications -> existing schedule + due dates (Phase 11) ----------------
   // notifications.js never imports data.js directly — it only calls these
@@ -864,7 +868,7 @@ async function init(session) {
         return weekSection && weekSection.onShow(param);
       },
     },
-    calendarView: agendaSection,
+    calendarView: calendarV3 || agendaSection,
     analyticsView: analyticsSection,
     insightsView: analyticsSection ? { onShow: () => analyticsSection.onShowInsights() } : null,
     settingsView: settingsSection,
@@ -3198,10 +3202,15 @@ async function init(session) {
                     <button type="button" class="edit-save-btn" data-id="${e.id}">${escapeAttr(t('carryOver.save'))}</button>
                     <button type="button" class="edit-cancel-btn" data-id="${e.id}">${escapeAttr(t('multiday.cancel'))}</button>
                   </div>
+                  <div class="edit-move-row">
+                    <label for="editMoveDate-${e.id}">${escapeAttr(t('planner3.moveToDay'))}</label>
+                    <input type="date" class="edit-move-date" id="editMoveDate-${e.id}" min="${todayDateStr()}">
+                    <button type="button" class="edit-move-btn" data-id="${e.id}">${escapeAttr(t('planner3.move'))}</button>
+                  </div>
                   <div class="edit-error"></div>
                 </div>
               `;
-            } else if (!e.locked) {
+            } else if (!e.completed || !e.locked) {
               editControl = `<button type="button" class="edit-btn" data-id="${e.id}">${escapeAttr(t('schedule.edit'))}</button>`;
             }
 
@@ -3398,6 +3407,39 @@ async function init(session) {
       return;
     }
 
+    // V3-I: non-drag way to move a block to another day (same time if
+    // free, else the nearest free slot), via the same safe move Rebalance uses.
+    const moveBtn = e.target.closest('.edit-move-btn');
+    if (moveBtn) {
+      const panel = moveBtn.closest('.edit-panel');
+      const errorEl = panel.querySelector('.edit-error');
+      const toDate = panel.querySelector('.edit-move-date').value;
+      const item = currentScheduleItems.find((i) => i.id === moveBtn.dataset.id);
+      errorEl.textContent = '';
+      if (!item || !toDate) {
+        errorEl.textContent = t('planner3.pickDay');
+        return;
+      }
+      moveBtn.disabled = true;
+      try {
+        const plan = await planSingleMove(userId, item, schedule.for_date, toDate);
+        if (plan.error) {
+          errorEl.textContent = t(`planner3.moveErr_${plan.error}`).replace('{date}', plan.due ? formatDateLabel(plan.due) : '');
+          moveBtn.disabled = false;
+          return;
+        }
+        await applyRebalanceMoves(userId, [plan.move], { allowLocked: true });
+        closeSecondaryPanels();
+        toast(t('planner3.moved').replace('{date}', formatDateLabel(toDate)).replace('{time}', formatClock(plan.move.toStart)), { kind: 'success' });
+        await loadScheduleForDate(schedule.for_date);
+      } catch (err) {
+        console.error('Could not move block', err);
+        errorEl.textContent = err && err.code === 'stale' ? t('rebalance.stale') : t('rebalance.failed');
+        moveBtn.disabled = false;
+      }
+      return;
+    }
+
     const saveBtn = e.target.closest('.edit-save-btn');
     if (saveBtn) {
       const id = saveBtn.dataset.id;
@@ -3458,9 +3500,16 @@ async function init(session) {
       saveBtn.disabled = true;
       try {
         await updateScheduleItemTime(id, result.start, result.end);
+        // V3-I: a block you placed by hand is pinned so Regenerate keeps it.
+        const pinNow = !item.locked;
+        if (pinNow) await setScheduleItemLocked(id, true);
         if (token !== activeToken) return; // navigated away before this resolved
         item.start = result.start;
         item.end = result.end;
+        if (pinNow) {
+          item.locked = true;
+          toast(t('planner3.pinnedAfterEdit'));
+        }
         editingItemId = null;
         currentScheduleItems.sort((a, b) => a.start - b.start);
         renderScheduleEvents(currentScheduleItems, buildSubjectsInput());
@@ -3695,6 +3744,7 @@ async function init(session) {
     regenerate: 'conflicts.actionRegenerate',
     unlock_block: 'conflicts.actionReviewLocked',
     shortfall_details: 'conflicts.actionShowDetails',
+    edit_prefs: 'conflicts.actionEditPrefs',
   };
 
   function renderLockConflicts(conflicts, details = []) {
@@ -3724,6 +3774,21 @@ async function init(session) {
       lockConflictDetails: lastLockConflictDetails,
       shortfall: lastShortfall,
       formatRange: (start, end) => `${formatClock(start)} – ${formatClock(end)}`,
+      // V3 checks: daily maximum, preferred study hours, and tasks due by
+      // this date that couldn't fully fit.
+      dailyMaxMinutes: schedule.max_daily_study_minutes || null,
+      studyWindow: (() => {
+        if (bounds.error || (!schedule.earliest_study_time && !schedule.latest_study_time)) return null;
+        const w = resolveStudyWindow(toHHMM(schedule.earliest_study_time) || null, toHHMM(schedule.latest_study_time) || null, bounds.dayStart, bounds.dayEnd);
+        return w.collapsed ? null : { start: w.studyWindowStart, end: w.studyWindowEnd };
+      })(),
+      dueShortfalls: lastShortfall
+        ? lastShortfall.subjects
+          .filter((x) => x.unscheduled > 0)
+          .map((x) => ({ ...x, dueDate: (buildSubjectsInput().find((si) => si.name === x.name) || {}).dueDate || null }))
+          .filter((x) => x.dueDate && x.dueDate <= schedule.for_date)
+        : [],
+      formatMinutes: (n) => formatDuration(n),
     });
     conflictPanelEl.hidden = conflicts.length === 0;
     conflictPanelBody.innerHTML = conflicts
@@ -3769,6 +3834,14 @@ async function init(session) {
         (generateBtn.hidden ? regenerateBtn : generateBtn).click();
       } else if (action === 'unlock_block') {
         output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      } else if (action === 'edit_prefs') {
+        const prefs = document.getElementById('studyPrefsForm');
+        const details = prefs ? prefs.closest('details') : null;
+        if (details) {
+          details.open = true;
+          details.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+        }
+        if (maxDailyStudyEl) maxDailyStudyEl.focus({ preventScroll: true });
       } else if (action === 'shortfall_details') {
         const card = document.getElementById('shortfallWarning');
         if (card) card.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });

@@ -13,7 +13,9 @@ import { topicRemainingMinutes } from '../exams/revisionPlanner.js';
 import { buildTaskGroups } from '../tasks/taskModel.js';
 import { capabilityFilter } from '../tasks/tasksData.js';
 import { getDailyMaxStudyMinutes, loadPlannedRange } from './loadData.js';
-import { dayWindow, mealIntervals } from './rebalanceModel.js';
+import { dayWindow, mealIntervals, freeSlots, findSlot } from './rebalanceModel.js';
+import { buildWorkloadForecast } from './workloadModel.js';
+import { todayStr } from '../shared/dates.js';
 
 export async function loadForecastInput(userId, today, days) {
   const end = addDays(today, days - 1);
@@ -83,7 +85,7 @@ function unwrap({ data, error }) {
  *   3. moves the block, pinned (locked) so Regenerate keeps it there
  * If any step fails, every change already made is undone in reverse.
  */
-export async function applyRebalanceMoves(userId, moves) {
+export async function applyRebalanceMoves(userId, moves, { allowLocked = false } = {}) {
   const undo = [];
   const run = async (fn, inverse) => {
     await fn();
@@ -93,7 +95,7 @@ export async function applyRebalanceMoves(userId, moves) {
     for (const m of moves) {
       // eslint-disable-next-line no-await-in-loop
       const item = unwrap(await supabase.from('schedule_items').select('*, schedules(for_date)').eq('id', m.itemId).maybeSingle());
-      if (!item || !item.schedules || item.schedules.for_date !== m.fromDate || item.start_minutes !== m.fromStart || item.end_minutes !== m.fromEnd || item.locked || item.completed) {
+      if (!item || !item.schedules || item.schedules.for_date !== m.fromDate || item.start_minutes !== m.fromStart || item.end_minutes !== m.fromEnd || (item.locked && !allowLocked) || item.completed) {
         throw Object.assign(new Error('stale'), { code: 'stale' });
       }
       // eslint-disable-next-line no-await-in-loop
@@ -193,4 +195,27 @@ export async function applyScenarioChanges(userId, scenario, { today, horizonEnd
   emitChange('exams');
   app().refreshPlanner();
   return done;
+}
+
+/**
+ * Plans moving one Planner block to another day (explicit student action):
+ * same start time if that's free, else the nearest free slot that avoids
+ * classes, meals and other study. Refuses past days and days after the
+ * task's due date. Returns { move } or { error: 'past'|'same_day'|'past_due'|'no_slot', due? }.
+ */
+export async function planSingleMove(userId, item, fromDate, toDate) {
+  const today = todayStr();
+  if (toDate < today) return { error: 'past' };
+  if (toDate === fromDate) return { error: 'same_day' };
+  const { input, dueBySubject } = await loadForecastInput(userId, toDate, 1);
+  const due = item.sourceSubjectId ? dueBySubject[item.sourceSubjectId] || null : null;
+  if (due && toDate > due) return { error: 'past_due', due };
+  const days = buildWorkloadForecast(input);
+  const ctx = buildContextByDate(days, input)[toDate];
+  const duration = item.end - item.start;
+  const start = findSlot(freeSlots(ctx.window, ctx.busy), duration, item.start);
+  if (start === null) return { error: 'no_slot' };
+  return {
+    move: { itemId: item.id, name: item.name, sourceSubjectId: item.sourceSubjectId || null, fromDate, fromStart: item.start, fromEnd: item.end, toDate, toStart: start, toEnd: start + duration, minutes: duration },
+  };
 }

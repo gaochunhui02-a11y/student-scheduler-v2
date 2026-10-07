@@ -37,8 +37,14 @@ function insideDay(c, dayStart, dayEnd) {
 // @param {{key:string, params:object}[]} [input.lockConflictDetails]
 // @param {{unscheduledTotal:number}|null} [input.shortfall]
 // @param {(minutes:number) => string} input.formatRange — (start, end) => display text
-export function detectScheduleConflicts({ classes = [], items = [], dayStart = null, dayEnd = null, lockConflictDetails = [], shortfall = null, formatRange }) {
+export function detectScheduleConflicts({
+  classes = [], items = [], dayStart = null, dayEnd = null, lockConflictDetails = [], shortfall = null, formatRange,
+  // V3 (all optional): daily study cap, preferred study window, and the
+  // day's tasks that are due by this date but couldn't be fully placed.
+  dailyMaxMinutes = null, studyWindow = null, dueShortfalls = [], formatMinutes,
+}) {
   const range = typeof formatRange === 'function' ? formatRange : (s, e) => `${s}–${e}`;
+  const mins = typeof formatMinutes === 'function' ? formatMinutes : (n) => `${n} min`;
   const conflicts = [];
   const valid = (classes || [])
     .filter((c) => c && c.name && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start)
@@ -105,6 +111,45 @@ export function detectScheduleConflicts({ classes = [], items = [], dayStart = n
   // Locked blocks that stopped regeneration.
   (lockConflictDetails || []).forEach((d) => {
     conflicts.push({ kind: 'lock_conflict', key: d.key || null, params: d.params || {}, error: d.error || null, action: 'unlock_block' });
+  });
+
+  // V3: study placed outside the student's preferred study hours.
+  if (studyWindow && Number.isFinite(studyWindow.start) && Number.isFinite(studyWindow.end)) {
+    study.forEach((s) => {
+      if (s.start >= studyWindow.start && s.end <= studyWindow.end) return;
+      conflicts.push({
+        kind: 'outside_preferred',
+        key: 'conflicts.outsidePreferred',
+        params: { name: s.name, range: range(s.start, s.end), window: range(studyWindow.start, studyWindow.end) },
+        action: s.locked ? 'edit_prefs' : 'edit_block',
+        itemId: s.id || null,
+      });
+    });
+  }
+
+  // V3: more study planned than the day's maximum.
+  if (Number.isFinite(dailyMaxMinutes) && dailyMaxMinutes > 0) {
+    const total = study.reduce((sum, s) => sum + (s.end - s.start), 0);
+    if (total > dailyMaxMinutes) {
+      conflicts.push({
+        kind: 'daily_max',
+        key: 'conflicts.dailyMax',
+        params: { total: mins(total), max: mins(dailyMaxMinutes), over: mins(total - dailyMaxMinutes) },
+        action: 'edit_prefs',
+      });
+    }
+  }
+
+  // V3: a task due by today that couldn't be fully placed — say exactly
+  // how much time existed instead of a generic error.
+  (dueShortfalls || []).forEach((d) => {
+    if (!d || !(d.unscheduled > 0)) return;
+    conflicts.push({
+      kind: 'impossible_deadline',
+      key: d.scheduled > 0 ? 'conflicts.deadlinePartly' : 'conflicts.deadlineNone',
+      params: { name: d.name, available: mins(d.scheduled || 0), short: mins(d.unscheduled) },
+      action: 'shortfall_details',
+    });
   });
 
   // Not enough time.
