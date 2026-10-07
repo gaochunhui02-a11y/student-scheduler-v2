@@ -15,6 +15,9 @@
 import v3en from '../i18n/v3.en.js';
 import v3zh from '../i18n/v3.zh.js';
 import v3ja from '../i18n/v3.ja.js';
+import moreEn from '../i18n/more.en.js';
+import moreZh from '../i18n/more.zh.js';
+import moreJa from '../i18n/more.ja.js';
 
 const STORAGE_KEY = 'student-scheduler-lang';
 
@@ -2532,7 +2535,7 @@ const ja = {
 
 export const SUPPORTED_LANGUAGES = ['en', 'zh', 'ja'];
 // V3 strings live in src/i18n/v3.*.js and are merged over the V1/V2 ones.
-const dictionaries = { en: { ...en, ...v3en }, zh: { ...zh, ...v3zh }, ja: { ...ja, ...v3ja } };
+const dictionaries = { en: { ...en, ...v3en, ...moreEn }, zh: { ...zh, ...v3zh, ...moreZh }, ja: { ...ja, ...v3ja, ...moreJa } };
 
 export function getLanguage() {
   try {

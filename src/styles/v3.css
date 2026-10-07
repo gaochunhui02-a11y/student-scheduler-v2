@@ -1,3 +1,5 @@
+@import "./v3-pages.css";
+
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:
    1. Re-skin the shared shell (ink navigation rail, canvas, page heads,
@@ -53,7 +55,7 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
   min-height: 100vh;
 }
-.brand { padding: var(--space-1) var(--space-2) var(--space-4); gap: var(--space-2); }
+.brand { padding: var(--space-1) var(--space-2) var(--space-3); gap: var(--space-2); }
 .brand-mark {
   background: linear-gradient(135deg, #5a7bff, #335cff 55%, #1f3fd1);
   color: #fff;
@@ -61,7 +63,7 @@ body {
 }
 .brand-name { color: #fff; font-size: var(--text-md); }
 
-.sidebar-actions { padding: 0 0 var(--space-4); gap: var(--space-2); }
+.sidebar-actions { padding: 0 0 var(--space-3); gap: var(--space-2); }
 .sidebar-quickadd {
   height: var(--control-md);
   border-radius: var(--radius-sm);
@@ -83,14 +85,14 @@ body {
 .sidebar-search:hover { background: rgba(255, 255, 255, 0.08); color: var(--nav-text); }
 .sidebar-kbd { background: rgba(255, 255, 255, 0.07); border-color: var(--nav-border); color: var(--nav-muted); }
 
-.sidebar-nav { gap: var(--space-4); }
+.sidebar-nav { gap: var(--space-3); }
 .nav-section-label { color: var(--nav-muted); font-size: 10.5px; letter-spacing: 0.08em; padding: 0 var(--space-2) var(--space-1); }
 .nav-item {
   color: var(--nav-text);
-  padding: 7px var(--space-2);
+  padding: 6px var(--space-2);
   font-size: 13.5px;
   font-weight: 500;
-  min-height: 34px;
+  min-height: 32px;
 }
 .nav-item:hover { background: var(--nav-hover); color: #fff; }
 .nav-item.active { background: var(--nav-active); color: var(--nav-active-text); }
@@ -366,7 +368,7 @@ button.list-row:hover, a.list-row:hover, .list-row.is-clickable:hover { backgrou
 .list-row.is-done .list-row-title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--muted-2); }
 
 /* ---------------- stats + progress ---------------- */
-.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); }
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--space-3); }
 .stat {
   display: flex;
   flex-direction: column;
@@ -633,7 +635,10 @@ button.list-row:hover, a.list-row:hover, .list-row.is-clickable:hover { backgrou
 /* ---------------- demo banner ---------------- */
 .demo-banner {
   position: relative;
-  z-index: 60;
+  z-index: 5;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -710,6 +715,9 @@ button.list-row:hover, a.list-row:hover, .list-row.is-clickable:hover { backgrou
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .grid-main-side { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-4); align-items: start; }
 .stack { display: flex; flex-direction: column; gap: var(--space-4); }
+.stack:empty, .stack-sm:empty { display: none; }
+a.course-chip { text-decoration: none; }
+a.course-chip:hover { filter: brightness(0.96); }
 .stack-sm { display: flex; flex-direction: column; gap: var(--space-2); }
 .row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }

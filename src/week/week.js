@@ -182,7 +182,10 @@ export function initWeekSection(userId, hostApi = {}) {
   // the same session must show up here. The CHOSEN week (if the user had
   // already navigated away from "this week") is preserved across repeat
   // opens; only the very first open defaults to the current week.
-  function onShow() {
+  // V3: an optional YYYY-MM-DD param (from #/week/<date>, e.g. a Semester
+  // week) opens the week containing that date.
+  function onShow(param) {
+    if (param && /^\d{4}-\d{2}-\d{2}$/.test(param)) return loadAndRender(getWeekStart(param));
     return loadAndRender(currentWeekStart || getWeekStart(hostApi.getTodayDateStr()));
   }
 

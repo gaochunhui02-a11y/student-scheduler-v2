@@ -119,6 +119,7 @@ import { setAppContext } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
 import { toast } from '../ui/toast.js';
+import { invalidate as invalidateCache } from '../app/store.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -1103,6 +1104,10 @@ async function init(session) {
   let activeToken = 0;
 
   function flashSaved() {
+    // V3 views cache task/schedule reads; any Planner write makes them stale.
+    invalidateCache('tasks');
+    invalidateCache('schedules');
+    invalidateCache('series');
     saveStatus.textContent = t('common.saved');
     saveStatus.classList.remove('hint-error');
     clearTimeout(flashSaved._t);

@@ -38,11 +38,13 @@ function block(lang) {
   const start = i18nSrc.indexOf(`\nconst ${lang} = {`);
   const end = i18nSrc.indexOf('\n};', start);
   const body = i18nSrc.slice(start, end);
-  // V3 strings live in src/i18n/v3.<lang>.js and are merged over these.
+  // V3 strings live in src/i18n/v3.<lang>.js + more.<lang>.js and are merged over these.
   const v3 = readFileSync(join(root, `src/i18n/v3.${lang}.js`), 'utf8');
+  const more = readFileSync(join(root, `src/i18n/more.${lang}.js`), 'utf8');
   return {
     ...Object.fromEntries([...body.matchAll(ENTRY_RE)].map((m) => [m[1], m[3]])),
     ...Object.fromEntries([...v3.matchAll(ENTRY_RE)].map((m) => [m[1], m[3]])),
+    ...Object.fromEntries([...more.matchAll(ENTRY_RE)].map((m) => [m[1], m[3]])),
   };
 }
 const dicts = { en: block('en'), zh: block('zh'), ja: block('ja') };

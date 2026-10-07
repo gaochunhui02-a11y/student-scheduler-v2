@@ -5,6 +5,8 @@
 import { setHtml } from '../ui/dom.js';
 import { pageHead, emptyState } from '../ui/components.js';
 import { t } from '../shared/i18n.js';
+import { initCoursesPage } from '../courses/coursesPage.js';
+import { initSemesterPage } from '../semester/semesterPage.js';
 
 function placeholderSection(viewId, titleKey) {
   const root = document.getElementById(viewId);
@@ -17,10 +19,10 @@ function placeholderSection(viewId, titleKey) {
 
 export function initV3Sections() {
   return {
-    coursesView: placeholderSection('coursesView', 'nav.courses'),
+    coursesView: initCoursesPage(),
     tasksView: placeholderSection('tasksView', 'nav.tasks'),
     gradesView: placeholderSection('gradesView', 'nav.grades'),
     examsView: placeholderSection('examsView', 'nav.exams'),
-    semesterView: placeholderSection('semesterView', 'nav.semester'),
+    semesterView: initSemesterPage(),
   };
 }

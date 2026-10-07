@@ -13,15 +13,6 @@
 </head>
 <body>
 <a class="skip-link" href="#mainContent" data-i18n="a11y.skipToContent">Skip to content</a>
-<div class="demo-banner" id="demoBanner" hidden role="status">
-  <span class="demo-banner-dot" aria-hidden="true"></span>
-  <span class="demo-banner-text"><strong data-i18n="demo.bannerTitle">Demo mode</strong> <span data-i18n="demo.bannerBody">You're exploring sample data. Changes stay in this tab and are never saved to an account.</span></span>
-  <span class="demo-banner-actions">
-    <button type="button" class="demo-banner-btn" id="demoResetBtn" data-i18n="demo.reset">Reset sample data</button>
-    <a class="demo-banner-btn demo-banner-btn-strong" id="demoSignupLink" href="/signup.html" data-i18n="demo.createAccount">Create a free account</a>
-    <button type="button" class="demo-banner-btn" id="demoExitBtn" data-i18n="demo.exit">Exit demo</button>
-  </span>
-</div>
 <div class="app-shell">
   <aside class="sidebar">
     <div class="brand">
@@ -150,6 +141,16 @@
 
   <main class="workspace" id="mainContent" tabindex="-1">
     <div class="workspace-inner">
+      <div class="demo-banner" id="demoBanner" hidden role="status">
+        <span class="demo-banner-dot" aria-hidden="true"></span>
+        <span class="demo-banner-text"><strong data-i18n="demo.bannerTitle">Demo mode</strong> <span data-i18n="demo.bannerBody">You're exploring sample data. Changes stay in this tab and are never saved to an account.</span></span>
+        <span class="demo-banner-actions">
+          <button type="button" class="demo-banner-btn" id="demoResetBtn" data-i18n="demo.reset">Reset sample data</button>
+          <a class="demo-banner-btn demo-banner-btn-strong" id="demoSignupLink" href="/signup.html" data-i18n="demo.createAccount">Create a free account</a>
+          <button type="button" class="demo-banner-btn" id="demoExitBtn" data-i18n="demo.exit">Exit demo</button>
+        </span>
+      </div>
+      
       <header class="dash-header" id="dashTop">
         <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" data-i18n-aria-label="nav.toggleMenu" aria-label="Toggle menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>
