@@ -9,6 +9,9 @@ import { initCoursesPage } from '../courses/coursesPage.js';
 import { initSemesterPage } from '../semester/semesterPage.js';
 import { initGradesPage } from '../grades/gradesUI.js';
 import { initExamsPage } from '../exams/examsPage.js';
+import { initTasksPage } from '../tasks/tasksPage.js';
+import '../tasks/taskEditorSections.js';
+import '../resources/resourcesUI.js';
 
 function placeholderSection(viewId, titleKey) {
   const root = document.getElementById(viewId);
@@ -22,7 +25,7 @@ function placeholderSection(viewId, titleKey) {
 export function initV3Sections() {
   return {
     coursesView: initCoursesPage(),
-    tasksView: placeholderSection('tasksView', 'nav.tasks'),
+    tasksView: initTasksPage(),
     gradesView: initGradesPage(),
     examsView: initExamsPage(),
     semesterView: initSemesterPage(),

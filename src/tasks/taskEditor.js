@@ -169,7 +169,7 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
             }
             for (const hd of sectionHandles) {
               // eslint-disable-next-line no-await-in-loop
-              if (hd.afterSave) await hd.afterSave(taskId);
+              if (hd.afterSave) await hd.afterSave(taskId, { fields, planDate });
             }
             api.close(true);
             toast(isNew ? t('tasks.created') : t('common.savedShort'), { kind: 'success' });

@@ -23,6 +23,7 @@ import { buildTaskGroups, sortTaskGroups, courseProgress, blockCompletedMinutes 
 import { openTaskEditor } from '../tasks/taskEditor.js';
 import { setTaskDone } from '../tasks/tasksData.js';
 import { openCourseEditor } from './courseEditor.js';
+import { taskRowHtml } from '../tasks/taskRow.js';
 import { courseTabs, courseOverviewWidgets, courseCardProviders } from './courseTabs.js';
 import { buildSeriesFields, validateSeriesFields } from '../dashboard/recurringClasses.js';
 import { statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
@@ -38,32 +39,6 @@ function weekdayShort(dow) {
 function meetingLine(m) {
   const days = m.days.map(weekdayShort).join(' ');
   return `${days} · ${fmtClockStr(m.start)}–${fmtClockStr(m.end)}`;
-}
-
-function taskStatusBadge(group) {
-  if (group.status === 'unscheduled') return badge(t('tasks.statusUnscheduled'), 'outline');
-  if (group.status === 'blocked') return badge(t('tasks.statusBlocked'), 'warning');
-  return raw(statusBadgeHtml(group.status, t(statusLabelKey(group.status)), { compact: true }));
-}
-
-export function taskRowHtml(group, { course = null, showCourse = false, today = todayStr() } = {}) {
-  const dueText = group.dueDate ? fmtDue(group.dueDate, today) : '';
-  const dueClass = group.overdue ? 'badge--danger' : group.dueDate && diffDays(today, group.dueDate) <= 2 && !group.done ? 'badge--warning' : 'badge--outline';
-  return html`<div class="list-row task-row${group.done ? ' is-done' : ''}" data-task-id="${group.id}">
-    ${has('taskExtensions') ? html`<button type="button" class="task-check${group.done ? ' is-checked' : ''}" data-action="toggle-done" aria-pressed="${group.done ? 'true' : 'false'}" aria-label="${group.done ? t('tasks.markNotDone') : t('tasks.markDone')}">${raw(icon('check'))}</button>` : ''}
-    <button type="button" class="list-row-main task-open" data-action="open-task">
-      <span class="list-row-title">${group.name}</span>
-      <span class="list-row-meta">
-        ${showCourse && course ? html`<span class="course-chip" style="--c:${safeColor(course.color)}"><span class="course-dot"></span>${course.code || course.name}</span>` : ''}
-        ${group.remainingMinutes > 0 ? html`<span>${t('tasks.leftShort').replace('{time}', fmtMinutes(group.remainingMinutes))}</span>` : ''}
-        ${group.tags.slice(0, 2).map((tag) => html`<span class="muted">#${tag}</span>`)}
-      </span>
-    </button>
-    <span class="list-row-side">
-      ${dueText ? html`<span class="badge ${dueClass}">${group.overdue ? t('tasks.overdueShort') : dueText}</span>` : ''}
-      ${taskStatusBadge(group)}
-    </span>
-  </div>`;
 }
 
 export function initCoursesPage() {

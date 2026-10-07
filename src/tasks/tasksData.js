@@ -9,6 +9,9 @@ import { getOrCreateScheduleForDate } from '../dashboard/data.js';
 import { invalidateTasks } from '../academics/academicsData.js';
 import { emitChange, app } from '../app/context.js';
 import { has } from '../shared/capabilities.js';
+import { cached, invalidate } from '../app/store.js';
+import { planGeneration, DEFAULT_HORIZON_DAYS } from './recurringModel.js';
+import { addDays } from '../shared/dates.js';
 
 function unwrap({ data, error }) {
   if (error) throw error;
@@ -78,4 +81,85 @@ export async function deleteTaskGroup(rowIds) {
   if (!rowIds || rowIds.length === 0) return;
   unwrap(await supabase.from('study_subjects').delete().in('id', rowIds));
   afterTaskWrite(null);
+}
+
+// ---------------- dependencies (V3-H, migration 0014) ----------------
+
+export function listDependencies(userId) {
+  if (!has('dependencies')) return Promise.resolve([]);
+  return cached('tasks:deps', async () => unwrap(await supabase.from('task_dependencies').select('*').eq('user_id', userId)));
+}
+
+export async function addDependency(userId, taskId, prereqId) {
+  unwrap(await supabase.from('task_dependencies').insert({ user_id: userId, task_id: taskId, depends_on_id: prereqId }));
+  invalidate('tasks');
+  emitChange('tasks');
+}
+
+export async function removeDependency(id) {
+  unwrap(await supabase.from('task_dependencies').delete().eq('id', id));
+  invalidate('tasks');
+  emitChange('tasks');
+}
+
+// ---------------- recurring rules (V3-H, migration 0014) ----------------
+export function listRecurrenceRules(userId) {
+  if (!has('recurringTasks')) return Promise.resolve([]);
+  return cached('tasks:rules', async () => unwrap(await supabase.from('task_recurrence_rules').select('*').eq('user_id', userId).order('created_at', { ascending: true })));
+}
+
+export async function saveRecurrenceRule(userId, id, fields) {
+  const row = id
+    ? unwrap(await supabase.from('task_recurrence_rules').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', id).select().single())
+    : unwrap(await supabase.from('task_recurrence_rules').insert({ user_id: userId, ...fields }).select().single());
+  invalidate('tasks');
+  emitChange('tasks');
+  return row;
+}
+
+// Deleting a rule keeps every task it already created (their
+// recurrence_rule_id becomes null); it only stops future occurrences.
+export async function deleteRecurrenceRule(id) {
+  unwrap(await supabase.from('task_recurrence_rules').delete().eq('id', id));
+  invalidate('tasks');
+  emitChange('tasks');
+}
+
+/**
+ * Creates any missing tasks for active rules in [today, today + horizon].
+ * Idempotent: occurrences that already exist are skipped, and the
+ * database's unique (rule, date) index rejects a duplicate created by a
+ * second tab at the same moment (that error is treated as "already done").
+ */
+export async function generateRecurringTasks(userId, today, horizon = DEFAULT_HORIZON_DAYS) {
+  if (!has('recurringTasks') || !has('taskExtensions')) return 0;
+  const rules = (await listRecurrenceRules(userId)).filter((r) => r.active);
+  if (!rules.length) return 0;
+  const { data: existing, error } = await supabase
+    .from('study_subjects')
+    .select('recurrence_rule_id, recurrence_date')
+    .eq('user_id', userId)
+    .in('recurrence_rule_id', rules.map((r) => r.id))
+    .gte('recurrence_date', today)
+    .lte('recurrence_date', addDays(today, horizon));
+  if (error) throw error;
+  const plan = planGeneration(rules, existing || [], today, horizon);
+  let created = 0;
+  for (const p of plan) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await createTask(userId, { planDate: p.planDate, fields: p.fields });
+      created += 1;
+    } catch (err) {
+      if (!(err && err.code === '23505')) throw err;
+    }
+  }
+  return created;
+}
+
+// ---------------- subtasks (V2 table, used by the V3 task editor) ----------------
+export async function listSubtasksFor(subjectId) {
+  const res = await supabase.from('study_subject_subtasks').select('*').eq('subject_id', subjectId).order('sort_order', { ascending: true });
+  if (res.error) return [];
+  return res.data || [];
 }

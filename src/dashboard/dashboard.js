@@ -120,6 +120,7 @@ import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
 import { initV3Sections } from '../app/v3Sections.js';
 import { toast } from '../ui/toast.js';
 import { invalidate as invalidateCache } from '../app/store.js';
+import { findBlockedSubjects } from '../tasks/dependencyGate.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -3859,6 +3860,18 @@ async function init(session) {
 
     const subjectsInput = buildSubjectsInput();
 
+    // V3-H: tasks still waiting on unfinished prerequisites are left out of
+    // this run (unless set to "Schedule anyway") and explained in the notes.
+    let blockedSubjects = [];
+    try {
+      blockedSubjects = await findBlockedSubjects(userId, subjectsInput);
+    } catch (err) {
+      console.error('Could not check task dependencies:', err);
+    }
+    if (token !== activeToken) return;
+    const blockedIds = new Set(blockedSubjects.map((b) => b.id));
+    const subjectsForGeneration = subjectsInput.filter((s) => !blockedIds.has(s.id));
+
     const mealsInput = [
       { name: 'Breakfast', duration: 30, on: meal.breakfast.on.checked, time: meal.breakfast.time.value },
       { name: 'Lunch', duration: 45, on: meal.lunch.on.checked, time: meal.lunch.time.value },
@@ -3870,7 +3883,7 @@ async function init(session) {
       sleepTime: sleepTimeEl.value,
       classes: classesInput,
       meals: mealsInput,
-      subjects: subjectsInput,
+      subjects: subjectsForGeneration,
       prefs: {
         sessionCap: schedule.session_cap_minutes,
         staminaBreak: schedule.stamina_break_minutes,
@@ -3905,9 +3918,10 @@ async function init(session) {
       ? result.noteDetails
         .filter((d) => d.key !== 'schedulerMsg.classOverlap') // shown in the Schedule conflicts panel instead
         .map((d) => tMessage(d.params && d.params.meal ? { ...d, params: { ...d.params, meal: mealLabel(d.params.meal, t) } } : d))
+        .concat(blockedSubjects.map((b) => t('deps.skippedNote').replace('{name}', b.name).replace('{waiting}', b.waitingOn.map((w) => w.name).join(', '))))
       : result.notes);
 
-    const progress = computeSubjectProgress(result.events, subjectsInput);
+    const progress = computeSubjectProgress(result.events, subjectsForGeneration);
     renderDailySummary(computeDailySummary(result.events, result.dayStart, result.dayEnd), progress);
     renderShortfallWarning(progress);
 
