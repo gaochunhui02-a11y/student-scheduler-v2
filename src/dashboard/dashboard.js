@@ -128,6 +128,7 @@ import { planSingleMove, applyRebalanceMoves } from '../workload/workloadData.js
 import { initCalendarV3 } from '../calendar/calendarView3.js';
 import { recordFocusSession, focusOutcome, taskTimeSummary } from '../focus/focusHistory.js';
 import { initInsightsV3 } from '../insights/insightsV3.js';
+import { initHomeV3 } from '../home/homeV3.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -883,6 +884,8 @@ async function init(session) {
 
   const v3Sections = initV3Sections();
   const insightsV3 = initInsightsV3();
+  // V3-S: the Dashboard is rebuilt around today (V2 Home stays in the DOM, hidden).
+  const homeV3 = initHomeV3();
   const altViewSections = {
     boardView: boardSection,
     weekView: {
@@ -892,7 +895,7 @@ async function init(session) {
       },
     },
     calendarView: calendarV3 || agendaSection,
-    analyticsView: analyticsSection,
+    analyticsView: homeV3 || analyticsSection,
     insightsView: {
       onShow: () => {
         if (insightsV3) insightsV3.onShow();
@@ -4529,7 +4532,8 @@ async function init(session) {
   else {
     showAltView(document.getElementById('analyticsView'));
     history.replaceState(null, '', '#/home');
-    if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
+    if (homeV3) homeV3.onShow();
+    else if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
   }
   document.body.dataset.appReady = '1';
 

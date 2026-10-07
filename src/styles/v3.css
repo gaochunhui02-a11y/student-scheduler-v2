@@ -6,6 +6,7 @@
 @import "./v3-calendar.css";
 @import "./v3-focus.css";
 @import "./v3-insights.css";
+@import "./v3-home.css";
 
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:
@@ -858,3 +859,5 @@ a.course-chip:hover { filter: brightness(0.96); }
 .auth-demo-link:hover { background: var(--accent-soft-strong); }
 .auth-demo-hint { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--muted); }
 .auth-wrap { background: var(--canvas-glow), var(--bg); }
+a.card-link { text-decoration: none; }
+a.card-link:hover { text-decoration: underline; }
