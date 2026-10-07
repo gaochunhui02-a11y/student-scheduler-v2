@@ -20,7 +20,12 @@ export function initCommandPalette({ getCommands, t }) {
   let selected = -1;
   let returnFocusTo = null;
 
-  const GROUP_KEYS = { create: 'palette.groupCreate', navigate: 'palette.groupGo', tasks: 'palette.groupTasks' };
+  const GROUP_KEYS = {
+    create: 'palette.groupCreate', navigate: 'palette.groupGo', tasks: 'palette.groupTasks',
+    // V3 groups
+    commands: 'search.groupCommands', courses: 'search.groupCourses', exams: 'search.groupExams',
+    classes: 'search.groupClasses', boards: 'search.groupBoards', settings: 'search.groupSettings',
+  };
 
   function build() {
     overlay = document.createElement('div');

@@ -1,0 +1,28 @@
+/* ---------------- Quick Add + keyboard reference (V3-Q/R) ---------------- */
+.qa-grid { display: flex; flex-direction: column; gap: var(--space-2); }
+.qa-tile {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.qa-tile:hover { border-color: var(--accent-soft-strong); background: var(--accent-soft); }
+.qa-tile-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.qa-tile-icon svg { width: 20px; height: 20px; }
+.qa-tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qa-tile-text strong { font-size: var(--text-md); }
+.qa-tile-text span { font-size: var(--text-xs); color: var(--muted); }
+.kbd-list { margin: 0; display: flex; flex-direction: column; }
+.kbd-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+.kbd-row dt { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.kbd-row dd { margin: 0; font-size: var(--text-sm); color: var(--text-soft); text-align: right; }
+.kbd-then { font-size: var(--text-2xs); color: var(--muted); }

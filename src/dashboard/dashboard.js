@@ -129,6 +129,15 @@ import { initCalendarV3 } from '../calendar/calendarView3.js';
 import { recordFocusSession, focusOutcome, taskTimeSummary } from '../focus/focusHistory.js';
 import { initInsightsV3 } from '../insights/insightsV3.js';
 import { initHomeV3 } from '../home/homeV3.js';
+import { openQuickAdd } from '../quickadd/quickAdd.js';
+import { searchIndex, refreshSearchIndex } from '../search/searchIndex.js';
+import { installShortcuts } from '../shared/keyboard.js';
+import { buildShortcutList } from '../shared/shortcutList.js';
+import { openDrawer } from '../ui/drawer.js';
+import { openTaskEditor } from '../tasks/taskEditor.js';
+import { buildTaskGroups } from '../tasks/taskModel.js';
+import { listTaskRowsInWindow, listBlocksForSubjectIds } from '../academics/academicsData.js';
+import { openBoard } from '../board/boardCourseWidget.js';
 
 // ---------------- PWA (Phase 11, applied immediately, before auth) ----------------
 // Registering the service worker and watching online/offline doesn't need
@@ -955,7 +964,7 @@ async function init(session) {
     refreshPlanner: () => {
       if (schedule) loadScheduleForDate(schedule.for_date);
     },
-    openQuickAdd: () => commandPalette.open('create'),
+    openQuickAdd: (type) => openQuickAdd(type),
   });
 
   // ---------------- mobile sidebar toggle (Checkpoint B) ----------------
@@ -1073,11 +1082,23 @@ async function init(session) {
     setTimeout(() => row.classList.remove('study-row-highlight'), 1800);
   }
 
+  // V3-Q: the palette searches everything — commands, pages, courses,
+  // tasks, exams, recurring classes, boards and settings — from a small
+  // in-memory index kept fresh in the background (src/search/searchIndex.js).
+  function openSettingsTab(key) {
+    activateView('settingsView').then(() => selectSettingsTab(key));
+  }
+  function toggleDarkMode() {
+    if (themeToggleBtn) themeToggleBtn.click();
+  }
   function buildPaletteCommands(mode) {
     const create = [
-      { id: 'add-task', group: 'create', title: t('palette.addTask'), keywords: ['study', 'subject', 'new task'], run: quickAddStudyTask },
-      { id: 'add-class', group: 'create', title: t('palette.addClass'), keywords: ['lecture', 'course'], run: quickAddClass },
-      { id: 'add-recurring', group: 'create', title: t('palette.addRecurringClass'), keywords: ['repeat', 'weekly', 'class'], run: quickAddRecurringClass },
+      { id: 'quick-add', group: 'create', title: t('palette.quickAdd'), keywords: ['new', 'create', 'add'], run: () => openQuickAdd() },
+      { id: 'new-task', group: 'create', title: t('search.newTask'), keywords: ['task', 'homework', 'assignment', 'study'], run: () => openQuickAdd('task') },
+      { id: 'new-course', group: 'create', title: t('search.newCourse'), keywords: ['course', 'class', 'subject'], run: () => openQuickAdd('course') },
+      { id: 'new-exam', group: 'create', title: t('search.newExam'), keywords: ['exam', 'test', 'midterm', 'final'], run: () => openQuickAdd('exam') },
+      { id: 'new-class', group: 'create', title: t('search.newClass'), keywords: ['lecture', 'class', 'weekly', 'recurring'], run: () => openQuickAdd('class') },
+      { id: 'new-study', group: 'create', title: t('search.newStudyBlock'), keywords: ['block', 'session', 'study time'], run: () => openQuickAdd('study') },
       { id: 'new-board', group: 'create', title: t('palette.newBoard'), keywords: ['project'], run: quickNewBoard },
       { id: 'add-node', group: 'create', title: t('palette.addBoardNode'), keywords: ['board', 'card', 'node'], run: quickAddBoardNode },
     ];
@@ -1085,25 +1106,66 @@ async function init(session) {
 
     const go = (id, titleKey, run, keywords = []) => ({ id, group: 'navigate', title: t(titleKey), keywords, run });
     const navigate = [
-      go('search-tasks', 'palette.searchTasks', focusTaskSearch, ['find', 'filter']),
-      go('open-home', 'palette.openHome', () => activateView('analyticsView'), ['dashboard']),
-      go('open-planner', 'palette.openPlanner', () => activatePlannerScroll('plannerForm'), ['today', 'schedule', 'plan']),
-      go('open-week', 'palette.openWeek', () => activateView('weekView'), ['week view']),
+      go('open-today', 'search.openToday', () => openPlannerForDate(todayDateStr()), ['today', 'planner', 'schedule']),
+      go('open-home', 'palette.openHome', () => activateView('analyticsView'), ['dashboard', 'home']),
+      go('open-planner', 'palette.openPlanner', () => activatePlannerScroll('plannerForm'), ['schedule', 'plan', 'day']),
+      go('open-week', 'palette.openWeek', () => activateView('weekView'), ['week view', 'forecast', 'workload']),
+      go('open-semester', 'search.openSemester', () => activateView('semesterView'), ['term', 'semester']),
+      go('open-calendar', 'palette.openCalendar', () => activateView('calendarView'), ['agenda', 'month', 'events']),
+      go('open-courses', 'search.openCourses', () => activateView('coursesView'), ['courses', 'classes']),
+      go('open-tasks', 'search.openTasks', () => activateView('tasksView'), ['tasks', 'todo', 'homework']),
+      go('open-grades', 'search.openGrades', () => activateView('gradesView'), ['grades', 'gpa', 'score']),
+      go('open-exams', 'search.openExams', () => activateView('examsView'), ['exams', 'revision']),
       go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
-      go('open-calendar', 'palette.openCalendar', () => activateView('calendarView'), ['agenda', 'events']),
-      go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics', 'google']),
       go('open-history', 'palette.openHistory', () => activateView('historyView'), ['past']),
       go('open-insights', 'palette.openInsights', () => activateView('insightsView'), ['analytics', 'stats']),
-      go('open-settings', 'palette.openSettings', () => activateView('settingsView'), ['preferences', 'theme', 'notifications']),
+      go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics']),
+      go('search-tasks', 'palette.searchTasks', focusTaskSearch, ['find', 'filter']),
     ];
+    const commands = [
+      { id: 'toggle-dark', group: 'commands', title: t('search.toggleDark'), keywords: ['theme', 'dark', 'light', 'night'], run: toggleDarkMode },
+      { id: 'shortcuts', group: 'commands', title: t('search.shortcuts'), keywords: ['keyboard', 'keys', 'hotkeys'], run: openShortcutHelp },
+      { id: 'focus-next', group: 'commands', title: t('search.focusNext'), keywords: ['focus', 'timer', 'pomodoro'], run: () => openPlannerForDate(todayDateStr()) },
+    ];
+    const settings = [
+      ['general', 'settings.tabGeneral'], ['appearance', 'settings.appearanceTitle'], ['planner', 'settings.tabPlanner'],
+      ['academics', 'settings3.tabAcademics'], ['notifications', 'notifications.title'], ['calendar', 'settings.calendarTitle'],
+      ['keyboard', 'settings3.tabKeyboard'], ['data', 'settings.tabData'], ['about', 'settings3.tabAbout'],
+    ].filter(([key]) => document.getElementById(`settingsTab-${key}`))
+      .map(([key, labelKey]) => ({ id: `settings-${key}`, group: 'settings', title: `${t('nav.settings')} · ${t(labelKey)}`, keywords: ['settings', 'preferences'], run: () => openSettingsTab(key) }));
 
-    // The date open in the Planner's own tasks, searchable by name.
-    const dateHint = schedule ? formatDateLabel(schedule.for_date) : '';
-    const tasks = buildSubjectsInput()
-      .filter((s) => s.id && s.name)
-      .map((s) => ({ id: `task-${s.id}`, group: 'tasks', title: s.name, hint: dateHint, run: () => revealStudyRow(s.id) }));
+    const idx = searchIndex();
+    const courseById = new Map(idx.courses.map((c) => [c.id, c]));
+    const courseLabel = (id) => (id && courseById.get(id) ? courseById.get(id).code || courseById.get(id).name : '');
+    const entities = [
+      ...idx.courses.filter((c) => !c.archived).map((c) => ({ id: `course-${c.id}`, group: 'courses', title: c.code ? `${c.code} · ${c.name}` : c.name, hint: c.instructor || '', keywords: [c.instructor || '', c.location || ''], run: () => activateView('coursesView', c.id) })),
+      ...idx.tasks.map((r) => ({ id: `task-${r.id}`, group: 'tasks', title: r.name, hint: [courseLabel(r.course_id), r.due_date ? formatDateLabel(r.due_date) : ''].filter(Boolean).join(' · '), keywords: (r.tags || []).concat(courseLabel(r.course_id)), run: () => openTaskById(r.id) })),
+      ...idx.exams.map((e) => ({ id: `exam-${e.id}`, group: 'exams', title: e.name, hint: [courseLabel(e.course_id), formatDateLabel(e.exam_date)].filter(Boolean).join(' · '), keywords: [courseLabel(e.course_id)], run: () => activateView('examsView', e.id) })),
+      ...idx.series.map((se) => ({ id: `series-${se.id}`, group: 'classes', title: se.name, hint: courseLabel(se.course_id), keywords: ['class', 'lecture'], run: () => (se.course_id ? activateView('coursesView', `${se.course_id}:schedule`) : activatePlannerScroll('recurringClassesCard')) })),
+      ...idx.boards.map((b) => ({ id: `board-${b.id}`, group: 'boards', title: b.title, keywords: ['board', 'project'], run: () => openBoard(b.id) })),
+    ];
+    // Without a query the palette shows actions and pages; typing searches everything.
+    return [...create, ...navigate, ...commands, ...settings, ...entities];
+  }
 
-    return [...create, ...navigate, ...tasks];
+  async function openTaskById(id) {
+    const today = todayDateStr();
+    const rows = await listTaskRowsInWindow(userId, addDaysToDateStr(today, -60), addDaysToDateStr(today, 120)).catch(() => []);
+    const blocks = await listBlocksForSubjectIds(rows.map((r) => r.id)).catch(() => []);
+    const group = buildTaskGroups(rows, blocks, { today }).find((g) => g.rowIds.includes(id));
+    if (group) openTaskEditor({ task: group });
+    else activateView('tasksView');
+  }
+
+  function openShortcutHelp() {
+    openDrawer({
+      title: t('settings3.tabKeyboard'),
+      size: 'narrow',
+      render: (body) => {
+        body.appendChild(buildShortcutList());
+      },
+      actions: [{ label: t('common.close'), variant: 'secondary', onClick: (api) => api.close() }],
+    });
   }
 
   const commandPalette = initCommandPalette({ getCommands: buildPaletteCommands, t });
@@ -1115,12 +1177,29 @@ async function init(session) {
     if (!isPaletteShortcut(e)) return;
     e.preventDefault();
     if (commandPalette.isOpen()) commandPalette.close();
-    else commandPalette.open('all');
+    else {
+      refreshSearchIndex();
+      commandPalette.open('all');
+    }
+  });
+  // V3-Q: a few memorable single-key shortcuts (see src/shared/keyboard.js).
+  installShortcuts({
+    onQuickAdd: () => openQuickAdd(),
+    onSearch: () => {
+      refreshSearchIndex();
+      commandPalette.open('all');
+    },
+    onHelp: () => openShortcutHelp(),
+    onGo: (view) => activateView(view),
   });
   document.querySelectorAll('[data-open-palette]').forEach((btn) => {
     btn.addEventListener('click', () => {
       closeSidebar();
-      commandPalette.open(btn.dataset.openPalette === 'create' ? 'create' : 'all');
+      if (btn.dataset.openPalette === 'create') openQuickAdd();
+      else {
+        refreshSearchIndex();
+        commandPalette.open('all');
+      }
     });
   });
   document.querySelectorAll('[data-open-quickadd]').forEach((btn) => {
@@ -1130,8 +1209,7 @@ async function init(session) {
     });
   });
   function appContextQuickAdd() {
-    // Replaced by the V3 Quick Add sheet once it is registered (V3-R).
-    commandPalette.open('create');
+    openQuickAdd();
   }
 
   // The currently active date's schedule row. Reassigned by loadScheduleForDate()
@@ -4536,6 +4614,8 @@ async function init(session) {
     else if (analyticsSection && typeof analyticsSection.onShow === 'function') analyticsSection.onShow();
   }
   document.body.dataset.appReady = '1';
+  // V3-Q: warm the search index so the first Ctrl/Cmd+K already finds courses and tasks.
+  setTimeout(() => refreshSearchIndex(), 1500);
 
   // ---------------- First-run onboarding (V2-F) ----------------
   // "Build my first plan" fills the REAL Planner inputs and fires their own
