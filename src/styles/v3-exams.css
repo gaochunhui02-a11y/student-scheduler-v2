@@ -1,0 +1,96 @@
+/* ---------------- Exams (V3-D) ---------------- */
+.exam-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.exam-card {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  color: inherit;
+  text-decoration: none;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.exam-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); border-color: color-mix(in srgb, var(--c, var(--accent)) 35%, var(--border)); }
+.exam-card.is-past { opacity: 0.7; }
+.exam-card.is-compact { grid-template-columns: 56px minmax(0, 1fr) auto; }
+.exam-card-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c, var(--accent)) 12%, var(--surface-2));
+  color: color-mix(in srgb, var(--c, var(--accent)) 80%, var(--text));
+}
+.exam-card.is-compact .exam-card-count { height: 48px; }
+.exam-card-count.is-soon { background: var(--now-soft); color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-border); }
+.exam-card-days { font-size: var(--text-xl); font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.exam-card-days-label { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 3px; opacity: 0.85; }
+.exam-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.exam-card-name { font-size: var(--text-md); font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exam-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--space-2); font-size: var(--text-xs); color: var(--muted); }
+.exam-card-progress { display: grid; grid-template-columns: minmax(80px, 220px) auto; align-items: center; gap: var(--space-2); }
+.exam-card-progress .bar > span { background: var(--c, var(--accent)); }
+@media (max-width: 600px) {
+  .exam-card { grid-template-columns: 60px minmax(0, 1fr); }
+  .exam-card-side { grid-column: 2; }
+  .exam-card-progress { grid-template-columns: 1fr; }
+}
+
+.exam-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.exam-hero-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(150deg, color-mix(in srgb, var(--c, var(--accent)) 85%, #fff), var(--c, var(--accent)));
+  color: #fff;
+  box-shadow: 0 14px 30px -14px var(--c, var(--accent));
+  flex: none;
+}
+.exam-hero-count.is-soon { background: linear-gradient(150deg, #f6b03c, #e2850c); box-shadow: 0 14px 30px -14px #e2850c; }
+.exam-hero-days { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.exam-hero-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.9; margin-top: 2px; }
+.exam-hero-text { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+
+.topic-row { align-items: center; }
+.topic-row .list-row-main { gap: 4px; }
+.topic-row .bar { margin-top: 4px; max-width: 320px; }
+.dots { display: inline-flex; gap: 2px; align-items: center; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--surface-3); display: inline-block; }
+.dots i.on { background: var(--warning); }
+
+.plan-days { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.plan-day-date { display: block; font-size: var(--text-xs); font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.plan-day ul { list-style: none; margin: 0; padding: 0 0 0 var(--space-3); border-left: 2px solid var(--accent-soft-strong); display: flex; flex-direction: column; gap: 3px; }
+.plan-day li li { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); }
+
+.scale { display: inline-flex; gap: 4px; }
+.scale-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-soft);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scale-btn[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.scale-caption { font-size: var(--text-xs); color: var(--muted); }
+.stack-sm > .card-link { align-self: flex-start; }

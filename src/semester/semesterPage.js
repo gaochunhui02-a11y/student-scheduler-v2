@@ -160,7 +160,7 @@ export function initSemesterPage() {
       </button>
       ${isOpen ? html`<div class="semester-week-body">
         ${items.length ? html`<ul class="semester-week-items">${items.sort((a, b) => a.date.localeCompare(b.date)).map((it) => html`<li>
-            <span class="semester-item-date">${fmtDate(it.date, { weekday: 'short', day: 'numeric' })}</span>
+            <span class="semester-item-date">${fmtDate(it.date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
             ${it.kind === 'exam' ? html`<span class="badge badge--danger">${t('semester.examTag')}</span>` : ''}
             <button type="button" class="semester-item-link${it.done ? ' is-done' : ''}" data-action="${it.kind === 'exam' ? 'open-exam' : 'open-task'}" data-id="${it.id}">${it.label}</button>
             ${it.course ? html`<a class="course-chip" href="#/courses/${it.course.id}" style="--c:${safeColor(it.course.color)}"><span class="course-dot"></span>${it.course.code || it.course.name}</a>` : ''}
