@@ -24,6 +24,8 @@ export function capabilityFilter(fields) {
   const out = { ...fields };
   if (!has('courseLinks')) delete out.course_id;
   if (!has('spaceLinks')) delete out.space_id; // V4 (0018)
+  if (!has('projectLinks')) { delete out.project_id; delete out.project_milestone_id; } // V4 (0019)
+  if (!has('taskFieldsV4')) ['due_time', 'start_time', 'status_override', 'project_sort'].forEach((k) => delete out[k]); // V4 (0020)
   if (!has('taskExtensions')) {
     ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'].forEach((k) => delete out[k]);
   }

@@ -21,7 +21,8 @@ function check(label, fn) {
   }
 }
 
-const builtV3 = MODULES.filter((m) => m.built).map((m) => m.id);
+const builtV3 = MODULES.filter((m) => m.built && m.v3).map((m) => m.id);
+const builtAll = MODULES.filter((m) => m.built).map((m) => m.id);
 
 console.log('\n=== legacy (V3) accounts keep everything ===');
 check('no saved workspace = legacy = every built V3 page visible', () => {
@@ -30,9 +31,20 @@ check('no saved workspace = legacy = every built V3 page visible', () => {
   assert.deepEqual(builtV3, ['home', 'planner', 'week', 'calendar', 'semester', 'tasks', 'courses', 'exams', 'grades', 'board', 'history', 'insights']);
 });
 check('unbuilt V4 modules are never shown, even if enabled', () => {
-  const ws = normalizeWorkspace({ mode: 'work', modules: { projects: true } });
-  assert.equal(isModuleEnabled(ws, 'projects'), true);
-  assert.equal(visibleModules(ws).includes('projects'), false);
+  const ws = normalizeWorkspace({ mode: 'work', modules: { goals: true } });
+  assert.equal(isModuleEnabled(ws, 'goals'), true);
+  assert.equal(visibleModules(ws).includes('goals'), false);
+});
+check('legacy (V3) accounts do not get new V4 pages until they opt in', () => {
+  assert.equal(visibleModules(normalizeWorkspace(null)).includes('projects'), false);
+  const on = withModule(normalizeWorkspace(null), 'projects', true);
+  assert.deepEqual(visibleModules(on), [...builtV3.slice(0, 6), 'projects', ...builtV3.slice(6)]);
+});
+check('Projects: on for Work and Multiple areas, off for School unless enabled', () => {
+  assert.ok(visibleModules(normalizeWorkspace({ mode: 'work' })).includes('projects'));
+  assert.ok(visibleModules(normalizeWorkspace({ mode: 'multiple' })).includes('projects'));
+  assert.ok(!visibleModules(normalizeWorkspace({ mode: 'school' })).includes('projects'));
+  assert.ok(visibleModules(withModule(normalizeWorkspace({ mode: 'school' }), 'projects', true)).includes('projects'));
 });
 
 console.log('\n=== modes ===');
@@ -52,7 +64,7 @@ check('school shows academics; work and personal do not', () => {
   assert.ok(work.includes('board') && !personal.includes('board'));
 });
 check('multiple areas shows every built module', () => {
-  assert.deepEqual(visibleModules(normalizeWorkspace({ mode: 'multiple' })), builtV3);
+  assert.deepEqual(visibleModules(normalizeWorkspace({ mode: 'multiple' })), builtAll);
 });
 check('sections with nothing visible are hidden', () => {
   assert.equal(visibleSections(normalizeWorkspace({ mode: 'personal' })).includes('academics'), false);

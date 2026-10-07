@@ -154,6 +154,37 @@ check('V4 spaces are backed up first and links are remapped; same-name spaces ar
   assert.ok(!v3db.availableTables.includes('spaces'));
   assert.deepEqual(v3db.unavailableColumns.courses, ['space_id']);
 });
+check('V4-B projects, milestones and project tasks round-trip with remapped links', () => {
+  const sp = { id: uid(), name: 'Work', icon: 'briefcase' };
+  const pj = { id: uid(), space_id: sp.id, title: 'Portfolio', status: 'active', priority: 'high' };
+  const ms = { id: uid(), project_id: pj.id, title: 'Prototype', due_date: '2026-10-25', status: 'open' };
+  const s = { id: uid(), for_date: '2026-10-20' };
+  const tk = { id: uid(), schedule_id: s.id, name: 'Homepage', minutes_requested: 90, project_id: pj.id, project_milestone_id: ms.id, due_time: '23:59', start_time: '14:00', status_override: 'deferred', project_sort: 20 };
+  const v4 = validateBackup({ ...backup, tables: { spaces: [sp], projects: [pj], project_milestones: [ms], schedules: [s], study_subjects: [tk] } });
+  assert.equal(v4.ok, true, JSON.stringify(v4.errors));
+  assert.deepEqual(BACKUP_TABLES.slice(0, 3), ['spaces', 'projects', 'project_milestones']);
+  const plan = planRestore({ tables: v4.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  const np = plan.inserts.projects[0];
+  const nm = plan.inserts.project_milestones[0];
+  const nt = plan.inserts.study_subjects[0];
+  assert.equal(np.space_id, plan.inserts.spaces[0].id);
+  assert.equal(nm.project_id, np.id);
+  assert.equal(nt.project_id, np.id);
+  assert.equal(nt.project_milestone_id, nm.id);
+  assert.equal(nt.status_override, 'deferred');
+  // On a database without 0019/0020: no project tables, no project columns.
+  const v3db = restoreAvailability({ courses: 1, courseLinks: 1, taskExtensions: 1 });
+  const plan3 = planRestore({ tables: v4.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, ...v3db, newId: newIds(), userId: 'me' });
+  assert.ok(plan3.unavailable.includes('projects'));
+  const t3 = plan3.inserts.study_subjects[0];
+  ['project_id', 'project_milestone_id', 'due_time', 'start_time', 'status_override', 'project_sort'].forEach((k) => assert.equal(k in t3, false, k));
+});
+check('a bad project status / task status override is rejected', () => {
+  const bad = validateBackup({ ...backup, tables: { projects: [{ id: uid(), title: 'x', status: 'done' }], study_subjects: [{ ...subj, status_override: 'done' }] } });
+  const problems = bad.errors.map((e) => `${e.table}.${e.column}`);
+  assert.ok(problems.includes('projects.status'));
+  assert.ok(problems.includes('study_subjects.status_override'));
+});
 check('a bad space icon is rejected', () => {
   const bad = validateBackup({ ...backup, tables: { spaces: [{ id: uid(), name: 'x', icon: '<svg onload=1>' }] } });
   assert.ok(bad.errors.some((e) => e.table === 'spaces' && e.column === 'icon'));

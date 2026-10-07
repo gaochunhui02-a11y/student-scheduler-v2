@@ -5,7 +5,8 @@
 // navigation by default; the student can switch any module on or off.
 //
 // An account that has never chosen a mode is a LEGACY (V3) account: it keeps
-// the full V3 navigation so nothing an upgrading user relies on disappears.
+// exactly the V3 navigation — nothing disappears, and new V4 pages
+// (Projects…) don't appear until the student turns them on or picks a mode.
 
 export const MODES = ['school', 'work', 'personal', 'selfstudy', 'multiple'];
 
@@ -16,23 +17,23 @@ export const SECTIONS = ['home', 'plan', 'work', 'academics', 'organize', 'revie
 // V4 checkpoint; it is never shown until it exists. `core` modules can't be
 // switched off (the app is unusable without them).
 export const MODULES = [
-  { id: 'home', section: 'home', view: 'analyticsView', labelKey: 'nav.home', built: true, core: true },
+  { id: 'home', v3: true, section: 'home', view: 'analyticsView', labelKey: 'nav.home', built: true, core: true },
   { id: 'today', section: 'home', view: 'todayView', labelKey: 'nav.today', built: false },
-  { id: 'planner', section: 'plan', view: 'plannerForm', labelKey: 'nav.planner', built: true, core: true },
-  { id: 'week', section: 'plan', view: 'weekView', labelKey: 'nav.week', built: true },
-  { id: 'calendar', section: 'plan', view: 'calendarView', labelKey: 'nav.calendar', built: true },
-  { id: 'semester', section: 'plan', view: 'semesterView', labelKey: 'nav.semester', built: true },
-  { id: 'tasks', section: 'work', view: 'tasksView', labelKey: 'nav.tasks', built: true },
-  { id: 'projects', section: 'work', view: 'projectsView', labelKey: 'nav.projects', built: false },
+  { id: 'planner', v3: true, section: 'plan', view: 'plannerForm', labelKey: 'nav.planner', built: true, core: true },
+  { id: 'week', v3: true, section: 'plan', view: 'weekView', labelKey: 'nav.week', built: true },
+  { id: 'calendar', v3: true, section: 'plan', view: 'calendarView', labelKey: 'nav.calendar', built: true },
+  { id: 'semester', v3: true, section: 'plan', view: 'semesterView', labelKey: 'nav.semester', built: true },
+  { id: 'tasks', v3: true, section: 'work', view: 'tasksView', labelKey: 'nav.tasks', built: true },
+  { id: 'projects', section: 'work', view: 'projectsView', labelKey: 'nav.projects', built: true },
   { id: 'goals', section: 'work', view: 'goalsView', labelKey: 'nav.goals', built: false },
   { id: 'routines', section: 'work', view: 'routinesView', labelKey: 'nav.routines', built: false },
-  { id: 'courses', section: 'academics', view: 'coursesView', labelKey: 'nav.courses', built: true },
-  { id: 'exams', section: 'academics', view: 'examsView', labelKey: 'nav.exams', built: true },
-  { id: 'grades', section: 'academics', view: 'gradesView', labelKey: 'nav.grades', built: true },
-  { id: 'board', section: 'organize', view: 'boardView', labelKey: 'nav.boards', built: true },
+  { id: 'courses', v3: true, section: 'academics', view: 'coursesView', labelKey: 'nav.courses', built: true },
+  { id: 'exams', v3: true, section: 'academics', view: 'examsView', labelKey: 'nav.exams', built: true },
+  { id: 'grades', v3: true, section: 'academics', view: 'gradesView', labelKey: 'nav.grades', built: true },
+  { id: 'board', v3: true, section: 'organize', view: 'boardView', labelKey: 'nav.boards', built: true },
   { id: 'notes', section: 'organize', view: 'notesView', labelKey: 'nav.notes', built: false },
-  { id: 'history', section: 'review', view: 'historyView', labelKey: 'nav.history', built: true },
-  { id: 'insights', section: 'review', view: 'insightsView', labelKey: 'nav.insights', built: true },
+  { id: 'history', v3: true, section: 'review', view: 'historyView', labelKey: 'nav.history', built: true },
+  { id: 'insights', v3: true, section: 'review', view: 'insightsView', labelKey: 'nav.insights', built: true },
 ];
 
 const ALL = MODULES.map((m) => m.id);
@@ -86,7 +87,7 @@ export function isModuleEnabled(ws, id) {
   if (m.core) return true;
   const w = ws || {};
   if (w.modules && typeof w.modules[id] === 'boolean') return w.modules[id];
-  if (isLegacyWorkspace(w)) return true;
+  if (isLegacyWorkspace(w)) return Boolean(m.v3);
   return (MODE_DEFAULTS[w.mode] || ALL).includes(id);
 }
 
@@ -114,10 +115,11 @@ export function withModule(ws, id, on) {
   const m = moduleById(id);
   const base = normalizeWorkspace(ws);
   if (!m || m.core) return base;
-  // A legacy account that starts customising becomes "multiple" (= the same
-  // full set) so its choice is remembered.
+  // A legacy account that starts customising becomes "multiple" so its choice
+  // is remembered; V4 modules it never had stay off unless switched on here.
   const mode = base.mode || 'multiple';
   const modules = { ...base.modules };
+  if (!base.mode) MODULES.filter((x) => !x.v3 && !x.core).forEach((x) => { if (!(x.id in modules)) modules[x.id] = false; });
   const def = MODE_DEFAULTS[mode].includes(id);
   if (on === def) delete modules[id];
   else modules[id] = Boolean(on);

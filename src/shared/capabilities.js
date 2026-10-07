@@ -27,6 +27,9 @@ const PROBES = {
   // V4
   spaces: ['spaces', 'id, icon, archived'],
   spaceLinks: ['study_subjects', 'id, space_id'],
+  projects: ['project_milestones', 'id, project_id, status'],
+  projectLinks: ['study_subjects', 'id, project_id, project_milestone_id'],
+  taskFieldsV4: ['study_subjects', 'id, due_time, start_time, status_override, project_sort'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -46,6 +49,9 @@ export const FEATURE_MIGRATIONS = {
   preferences: '0017_profile_preferences.sql',
   spaces: '0018_spaces.sql',
   spaceLinks: '0018_spaces.sql',
+  projects: '0019_projects.sql',
+  projectLinks: '0019_projects.sql',
+  taskFieldsV4: '0020_task_fields.sql',
 };
 
 let state = null;

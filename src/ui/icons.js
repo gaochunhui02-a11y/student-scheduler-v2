@@ -61,6 +61,7 @@ Object.assign(ICONS, {
   star: wrap('<path d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4l-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z"/>'),
   circle: wrap('<circle cx="12" cy="12" r="6.5"/>'),
   sliders: wrap('<path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>'),
+  chevronUp: wrap('<path d="m5 15 7-7 7 7"/>'),
   archive: wrap('<rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v10a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18.5v-10M10 12.5h4"/>'),
 });
 

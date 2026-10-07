@@ -6,12 +6,15 @@ import { todayStr, diffDays } from '../shared/dates.js';
 import { html, raw, safeColor } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { badge } from '../ui/components.js';
-import { fmtDue, fmtMinutes } from '../ui/format.js';
+import { fmtDue, fmtMinutes, fmtClockStr } from '../ui/format.js';
 import { statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { tagLabel } from './taskEditorSections.js';
 
 export function taskStatusBadge(group, blockedInfo = null) {
   if (!group.done && blockedInfo && blockedInfo.blocked) return badge(t('tasks.statusBlocked'), 'warning');
+  // V4-B explicit statuses (only set by the student; V3 tasks never have them)
+  if (!group.done && group.statusOverride === 'deferred') return badge(t('tasks.status_deferred'), 'outline');
+  if (!group.done && group.statusOverride === 'in_progress' && group.status === 'unscheduled') return badge(t('tasks.status_in_progress'), 'accent');
   if (group.status === 'unscheduled') return badge(t('tasks.statusUnscheduled'), 'outline');
   return raw(statusBadgeHtml(group.status, t(statusLabelKey(group.status)), { compact: true }));
 }
@@ -24,8 +27,8 @@ export function taskStatusBadge(group, blockedInfo = null) {
  * @param {object} [opts.blockedInfo]  from dependencyModel.computeBlockedState
  * @param {string} [opts.today]
  */
-export function taskRowHtml(group, { course = null, showCourse = false, blockedInfo = null, today = todayStr() } = {}) {
-  const dueText = group.dueDate ? fmtDue(group.dueDate, today) : '';
+export function taskRowHtml(group, { course = null, showCourse = false, project = null, blockedInfo = null, today = todayStr() } = {}) {
+  const dueText = group.dueDate ? `${fmtDue(group.dueDate, today)}${group.dueTime ? ` ${fmtClockStr(group.dueTime)}` : ''}` : '';
   const soon = group.dueDate && !group.done && diffDays(today, group.dueDate) <= 2;
   const dueClass = group.overdue ? 'badge--danger' : soon ? 'badge--warning' : 'badge--outline';
   const waiting = blockedInfo && (blockedInfo.blocked || blockedInfo.overridden) && blockedInfo.waitingOn.length ? blockedInfo.waitingOn : null;
@@ -34,6 +37,7 @@ export function taskRowHtml(group, { course = null, showCourse = false, blockedI
     <button type="button" class="list-row-main task-open" data-action="open-task">
       <span class="list-row-title">${group.name}</span>
       <span class="list-row-meta">
+        ${project ? html`<span class="task-project">${raw(icon('briefcase'))}${project.title}</span>` : ''}
         ${showCourse && course ? html`<span class="course-chip" style="--c:${safeColor(course.color)}"><span class="course-dot"></span>${course.code || course.name}</span>` : ''}
         ${group.remainingMinutes > 0 ? html`<span>${t('tasks.leftShort').replace('{time}', fmtMinutes(group.remainingMinutes))}</span>` : ''}
         ${waiting ? html`<span class="task-waiting">${raw(icon('branch'))}${t('deps.waitingOn').replace('{name}', waiting.map((w) => w.name).join(', '))}${blockedInfo.overridden ? ` · ${t('deps.overriddenShort')}` : ''}</span>` : ''}

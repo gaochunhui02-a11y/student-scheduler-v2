@@ -53,7 +53,7 @@ export function buildDemoSeed(now = new Date()) {
     profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240 } }],
     schedules: [], classes: [], study_subjects: [], schedule_items: [], study_subject_subtasks: [],
     class_series: [], class_series_exceptions: [], boards: [], board_nodes: [], board_edges: [],
-    spaces: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
+    spaces: [], projects: [], project_milestones: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
     task_dependencies: [], task_recurrence_rules: [], resources: [], focus_sessions: [],
   };
 
@@ -74,7 +74,8 @@ export function buildDemoSeed(now = new Date()) {
   // ---------------- spaces (V4) ----------------
   const schoolSpace = { id: id(), user_id: U, name: 'School', icon: 'school', color: '#3b6fe0', archived: false, sort_order: 0, created_at: ts, updated_at: ts };
   db.spaces.push(schoolSpace);
-  db.spaces.push({ id: id(), user_id: U, name: 'Personal', icon: 'home', color: '#d9466b', archived: false, sort_order: 1, created_at: ts, updated_at: ts });
+  const personalSpace = { id: id(), user_id: U, name: 'Personal', icon: 'home', color: '#d9466b', archived: false, sort_order: 1, created_at: ts, updated_at: ts };
+  db.spaces.push(personalSpace);
 
   // ---------------- courses + weekly classes ----------------
   const course = {};
@@ -435,6 +436,24 @@ export function buildDemoSeed(now = new Date()) {
   res(null, 'Open-Meteo API docs', 'https://open-meteo.com/en/docs', 'reference', draft.id);
   res(course.chem, 'Lab manual', 'https://example.edu/chem110/lab-manual.pdf', 'document');
   res(course.hist, 'Essay rubric', 'https://example.edu/hist210/essay-rubric', 'document');
+
+  // ---------------- projects (V4-B) ----------------
+  const projectBase = { user_id: U, description: '', priority: 'medium', start_date: null, due_date: null, estimated_minutes: null, progress_mode: 'auto', manual_progress: null, completed_at: null, created_at: ts, updated_at: ts };
+  const portfolio = { ...projectBase, id: id(), space_id: personalSpace.id, title: 'Portfolio Website', description: 'A small site showing three projects, for internship applications.', status: 'active', priority: 'high', start_date: addDays(today, -14), due_date: addDays(today, 30), sort_order: 0 };
+  const internships = { ...projectBase, id: id(), space_id: null, title: 'Apply for summer internships', status: 'planned', start_date: addDays(today, 7), due_date: addDays(today, 60), sort_order: 1 };
+  const oldProject = { ...projectBase, id: id(), space_id: personalSpace.id, title: 'Blog redesign', status: 'completed', completed_at: ts, sort_order: 2 };
+  db.projects.push(portfolio, internships, oldProject);
+  const msBase = { user_id: U, description: '', completed_at: null, created_at: ts, updated_at: ts };
+  const msDesign = { ...msBase, id: id(), project_id: portfolio.id, title: 'Design approved', due_date: addDays(today, -3), status: 'done', completed_at: ts, sort_order: 0 };
+  const msPrototype = { ...msBase, id: id(), project_id: portfolio.id, title: 'Prototype', due_date: addDays(today, 18), status: 'open', sort_order: 1 };
+  const msLaunch = { ...msBase, id: id(), project_id: portfolio.id, title: 'Launch', due_date: addDays(today, 30), status: 'open', sort_order: 2 };
+  db.project_milestones.push(msDesign, msPrototype, msLaunch);
+  const ptask = (date, name, minutes, extra) => task(date, name, minutes, { space_id: null, project_id: portfolio.id, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0, ...extra });
+  ptask(addDays(today, -6), 'Sketch homepage layout', 45, { completed_at: ts, actual_minutes: 50, project_milestone_id: msDesign.id, project_sort: 10 });
+  ptask(today, 'Build homepage', 90, { due_date: addDays(today, 4), priority: 'high', project_milestone_id: msPrototype.id, project_sort: 20, tags: ['coding'] });
+  ptask(addDays(today, 2), 'Write three case studies', 120, { due_date: addDays(today, 12), project_milestone_id: msPrototype.id, project_sort: 30 });
+  ptask(addDays(today, 5), 'Choose hosting and deploy', 60, { due_date: addDays(today, 28), due_time: '18:00:00', project_milestone_id: msLaunch.id, project_sort: 40 });
+  task(addDays(today, 7), 'Update résumé', 45, { project_id: internships.id, due_date: addDays(today, 14), project_sort: 10 });
 
   return db;
 }

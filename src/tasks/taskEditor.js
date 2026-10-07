@@ -9,12 +9,16 @@ import { toast } from '../ui/toast.js';
 import { t } from '../shared/i18n.js';
 import { app } from '../app/context.js';
 import { has } from '../shared/capabilities.js';
-import { todayStr } from '../shared/dates.js';
+import { todayStr, clockToMinutes } from '../shared/dates.js';
+import { fmtClockStr } from '../ui/format.js';
 import { listCourses } from '../academics/academicsData.js';
 import { sortCourses } from '../academics/courseModel.js';
 import { validateTaskFields } from './taskModel.js';
 import { createTask, updateTask, moveTaskToDate, deleteTaskGroup } from './tasksData.js';
 import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
+import { listProjects, listMilestones } from '../projects/projectsData.js';
+import { SETTABLE_STATUSES, universalStatus, overrideForStatus } from './universalStatus.js';
+import { pinStudyBlock, taskHasBlockOn } from '../planner/pinBlock.js';
 
 const extraSections = [];
 
@@ -58,6 +62,18 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
       courses = [];
     }
   }
+  // V4-B: projects and their milestones (only when the database has them).
+  let projects = [];
+  let milestones = [];
+  if (has('projects') && has('projectLinks')) {
+    try {
+      [projects, milestones] = await Promise.all([listProjects(ctx.userId), listMilestones(ctx.userId)]);
+      projects = projects.filter((p) => p.status !== 'archived' || (task && p.id === task.projectId));
+    } catch {
+      projects = [];
+    }
+  }
+  const v4Fields = has('taskFieldsV4');
   const root = task ? task.root : null;
   const planDateInitial = task ? (root.for_date || task.firstDate || todayStr()) : (defaults.planDate || todayStr());
   const sectionHandles = [];
@@ -77,12 +93,21 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
       grid.appendChild(field('te-due', 'tasks.fieldDue', due));
       body.appendChild(grid);
 
+      // Course and project side by side; a task needs neither.
+      const where = h('div', { class: 'field-grid' });
       if (courses.length && has('courseLinks')) {
         const select = h('select', { id: 'te-course' }, h('option', { value: '' }, t('tasks.noCourse')));
         courses.forEach((c) => select.appendChild(h('option', { value: c.id }, c.code ? `${c.code} — ${c.name}` : c.name)));
         select.value = (task ? task.courseId : defaults.courseId) || '';
-        body.appendChild(field('te-course', 'tasks.fieldCourse', select));
+        where.appendChild(field('te-course', 'tasks.fieldCourse', select));
       }
+      if (projects.length) {
+        const select = h('select', { id: 'te-project' }, h('option', { value: '' }, t('tasks.noProject')));
+        projects.forEach((p) => select.appendChild(h('option', { value: p.id }, p.title)));
+        select.value = (task ? task.projectId : defaults.projectId) || '';
+        where.appendChild(field('te-project', 'tasks.fieldProject', select));
+      }
+      if (where.childElementCount) body.appendChild(where);
       // V4: a task's own space; empty = follow its course's space.
       const space = spaceSelect('te-space', task ? task.spaceId : (defaults.spaceId || (defaults.courseId ? '' : defaultSpaceForNew())), 'spaces.fromCourse');
       if (space) body.appendChild(field('te-space', 'spaces.field', space, { hint: t('spaces.taskHint') }));
@@ -97,6 +122,33 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
       const moreGrid = h('div', { class: 'field-grid' });
       moreGrid.appendChild(field('te-plan', 'tasks.fieldPlanDate', plan, { hint: t('tasks.fieldPlanDateHint') }));
       moreGrid.appendChild(field('te-priority', 'tasks.fieldPriority', priority));
+      if (v4Fields) {
+        moreGrid.appendChild(field('te-due-time', 'tasks.fieldDueTime', h('input', { type: 'time', id: 'te-due-time', value: task ? task.dueTime || '' : '' })));
+        moreGrid.appendChild(field('te-start', 'tasks.fieldStartTime', h('input', { type: 'time', id: 'te-start', value: task ? task.startTime || '' : '' }), { hint: t('tasks.fieldStartTimeHint') }));
+        const status = h('select', { id: 'te-status' });
+        const current = task ? universalStatus(task) : 'todo';
+        if (current === 'done' || current === 'missed') status.appendChild(h('option', { value: current }, t(`tasks.status_${current}`)));
+        SETTABLE_STATUSES.forEach((s) => status.appendChild(h('option', { value: s }, t(`tasks.status_${s}`))));
+        status.value = current;
+        if (current === 'done') status.disabled = true;
+        moreGrid.appendChild(field('te-status', 'tasks.fieldStatus', status, current === 'done' ? { hint: t('tasks.statusDoneHint') } : {}));
+      }
+      if (projects.length) {
+        const msSel = h('select', { id: 'te-milestone' });
+        const fillMilestones = (projectId, selected) => {
+          msSel.innerHTML = '';
+          msSel.appendChild(h('option', { value: '' }, t('tasks.noMilestone')));
+          milestones.filter((m) => m.project_id === projectId).forEach((m) => msSel.appendChild(h('option', { value: m.id }, m.title)));
+          msSel.value = selected || '';
+          msSel.closest('.field') && (msSel.closest('.field').hidden = !projectId);
+        };
+        const msField = field('te-milestone', 'tasks.fieldMilestone', msSel);
+        moreGrid.appendChild(msField);
+        const projSel = body.querySelector('#te-project');
+        fillMilestones(projSel ? projSel.value : '', task ? task.milestoneId : defaults.milestoneId);
+        msField.hidden = !(projSel && projSel.value);
+        if (projSel) projSel.addEventListener('change', () => fillMilestones(projSel.value, ''));
+      }
       moreBody.appendChild(moreGrid);
       const notes = h('textarea', { id: 'te-notes', rows: '3', maxlength: '5000' });
       notes.value = root ? root.notes || '' : '';
@@ -157,6 +209,20 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
           if (courseSel) fields.course_id = courseSel.value || null;
           const spaceSel = body.querySelector('#te-space');
           if (spaceSel) fields.space_id = spaceSel.value || null;
+          const projectSel = body.querySelector('#te-project');
+          if (projectSel) {
+            fields.project_id = projectSel.value || null;
+            const msSel = body.querySelector('#te-milestone');
+            fields.project_milestone_id = fields.project_id && msSel ? msSel.value || null : null;
+          }
+          let startTime = null;
+          if (v4Fields) {
+            fields.due_time = body.querySelector('#te-due-time').value || null;
+            startTime = body.querySelector('#te-start').value || null;
+            fields.start_time = startTime;
+            const st = body.querySelector('#te-status');
+            if (!st.disabled && st.value !== 'missed') fields.status_override = overrideForStatus(st.value);
+          }
           sectionHandles.forEach((hd) => { if (hd.collect) Object.assign(fields, hd.collect()); });
           const planDate = body.querySelector('#te-plan').value || todayStr();
           const formErr = body.querySelector('#te-form-error');
@@ -177,8 +243,19 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
               // eslint-disable-next-line no-await-in-loop
               if (hd.afterSave) await hd.afterSave(taskId, { fields, planDate });
             }
+            // V4-B: a start time pins a study block at that time on the planned
+            // day (once — not if the task already has a block that day).
+            let pinNote = null;
+            if (startTime && (isNew || startTime !== task.startTime)) {
+              const start = clockToMinutes(startTime);
+              const minutes = Math.min(Number(fields.minutes_requested) || 30, 240);
+              if (start !== null && start + minutes <= 1440 && !(await taskHasBlockOn(taskId, planDate, ctx.userId).catch(() => true))) {
+                const res = await pinStudyBlock({ userId: ctx.userId, date: planDate, start, minutes, name: fields.name, taskId }).catch(() => ({ ok: false, clash: '' }));
+                pinNote = res.ok ? t('tasks.pinnedAt').replace('{time}', fmtClockStr(startTime)) : t('tasks.pinFailed').replace('{time}', fmtClockStr(startTime)).replace('{name}', res.clash || '—');
+              }
+            }
             api.close(true);
-            toast(isNew ? t('tasks.created') : t('common.savedShort'), { kind: 'success' });
+            toast(pinNote || (isNew ? t('tasks.created') : t('common.savedShort')), { kind: 'success' });
             if (onSaved) onSaved(taskId);
           } catch (err) {
             console.error('Could not save task', err);

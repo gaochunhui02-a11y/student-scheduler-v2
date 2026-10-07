@@ -10,6 +10,7 @@ export const ROUTES = {
   home: 'analyticsView',
   courses: 'coursesView',
   tasks: 'tasksView',
+  projects: 'projectsView',
   grades: 'gradesView',
   exams: 'examsView',
   planner: 'plannerForm',

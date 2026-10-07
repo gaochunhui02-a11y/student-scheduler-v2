@@ -54,7 +54,7 @@ read this one table.
 |---|---|---|
 | `0018_spaces.sql` | A | `spaces`; nullable `space_id` on `courses`, `study_subjects`, `boards`; ownership triggers |
 | `0019_projects.sql` | B | `projects`, `project_milestones`; nullable `project_id`, `project_milestone_id` on `study_subjects`; `boards.project_id` |
-| `0020_task_fields.sql` | B | `study_subjects.due_time`, `effort` (light/normal/deep), `status_override` (deferred/…); nullable/defaulted only |
+| `0020_task_fields.sql` | B | `study_subjects.due_time`, `start_time`, `status_override` (in_progress/deferred), `project_sort`; nullable/defaulted only (effort moves to V4-E) |
 | `0021_goals.sql` | C | `goals`, `goal_milestones`, `goal_progress_log`; nullable `goal_id` on `study_subjects`, `projects` |
 | `0022_routines.sql` | C | `routines`, `routine_completions` (unique per routine+date) |
 | `0023_attendance.sql` | G | `attendance_records` (unique per course/series + date) |
@@ -149,3 +149,66 @@ Default modules per mode (only built ones are shown):
 - Command palette: switch space, show all spaces, customize sidebar.
 - Backup/restore includes spaces (same-name spaces are reused).
 - Settings › Workspace tab; About lists the two new database features.
+
+### V4-B — Projects + universal tasks (done, awaiting review)
+
+**Migrations (files only — not applied anywhere):**
+- `0019_projects.sql` — `projects` (title, description, space, status
+  planned/active/on_hold/completed/archived, priority, start/due dates,
+  estimated minutes, progress mode auto/manual + manual value, sort order,
+  completed_at) and `project_milestones` (project, title, description, due
+  date, status open/done, completed_at, sort order); RLS with select/insert/
+  update/delete-own on both; nullable `study_subjects.project_id` and
+  `project_milestone_id`; ownership triggers (space → project → milestone →
+  task); `v4_task_milestone_matches` keeps a task's milestone inside the
+  task's own project (and clears it when the task leaves its project).
+- `0020_task_fields.sql` — `study_subjects.due_time`, `start_time`,
+  `status_override` ('in_progress' | 'deferred'), `project_sort` (default 0).
+
+**Deletion behaviour (deliberate):**
+- Deleting a project keeps its tasks: `project_id` is ON DELETE SET NULL,
+  so tasks, their blocks, history and focus time stay; they simply leave
+  the project. The app's confirmation says so and recommends Archive.
+- A project's milestones are deleted with it (CASCADE) — they hold no work.
+- Deleting a milestone only clears `project_milestone_id` on its tasks.
+- Archive (status = archived) is the normal way to put a project away.
+
+**Compatibility decisions:**
+- One task system. A project task is an ordinary `study_subjects` row with a
+  `project_id`; it appears in Tasks, the Planner, Week, Calendar, the
+  Dashboard and search with no duplication. Neither course nor project is
+  required.
+- Tasks still live on a planned day (`schedule_id` NOT NULL) — "optional
+  scheduled date" means the editor defaults to today; nothing in V3 had to
+  change, and a rollback to V3 still reads every V4 task.
+- Status: To Do / In Progress / Done / Missed / Deferred. Done is still
+  `completed_at`; To Do / In Progress / Missed are still derived from blocks
+  exactly as in V3; only In Progress (for tasks without blocks) and Deferred
+  can be set explicitly. Every V3 task has a NULL override → identical status.
+- Description: the existing `notes` field is the task's description/notes
+  (one field, labelled Notes) rather than adding a second free-text column.
+- Start time: saving a task with a start time pins a locked study block at
+  that time on its planned day (shared code with Quick Add's study block),
+  only if the task has no block that day and nothing overlaps; otherwise the
+  task saves and the toast explains why no block was pinned.
+- Space: a task's effective space is its own, else its project's, else its
+  course's.
+- Legacy (never chose a mode) accounts keep exactly the V3 sidebar; Projects
+  is off for them and for School mode until switched on (it is still
+  reachable from Quick Add, the palette and search). Work and Multiple areas
+  show it by default.
+- Progress: one number. Automatic = completed tasks + completed milestones,
+  each counted once, over all of them; Completed projects show 100%; manual
+  mode shows the student's percentage and keeps the counts as counts.
+
+**Known limitations (V4-B):**
+- Project task order uses Move up / Move down buttons, not drag and drop.
+- Changing a task's start time later does not move a block already pinned.
+- Missed is derived from missed blocks only; a passed due date shows as
+  Overdue, not Missed.
+- Projects have a description; linking notes and resources to projects is
+  part of V4-H (0024/0025).
+- Project lists load all of a user's projects, milestones and project tasks
+  (single-user scale; no pagination).
+- Demo mode can now simulate missing V4 tables *and* columns
+  (`?premigration=v4|v3`) — still not a substitute for the real database.

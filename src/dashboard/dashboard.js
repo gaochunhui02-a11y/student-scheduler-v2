@@ -425,6 +425,7 @@ async function init(session) {
     document.getElementById('tasksView'),
     document.getElementById('gradesView'),
     document.getElementById('examsView'),
+    document.getElementById('projectsView'), // V4-B
     document.getElementById('semesterView'),
   ].filter(Boolean);
 
@@ -1156,7 +1157,8 @@ async function init(session) {
   function buildPaletteCommands(mode) {
     const create = [
       { id: 'quick-add', group: 'create', title: t('palette.quickAdd'), keywords: ['new', 'create', 'add'], run: () => openQuickAdd() },
-      { id: 'new-task', group: 'create', title: t('search.newTask'), keywords: ['task', 'homework', 'assignment', 'study'], run: () => openQuickAdd('task') },
+      { id: 'new-task', group: 'create', title: t('search.newTask'), keywords: ['task', 'homework', 'assignment', 'study', 'todo'], run: () => openQuickAdd('task') },
+      ...(hasCapability('projects') ? [{ id: 'new-project', group: 'create', title: t('search.newProject'), keywords: ['project', 'plan', 'goal'], run: () => openQuickAdd('project') }] : []),
       { id: 'new-course', group: 'create', title: t('search.newCourse'), keywords: ['course', 'class', 'subject'], run: () => openQuickAdd('course') },
       { id: 'new-exam', group: 'create', title: t('search.newExam'), keywords: ['exam', 'test', 'midterm', 'final'], run: () => openQuickAdd('exam') },
       { id: 'new-class', group: 'create', title: t('search.newClass'), keywords: ['lecture', 'class', 'weekly', 'recurring'], run: () => openQuickAdd('class') },
@@ -1176,6 +1178,7 @@ async function init(session) {
       go('open-calendar', 'palette.openCalendar', () => activateView('calendarView'), ['agenda', 'month', 'events']),
       go('open-courses', 'search.openCourses', () => activateView('coursesView'), ['courses', 'classes']),
       go('open-tasks', 'search.openTasks', () => activateView('tasksView'), ['tasks', 'todo', 'homework']),
+      ...(hasCapability('projects') ? [go('open-projects', 'search.openProjects', () => activateView('projectsView'), ['projects', 'work'])] : []),
       go('open-grades', 'search.openGrades', () => activateView('gradesView'), ['grades', 'gpa', 'score']),
       go('open-exams', 'search.openExams', () => activateView('examsView'), ['exams', 'revision']),
       go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
@@ -1213,9 +1216,12 @@ async function init(session) {
     const idx = searchIndex();
     const courseById = new Map(idx.courses.map((c) => [c.id, c]));
     const courseLabel = (id) => (id && courseById.get(id) ? courseById.get(id).code || courseById.get(id).name : '');
+    const projectById = new Map((idx.projects || []).map((p) => [p.id, p]));
+    const projectLabel = (id) => (id && projectById.get(id) ? projectById.get(id).title : '');
     const entities = [
       ...idx.courses.filter((c) => !c.archived).map((c) => ({ id: `course-${c.id}`, group: 'courses', title: c.code ? `${c.code} · ${c.name}` : c.name, hint: c.instructor || '', keywords: [c.instructor || '', c.location || ''], run: () => activateView('coursesView', c.id) })),
-      ...idx.tasks.map((r) => ({ id: `task-${r.id}`, group: 'tasks', title: r.name, hint: [courseLabel(r.course_id), r.due_date ? formatDateLabel(r.due_date) : ''].filter(Boolean).join(' · '), keywords: (r.tags || []).concat(courseLabel(r.course_id)), run: () => openTaskById(r.id) })),
+      ...(idx.projects || []).filter((p) => p.status !== 'archived').map((p) => ({ id: `project-${p.id}`, group: 'projects', title: p.title, hint: t(`projects.status_${p.status}`), keywords: ['project', p.description || ''], run: () => activateView('projectsView', p.id) })),
+      ...idx.tasks.map((r) => ({ id: `task-${r.id}`, group: 'tasks', title: r.name, hint: [projectLabel(r.project_id), courseLabel(r.course_id), r.due_date ? formatDateLabel(r.due_date) : ''].filter(Boolean).join(' · '), keywords: (r.tags || []).concat(courseLabel(r.course_id), projectLabel(r.project_id)), run: () => openTaskById(r.id) })),
       ...idx.exams.map((e) => ({ id: `exam-${e.id}`, group: 'exams', title: e.name, hint: [courseLabel(e.course_id), formatDateLabel(e.exam_date)].filter(Boolean).join(' · '), keywords: [courseLabel(e.course_id)], run: () => activateView('examsView', e.id) })),
       ...idx.series.map((se) => ({ id: `series-${se.id}`, group: 'classes', title: se.name, hint: courseLabel(se.course_id), keywords: ['class', 'lecture'], run: () => (se.course_id ? activateView('coursesView', `${se.course_id}:schedule`) : activatePlannerScroll('recurringClassesCard')) })),
       ...idx.boards.map((b) => ({ id: `board-${b.id}`, group: 'boards', title: b.title, keywords: ['board', 'project'], run: () => openBoard(b.id) })),

@@ -149,6 +149,49 @@ await expectOk('A deletes the space', `delete from public.spaces where id = $1`,
 const afterSpace = await rows(`select (select space_id from public.courses where id = $1) as c, (select space_id from public.study_subjects where id = $2) as t, (select count(*)::int from public.study_subjects where id = $2) as n`, [course3, spacedTask]);
 afterSpace[0].c === null && afterSpace[0].t === null && afterSpace[0].n === 1 ? ok('deleting a space keeps its course and task (space_id -> null)') : bad('space delete', JSON.stringify(afterSpace));
 
+console.log('\n=== V4 projects + universal tasks (0019, 0020) ===');
+await as(A);
+const spaceW = await ins('A work space', `insert into public.spaces (user_id, name, icon) values ($1, 'Work', 'briefcase')`, [A]);
+const projA = await ins('A project in a space', `insert into public.projects (user_id, space_id, title, status, priority, start_date, due_date) values ($1, $2, 'Portfolio', 'active', 'high', '2026-10-01', '2026-11-30')`, [A, spaceW]);
+const projA2 = await ins('A second project', `insert into public.projects (user_id, title) values ($1, 'Move to Tokyo')`, [A]);
+const msA = await ins('A milestone', `insert into public.project_milestones (user_id, project_id, title, due_date) values ($1, $2, 'Prototype', '2026-10-25')`, [A, projA]);
+const msOther = await ins('A milestone on the other project', `insert into public.project_milestones (user_id, project_id, title) values ($1, $2, 'Visa')`, [A, projA2]);
+const ptask = await ins('project task with NO course', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, project_id, project_milestone_id, due_time, start_time, status_override) values ($1, $2, 'Homepage', 90, $3, $4, '23:59', '14:00', 'in_progress')`, [A, schedA, projA, msA]);
+const plainTask = await ins('generic task with no course, project or space', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested) values ($1, $2, 'Groceries', 20)`, [A, schedA]);
+const v3row = await rows(`select project_id, project_milestone_id, due_time, start_time, status_override, project_sort from public.study_subjects where id = $1`, [plainTask]);
+JSON.stringify(v3row[0]) === JSON.stringify({ project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0 }) ? ok('V3-shaped task gets null / 0 defaults for every V4 column') : bad('V3-shaped defaults', JSON.stringify(v3row));
+await expectErr('task milestone from a different project rejected', `update public.study_subjects set project_milestone_id = $2 where id = $1`, [ptask, msOther], /23514|milestone must belong/);
+await expectErr('bad project status rejected', `insert into public.projects (user_id, title, status) values ($1, 'x', 'done')`, [A], /check/);
+await expectErr('project due before start rejected', `insert into public.projects (user_id, title, start_date, due_date) values ($1, 'x', '2026-12-01', '2026-11-01')`, [A], /check/);
+await expectErr('manual progress over 100 rejected', `insert into public.projects (user_id, title, progress_mode, manual_progress) values ($1, 'x', 'manual', 120)`, [A], /check/);
+await expectErr('blank project title rejected', `insert into public.projects (user_id, title) values ($1, '  ')`, [A], /check/);
+await expectErr('bad milestone status rejected', `insert into public.project_milestones (user_id, project_id, title, status) values ($1, $2, 'x', 'finished')`, [A, projA], /check/);
+await expectErr('status override limited to in_progress/deferred', `update public.study_subjects set status_override = 'done' where id = $1`, [ptask], /check/);
+await as(B);
+for (const tbl of ['projects', 'project_milestones']) {
+  const n = (await rows(`select count(*)::int n from public.${tbl}`))[0].n;
+  n === 0 ? ok(`B sees 0 rows in ${tbl}`) : bad(`B sees A's ${tbl}`, String(n));
+}
+const bp = await db.query(`update public.projects set title = 'hacked' where id = $1`, [projA]);
+bp.affectedRows === 0 ? ok("B update of A's project affects 0 rows") : bad('B updated A project', String(bp.affectedRows));
+const bd = await db.query(`delete from public.projects where id = $1`, [projA]);
+bd.affectedRows === 0 ? ok("B delete of A's project affects 0 rows") : bad('B deleted A project', String(bd.affectedRows));
+await expectErr('B task -> A project', `insert into public.study_subjects (user_id, schedule_id, name, minutes_requested, project_id) values ($1, $2, 'x', 30, $3)`, [B, schedB, projA], /42501|does not belong/);
+await expectErr('B milestone -> A project', `insert into public.project_milestones (user_id, project_id, title) values ($1, $2, 'x')`, [B, projA], /42501|does not belong/);
+await expectErr('B project -> A space', `insert into public.projects (user_id, title, space_id) values ($1, 'x', $2)`, [B, spaceW], /42501|does not belong/);
+await expectErr('B cannot insert a project owned by A', `insert into public.projects (user_id, title) values ($1, 'x')`, [A], /row-level security/);
+await as(A);
+await expectOk('A deletes a milestone', `delete from public.project_milestones where id = $1`, [msA]);
+const afterMs = await rows(`select project_id, project_milestone_id from public.study_subjects where id = $1`, [ptask]);
+afterMs[0].project_id === projA && afterMs[0].project_milestone_id === null ? ok('deleting a milestone keeps the task and its project') : bad('milestone delete', JSON.stringify(afterMs));
+const ms2 = await ins('A another milestone', `insert into public.project_milestones (user_id, project_id, title) values ($1, $2, 'Launch')`, [A, projA]);
+await expectOk('link the task to it', `update public.study_subjects set project_milestone_id = $2 where id = $1`, [ptask, ms2]);
+await expectOk('A deletes the project', `delete from public.projects where id = $1`, [projA]);
+const afterProj = await rows(`select id, project_id, project_milestone_id, name from public.study_subjects where id = $1`, [ptask]);
+afterProj.length === 1 && afterProj[0].project_id === null && afterProj[0].project_milestone_id === null ? ok('deleting a project KEEPS its tasks (project_id and milestone -> null)') : bad('project delete lost task', JSON.stringify(afterProj));
+const msLeft = (await rows(`select count(*)::int n from public.project_milestones where project_id = $1`, [projA]))[0].n;
+msLeft === 0 ? ok("deleting a project removes its milestones") : bad('milestones remain', String(msLeft));
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

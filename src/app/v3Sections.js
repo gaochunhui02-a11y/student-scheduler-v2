@@ -10,6 +10,7 @@ import { initSemesterPage } from '../semester/semesterPage.js';
 import { initGradesPage } from '../grades/gradesUI.js';
 import { initExamsPage } from '../exams/examsPage.js';
 import { initTasksPage } from '../tasks/tasksPage.js';
+import { initProjectsPage } from '../projects/projectsPage.js';
 import '../tasks/taskEditorSections.js';
 import '../resources/resourcesUI.js';
 import '../board/boardCourseWidget.js';
@@ -27,6 +28,7 @@ export function initV3Sections() {
   return {
     coursesView: initCoursesPage(),
     tasksView: initTasksPage(),
+    projectsView: initProjectsPage(),
     gradesView: initGradesPage(),
     examsView: initExamsPage(),
     semesterView: initSemesterPage(),

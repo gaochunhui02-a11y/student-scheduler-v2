@@ -109,7 +109,7 @@ check('the ownership guard runs as the caller (security invoker) with a fixed se
   assert.match(sql, /function public\.v3_assert_owned_ref\(\) returns trigger language plpgsql security invoker set search_path = public/);
 });
 check('every V3 foreign key to a user-owned table has an ownership trigger', () => {
-  const OWNED = ['spaces', 'semesters', 'courses', 'exams', 'exam_topics', 'task_recurrence_rules', 'study_subjects', 'schedule_items', 'grade_categories'];
+  const OWNED = ['spaces', 'projects', 'project_milestones', 'semesters', 'courses', 'exams', 'exam_topics', 'task_recurrence_rules', 'study_subjects', 'schedule_items', 'grade_categories'];
   v3.forEach((file) => {
     const sql = sqlOf(file);
     // "<col> uuid [not null] references public.<target>" (table bodies and add column)

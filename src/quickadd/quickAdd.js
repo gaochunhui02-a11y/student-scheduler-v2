@@ -17,6 +17,8 @@ import { openExamEditor } from '../exams/examEditors.js';
 import { listCourses, createCourseMeeting, listTaskRowsInWindow } from '../academics/academicsData.js';
 import { sortCourses } from '../academics/courseModel.js';
 import { getOrCreateScheduleForDate, insertClass } from '../dashboard/data.js';
+import { pinStudyBlock } from '../planner/pinBlock.js';
+import { openProjectEditor } from '../projects/projectEditors.js';
 import { buildSeriesFields, validateSeriesFields } from '../dashboard/recurringClasses.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { invalidate } from '../app/store.js';
@@ -24,6 +26,7 @@ import { emitChange } from '../app/context.js';
 
 const TYPES = [
   { id: 'task', key: 't', iconName: 'tasks', labelKey: 'qa.task', hintKey: 'qa.taskHint' },
+  { id: 'project', key: 'p', iconName: 'briefcase', labelKey: 'qa.project', hintKey: 'qa.projectHint' },
   { id: 'class', key: 'c', iconName: 'calendar', labelKey: 'qa.class', hintKey: 'qa.classHint' },
   { id: 'course', key: 'o', iconName: 'book', labelKey: 'qa.course', hintKey: 'qa.courseHint' },
   { id: 'exam', key: 'e', iconName: 'exam', labelKey: 'qa.exam', hintKey: 'qa.examHint' },
@@ -160,19 +163,12 @@ async function openStudyForm() {
           if (!date || start === null || !Number.isFinite(mins) || mins < 10 || start + mins > 1440) { err.textContent = t('errors.invalidTime'); return; }
           api.setBusy(true);
           try {
-            const sched = await getOrCreateScheduleForDate(ctx.userId, date);
-            const { data: existing } = await supabase.from('schedule_items').select('name, start_minutes, end_minutes, item_type').eq('schedule_id', sched.id);
-            const clash = (existing || []).find((i) => i.item_type !== 'free' && i.item_type !== 'break' && start < i.end_minutes && start + mins > i.start_minutes);
-            if (clash) {
-              err.textContent = t('calendar3.dropOverlap').replace('{name}', clash.name);
+            const res = await pinStudyBlock({ userId: ctx.userId, date, start, minutes: mins, name, taskId });
+            if (!res.ok) {
+              err.textContent = t('calendar3.dropOverlap').replace('{name}', res.clash);
               api.setBusy(false);
               return;
             }
-            const { error } = await supabase.from('schedule_items').insert({
-              schedule_id: sched.id, user_id: ctx.userId, item_type: 'study', name, start_minutes: start, end_minutes: start + mins,
-              sort_order: 999, locked: true, completed: false, source_subject_id: taskId,
-            });
-            if (error) throw error;
             afterPlannerWrite(date);
             api.close(true);
             toast(t('qa.studyAdded'), { kind: 'success' });
@@ -192,6 +188,7 @@ export function openQuickAdd(initialType = null) {
     if (api) api.close(true);
     if (type === 'task') openTaskEditor({});
     else if (type === 'course') openCourseEditor({ onSaved: (c) => c && app().openCourse(c.id) });
+    else if (type === 'project') openProjectEditor({ onSaved: (p) => p && app().navigate('projectsView', p.id) });
     else if (type === 'exam') openExamEditor({ onSaved: (x) => x && app().navigate('examsView', x.id) });
     else if (type === 'class') openClassForm();
     else if (type === 'study') openStudyForm();
@@ -209,7 +206,7 @@ export function openQuickAdd(initialType = null) {
     render: (body, api) => {
       const grid = h('div', { class: 'qa-grid', role: 'list' });
       TYPES.forEach((tp) => {
-        if ((tp.id === 'course' && !has('courses')) || (tp.id === 'exam' && !has('exams'))) return;
+        if ((tp.id === 'course' && !has('courses')) || (tp.id === 'exam' && !has('exams')) || (tp.id === 'project' && !has('projects'))) return;
         const btn = h('button', { type: 'button', class: 'qa-tile', role: 'listitem', 'data-qa': tp.id });
         btn.innerHTML = `<span class="qa-tile-icon">${icon(tp.iconName)}</span><span class="qa-tile-text"><strong></strong><span></span></span><kbd class="kbd"></kbd>`;
         btn.querySelector('strong').textContent = t(tp.labelKey);

@@ -1,0 +1,112 @@
+/* ==========================================================================
+   V4-B: Projects list + project page, project chip on task rows.
+   The space colour (or the accent) is passed as --c.
+   ========================================================================== */
+
+.projects-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.projects-search { flex: 1 1 220px; max-width: 360px; }
+
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.project-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  min-width: 0;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.project-card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--c); }
+.project-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.project-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.project-card.is-archived { opacity: 0.85; }
+.project-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.project-card-title { font-size: var(--text-lg); font-weight: 650; line-height: var(--leading-tight); overflow-wrap: anywhere; }
+.project-card-desc {
+  font-size: var(--text-sm);
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.project-card-progress { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: var(--space-2); }
+.project-card-stats { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.project-card-stats strong { color: var(--text); font-size: var(--text-sm); }
+.project-card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 22px; }
+.project-next { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--text-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-next svg, .project-task-ms svg, .task-project svg { width: 13px; height: 13px; flex: none; }
+
+.project-space { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-2xs); font-weight: 600; color: var(--text-soft); }
+.project-space-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--c); flex: none; }
+
+/* ---------------- project page ---------------- */
+.project-head { margin-bottom: var(--space-5); }
+.project-head .back-link { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm); color: var(--muted); text-decoration: none; margin-bottom: var(--space-2); }
+.project-head .back-link:hover { color: var(--text); }
+.project-head .back-link svg { width: 14px; height: 14px; }
+.project-head-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.project-head-text { min-width: 0; }
+.project-head-text .page-heading { overflow-wrap: anywhere; }
+.project-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: var(--space-2) 0 0; font-size: var(--text-sm); }
+.project-desc { margin: var(--space-3) 0 0; max-width: 72ch; color: var(--text-soft); white-space: pre-line; }
+
+.project-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.project-summary .ring-fill { stroke: var(--c, var(--accent)); }
+.project-summary-text p { margin: 2px 0; font-size: var(--text-sm); color: var(--text-soft); }
+.project-summary-main { font-size: var(--text-md) !important; color: var(--text) !important; }
+.project-times { display: flex; gap: var(--space-5); margin: 0; }
+.project-times > div { display: flex; flex-direction: column; gap: 2px; }
+.project-times dt { font-size: var(--text-2xs); font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.project-times dd { margin: 0; font-size: var(--text-md); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.project-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.project-task { position: relative; }
+.project-task + .project-task { border-top: 1px solid var(--border-subtle); }
+.project-task .task-row { border-top: 0 !important; }
+.project-task-ms { display: inline-flex; align-items: center; gap: 4px; margin: -6px 0 8px 56px; font-size: var(--text-2xs); color: var(--muted); }
+.project-task-order { position: absolute; right: 6px; bottom: 4px; display: flex; gap: 2px; }
+.project-task-order .btn { width: 26px; height: 26px; }
+.project-task-order .btn:disabled { opacity: 0.35; }
+.project-task:has(.project-task-order) .task-row { padding-right: 70px; }
+
+.milestone-list { list-style: none; margin: 0; padding: 0; }
+.milestone-row.is-done .list-row-title { text-decoration: line-through; color: var(--muted); }
+
+/* project chip on task rows */
+.task-project { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--text-soft); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+
+/* Tasks and milestones side by side only when both have room. */
+@media (max-width: 1200px) {
+  .project-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .project-summary { grid-template-columns: auto minmax(0, 1fr); }
+  .project-times { grid-column: 1 / -1; gap: var(--space-4); }
+}
+@media (max-width: 520px) {
+  .project-grid { grid-template-columns: minmax(0, 1fr); }
+  .project-head-row .page-head-actions { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-card { transition: none; }
+  .project-card:hover { transform: none; }
+}
+
+/* Flush cards on the project page keep their header inset. */
+.project-tasks > .card-head,
+.project-milestones > .card-head { margin: 0; padding: var(--space-4) var(--space-4) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.project-tasks > .empty-state, .project-milestones > .empty-state { padding: var(--space-5) var(--space-4); }

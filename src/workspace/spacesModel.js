@@ -18,11 +18,14 @@ export function validateSpaceFields(input = {}) {
   return { ok: Object.keys(errors).length === 0, errors, fields: { name, icon, color } };
 }
 
-/** The space an item belongs to: its own, else its course's, else none. */
-export function effectiveSpaceId(item, courseById = new Map()) {
+/** The space an item belongs to: its own, else its project's, else its course's, else none. */
+export function effectiveSpaceId(item, courseById = new Map(), projectById = new Map()) {
   if (!item) return null;
   const own = item.spaceId !== undefined ? item.spaceId : item.space_id;
   if (own) return own;
+  const projectId = item.projectId !== undefined ? item.projectId : item.project_id;
+  const project = projectId ? projectById.get(projectId) : null;
+  if (project && project.space_id) return project.space_id;
   const courseId = item.courseId !== undefined ? item.courseId : item.course_id;
   const course = courseId ? courseById.get(courseId) : null;
   return (course && course.space_id) || null;

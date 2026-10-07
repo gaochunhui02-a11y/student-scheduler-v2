@@ -24,6 +24,7 @@ import { taskRowHtml } from './taskRow.js';
 import { tagLabel } from './taskEditorSections.js';
 import { matchesSpace, effectiveSpaceId } from '../workspace/spacesModel.js';
 import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
+import { listProjects, listProjectTaskRows } from '../projects/projectsData.js';
 
 const VIEWS = ['today', 'upcoming', 'overdue', 'open', 'done'];
 const FILTER_KEY = 'student-scheduler-tasks-filters';
@@ -31,15 +32,15 @@ const FILTER_KEY = 'student-scheduler-tasks-filters';
 function loadFilters() {
   try {
     const f = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
-    return { view: VIEWS.includes(f.view) ? f.view : 'open', course: f.course || '', tag: f.tag || '', priority: f.priority || '', search: '' };
+    return { view: VIEWS.includes(f.view) ? f.view : 'open', course: f.course || '', project: f.project || '', tag: f.tag || '', priority: f.priority || '', search: '' };
   } catch {
-    return { view: 'open', course: '', tag: '', priority: '', search: '' };
+    return { view: 'open', course: '', project: '', tag: '', priority: '', search: '' };
   }
 }
 
 function saveFilters(f) {
   try {
-    localStorage.setItem(FILTER_KEY, JSON.stringify({ view: f.view, course: f.course, tag: f.tag, priority: f.priority }));
+    localStorage.setItem(FILTER_KEY, JSON.stringify({ view: f.view, course: f.course, project: f.project, tag: f.tag, priority: f.priority }));
   } catch { /* per-viewer convenience only */ }
 }
 
@@ -57,11 +58,13 @@ export function dueBucket(group, today) {
 }
 const BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'thisWeek', 'nextTwoWeeks', 'later', 'noDate', 'done'];
 
-export function filterTaskGroups(groups, filters, today, courseById = new Map()) {
+export function filterTaskGroups(groups, filters, today, courseById = new Map(), projectById = new Map()) {
   const q = (filters.search || '').trim().toLowerCase();
   return groups.filter((g) => {
-    // V4: the sidebar's space switcher (a task inherits its course's space).
-    if (filters.space && !matchesSpace(effectiveSpaceId(g, courseById), filters.space)) return false;
+    // V4: the sidebar's space switcher (a task inherits its project's, then its course's space).
+    if (filters.space && !matchesSpace(effectiveSpaceId(g, courseById, projectById), filters.space)) return false;
+    if (filters.project === '__none' && g.projectId) return false;
+    if (filters.project && filters.project !== '__none' && g.projectId !== filters.project) return false;
     if (filters.view === 'done' && !g.done) return false;
     if (filters.view !== 'done' && g.done) return false;
     if (filters.view === 'today' && !(g.dueDate === today || g.dates.includes(today) || g.overdue)) return false;
@@ -73,7 +76,8 @@ export function filterTaskGroups(groups, filters, today, courseById = new Map())
     if (filters.priority && g.priority !== filters.priority) return false;
     if (q) {
       const course = courseById.get(g.courseId);
-      const hay = [g.name, g.notes, ...(g.tags || []), course ? course.name : '', course ? course.code : ''].join(' ').toLowerCase();
+      const project = projectById.get(g.projectId);
+      const hay = [g.name, g.notes, ...(g.tags || []), course ? course.name : '', course ? course.code : '', project ? project.title : ''].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -102,17 +106,23 @@ export function initTasksPage() {
         console.error('Recurring task generation failed', err);
       }
     }
-    const [rows, courses, deps, rules] = await Promise.all([
+    const [windowRows, courses, deps, rules, projects, projectRows] = await Promise.all([
       listTaskRowsInWindow(ctx.userId, addDays(today, -60), addDays(today, 120)),
       has('courses') ? listCourses(ctx.userId).catch(() => []) : [],
       listDependencies(ctx.userId).catch(() => []),
       listRecurrenceRules(ctx.userId).catch(() => []),
+      listProjects(ctx.userId).catch(() => []),
+      listProjectTaskRows(ctx.userId).catch(() => []),
     ]);
+    // Every project task belongs on this page, even one planned long ago.
+    const byId = new Map(windowRows.map((r) => [r.id, r]));
+    projectRows.forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, r); });
+    const rows = [...byId.values()];
     const blocks = await listBlocksForSubjectIds(rows.map((r) => r.id));
     const todayScheduleIds = new Set(rows.filter((r) => r.for_date === today).map((r) => r.schedule_id));
     const groups = sortTaskGroups(buildTaskGroups(rows, blocks, { today, nowMinutes: minutesOfDay(), todayScheduleIds }));
     const blocked = computeBlockedState(groups, deps);
-    return { today, groups, courses: sortCourses(courses), deps, rules, blocked };
+    return { today, groups, courses: sortCourses(courses), deps, rules, blocked, projects };
   }
 
   async function render() {
@@ -143,9 +153,10 @@ export function initTasksPage() {
   function draw(head) {
     const data = last;
     const courseById = new Map(data.courses.map((c) => [c.id, c]));
+    const projectById = new Map(data.projects.map((p) => [p.id, p]));
     const scoped = { ...filters, space: currentSpaceFilter() };
-    const filtered = filterTaskGroups(data.groups, scoped, data.today, courseById);
-    const counts = Object.fromEntries(VIEWS.map((v) => [v, filterTaskGroups(data.groups, { ...scoped, view: v, search: '' }, data.today, courseById).length]));
+    const filtered = filterTaskGroups(data.groups, scoped, data.today, courseById, projectById);
+    const counts = Object.fromEntries(VIEWS.map((v) => [v, filterTaskGroups(data.groups, { ...scoped, view: v, search: '' }, data.today, courseById, projectById).length]));
     const tags = [...new Set(data.groups.flatMap((g) => g.tags))].sort();
     const remaining = filtered.filter((g) => !g.done).reduce((s, g) => s + g.remainingMinutes, 0);
 
@@ -160,6 +171,11 @@ export function initTasksPage() {
         <option value="">${t('tasks.allCourses')}</option>
         ${data.courses.filter((c) => !c.archived).map((c) => html`<option value="${c.id}"${filters.course === c.id ? raw(' selected') : ''}>${c.code || c.name}</option>`)}
         <option value="__none"${filters.course === '__none' ? raw(' selected') : ''}>${t('tasks.noCourse')}</option>
+      </select>` : ''}
+      ${data.projects.length ? html`<label class="sr-only" for="tasksProject">${t('tasks.fieldProject')}</label><select id="tasksProject" class="v3-input filter-select">
+        <option value="">${t('tasks.allProjects')}</option>
+        ${data.projects.filter((p) => p.status !== 'archived').map((p) => html`<option value="${p.id}"${filters.project === p.id ? raw(' selected') : ''}>${p.title}</option>`)}
+        <option value="__none"${filters.project === '__none' ? raw(' selected') : ''}>${t('tasks.noProject')}</option>
       </select>` : ''}
       ${tags.length ? html`<label class="sr-only" for="tasksTag">${t('tasks.sectionTags')}</label><select id="tasksTag" class="v3-input filter-select">
         <option value="">${t('tasks.allTags')}</option>
@@ -184,7 +200,7 @@ export function initTasksPage() {
       filtered.forEach((g) => { (buckets[dueBucket(g, data.today)] ||= []).push(g); });
       body = BUCKET_ORDER.filter((b) => buckets[b]).map((b) => html`<section class="task-bucket">
         <h2 class="task-bucket-title${b === 'overdue' ? ' is-danger' : ''}">${t(`tasks.bucket_${b}`)} <span class="muted">${buckets[b].length}</span></h2>
-        <div class="card card-flush"><div class="list">${buckets[b].map((g) => taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: true, blockedInfo: data.blocked.get(g.id), today: data.today }))}</div></div>
+        <div class="card card-flush"><div class="list">${buckets[b].map((g) => taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: true, project: projectById.get(g.projectId), blockedInfo: data.blocked.get(g.id), today: data.today }))}</div></div>
       </section>`);
     }
     setHtml(root, [head || pageHead({ eyebrow: t('nav.sectionWork'), title: t('nav.tasks') }), spaceScopeNote(), toolbar, body]);
@@ -197,7 +213,7 @@ export function initTasksPage() {
       again.focus();
       again.setSelectionRange(again.value.length, again.value.length);
     }, 150));
-    [['#tasksCourse', 'course'], ['#tasksTag', 'tag'], ['#tasksPriority', 'priority']].forEach(([sel, key]) => {
+    [['#tasksCourse', 'course'], ['#tasksProject', 'project'], ['#tasksTag', 'tag'], ['#tasksPriority', 'priority']].forEach(([sel, key]) => {
       const el = root.querySelector(sel);
       if (el) el.addEventListener('change', () => { filters[key] = el.value; saveFilters(filters); draw(headCache); });
     });
@@ -326,7 +342,7 @@ export function initTasksPage() {
   on(root, 'click', '[data-action]', async (e, el) => {
     const action = el.dataset.action;
     if (action === 'retry') render();
-    else if (action === 'add-task') openTaskEditor({ defaults: { courseId: filters.course && filters.course !== '__none' ? filters.course : null }, onSaved: () => render() });
+    else if (action === 'add-task') openTaskEditor({ defaults: { courseId: filters.course && filters.course !== '__none' ? filters.course : null, projectId: filters.project && filters.project !== '__none' ? filters.project : null }, onSaved: () => render() });
     else if (action === 'manage-rules') openRulesDrawer();
     else if (action === 'open-task' || action === 'toggle-done') {
       const id = el.closest('[data-task-id]').dataset.taskId;

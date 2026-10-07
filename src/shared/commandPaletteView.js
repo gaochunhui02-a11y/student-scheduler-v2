@@ -27,6 +27,7 @@ export function initCommandPalette({ getCommands, t }) {
     classes: 'search.groupClasses', boards: 'search.groupBoards', settings: 'search.groupSettings',
     // V4
     spaces: 'search.groupSpaces',
+    projects: 'search.groupProjects',
   };
 
   function build() {

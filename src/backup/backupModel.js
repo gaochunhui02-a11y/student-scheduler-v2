@@ -36,6 +36,17 @@ const S = {
     id: ['id', true], name: ['text', true, 60], icon: ['enum', false, ['school', 'briefcase', 'home', 'heart', 'dumbbell', 'language', 'code', 'book', 'flask', 'music', 'leaf', 'star', 'circle']],
     color: ['color'], archived: ['bool'], sort_order: ['int', false, [-1e6, 1e6]],
   },
+  // V4-B (0019)
+  projects: {
+    id: ['id', true], space_id: ['ref'], title: ['text', true, 120], description: ['text', false, 5000],
+    status: ['enum', false, ['planned', 'active', 'on_hold', 'completed', 'archived']], priority: ['enum', false, ['low', 'medium', 'high']],
+    start_date: ['date'], due_date: ['date'], estimated_minutes: ['int', false, [1, 1000000]], progress_mode: ['enum', false, ['auto', 'manual']],
+    manual_progress: ['int', false, [0, 100]], sort_order: ['int', false, [-1e6, 1e6]], completed_at: ['ts'],
+  },
+  project_milestones: {
+    id: ['id', true], project_id: ['ref', true], title: ['text', true, 120], description: ['text', false, 2000], due_date: ['date'],
+    status: ['enum', false, ['open', 'done']], completed_at: ['ts'], sort_order: ['int', false, [-1e6, 1e6]],
+  },
   semesters: {
     id: ['id', true], name: ['text', true, 120], start_date: ['date', true], end_date: ['date', true], breaks: ['breaks'], is_current: ['bool'],
   },
@@ -77,6 +88,9 @@ const S = {
     due_date: ['date'], notes: ['text', false, 5000], tags: ['tags'], origin_subject_id: ['ref'], course_id: ['ref'], completed_at: ['ts'], actual_minutes: ['int', false, [0, 10000]],
     dependency_override: ['bool'], exam_topic_id: ['ref'], recurrence_rule_id: ['ref'], recurrence_date: ['date'],
     space_id: ['ref'],
+    // V4-B (0019, 0020)
+    project_id: ['ref'], project_milestone_id: ['ref'], due_time: ['time'], start_time: ['time'],
+    status_override: ['enum', false, ['in_progress', 'deferred']], project_sort: ['int', false, [-1e6, 1e6]],
   },
   study_subject_subtasks: { id: ['id', true], subject_id: ['ref', true], title: ['text', false, 200], completed: ['bool'], sort_order: ['int', false, [-1e6, 1e6]] },
   task_dependencies: { id: ['id', true], task_id: ['ref', true], depends_on_id: ['ref', true] },
@@ -111,6 +125,8 @@ export const BACKUP_TABLES = Object.keys(S);
 
 // Foreign keys to rewrite: table -> { column: parentTable }
 export const REFS = {
+  projects: { space_id: 'spaces' },
+  project_milestones: { project_id: 'projects' },
   courses: { semester_id: 'semesters', space_id: 'spaces' },
   classes: { schedule_id: 'schedules', course_id: 'courses' },
   class_series: { course_id: 'courses' },
@@ -118,7 +134,7 @@ export const REFS = {
   task_recurrence_rules: { course_id: 'courses' },
   exams: { course_id: 'courses' },
   exam_topics: { exam_id: 'exams' },
-  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules', space_id: 'spaces' },
+  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules', space_id: 'spaces', project_id: 'projects', project_milestone_id: 'project_milestones' },
   study_subject_subtasks: { subject_id: 'study_subjects' },
   task_dependencies: { task_id: 'study_subjects', depends_on_id: 'study_subjects' },
   schedule_items: { schedule_id: 'schedules', source_subject_id: 'study_subjects' },
@@ -265,10 +281,12 @@ export const CAPABILITY_COLUMNS = {
   boardCourseLinks: { boards: ['course_id'], board_nodes: ['course_id'] },
   taskExtensions: { study_subjects: ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'] },
   spaceLinks: { courses: ['space_id'], study_subjects: ['space_id'], boards: ['space_id'] },
+  projectLinks: { study_subjects: ['project_id', 'project_milestone_id'] },
+  taskFieldsV4: { study_subjects: ['due_time', 'start_time', 'status_override', 'project_sort'] },
 };
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
-  spaces: 'spaces', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
+  spaces: 'spaces', projects: 'projects', project_milestones: 'projects', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
   task_recurrence_rules: 'recurringTasks', task_dependencies: 'dependencies', resources: 'resources', focus_sessions: 'focusSessions',
 };
 

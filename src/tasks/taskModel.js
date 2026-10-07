@@ -106,6 +106,13 @@ export function buildTaskGroups(rows = [], blocks = [], ctx = {}) {
       recurrenceRuleId: root.recurrence_rule_id || null,
       examTopicId: root.exam_topic_id || null,
       dependencyOverride: Boolean(root.dependency_override),
+      // V4-B universal task fields (all null/0 for V3 tasks)
+      projectId: root.project_id || null,
+      milestoneId: root.project_milestone_id || null,
+      dueTime: root.due_time ? String(root.due_time).slice(0, 5) : null,
+      startTime: root.start_time ? String(root.start_time).slice(0, 5) : null,
+      statusOverride: root.status_override || null,
+      projectSort: Number.isFinite(root.project_sort) ? root.project_sort : 0,
     });
   });
   return groups;

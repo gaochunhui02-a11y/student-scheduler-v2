@@ -27,7 +27,7 @@ export const TABLE_DEFAULTS = {
   }),
   classes: () => ({ sort_order: 0, source: 'manual', course_id: null }),
   study_subjects: () => ({
-    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null,
+    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null, project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0,
     actual_minutes: null, completed_at: null, dependency_override: false, exam_topic_id: null, recurrence_rule_id: null, recurrence_date: null,
   }),
   schedule_items: () => ({ sort_order: 0, locked: false, completed: false, completed_minutes: 0, missed: false, carried_over_minutes: 0, source_subject_id: null }),
@@ -39,6 +39,8 @@ export const TABLE_DEFAULTS = {
   class_series_exceptions: () => ({ override_name: null, override_start_time: null, override_end_time: null }),
   semesters: () => ({ breaks: [], is_current: false }),
   spaces: () => ({ icon: 'circle', color: null, archived: false, sort_order: 0 }),
+  projects: () => ({ space_id: null, description: '', status: 'active', priority: 'medium', start_date: null, due_date: null, estimated_minutes: null, progress_mode: 'auto', manual_progress: null, sort_order: 0, completed_at: null }),
+  project_milestones: () => ({ description: '', due_date: null, status: 'open', completed_at: null, sort_order: 0 }),
   courses: () => ({ space_id: null, semester_id: null, code: null, instructor: null, color: null, location: null, notes: '', target_grade: null, credits: null, archived: false, sort_order: 0 }),
   grade_categories: () => ({ weight: 0, sort_order: 0 }),
   grade_items: () => ({ category_id: null, earned_points: null, due_date: null, counts: true, notes: '', sort_order: 0 }),
@@ -69,6 +71,8 @@ const CASCADES = [
   ['task_dependencies', 'study_subjects', 'depends_on_id'],
   ['resources', 'courses', 'course_id'],
   ['resources', 'study_subjects', 'task_id'],
+  // V4-B: milestones belong to their project
+  ['project_milestones', 'projects', 'project_id'],
 ];
 const SET_NULLS = [
   ['schedule_items', 'study_subjects', 'source_subject_id'],
@@ -92,6 +96,10 @@ const SET_NULLS = [
   ['courses', 'spaces', 'space_id'],
   ['study_subjects', 'spaces', 'space_id'],
   ['boards', 'spaces', 'space_id'],
+  // V4-B: deleting a project keeps its tasks
+  ['projects', 'spaces', 'space_id'],
+  ['study_subjects', 'projects', 'project_id'],
+  ['study_subjects', 'project_milestones', 'project_milestone_id'],
 ];
 
 function cmp(a, b) {
@@ -111,8 +119,9 @@ function clone(v) {
  * @param {object} options.session     the fake auth session to report
  * @param {string} [options.storageKey]
  * @param {Set<string>} [options.missingTables] tables to report as absent (simulates un-migrated databases)
+ * @param {Object<string, string[]>} [options.missingColumns] table -> columns to report as absent (selecting or writing them errors, like Postgres 42703)
  */
-export function createMemoryClient({ seed, session, storageKey = 'student-scheduler-demo-db', missingTables = new Set() }) {
+export function createMemoryClient({ seed, session, storageKey = 'student-scheduler-demo-db', missingTables = new Set(), missingColumns = {} }) {
   function load() {
     try {
       const raw = sessionStorage.getItem(storageKey);
@@ -182,6 +191,7 @@ export function createMemoryClient({ seed, session, storageKey = 'student-schedu
 
     select(cols, opts = {}) {
       if (this.op === 'select') {
+        this.cols = cols;
         this.head = Boolean(opts.head);
         // "*, schedules(for_date)" — a many-to-one embed through `<singular>_id`
         for (const m of String(cols || '').matchAll(/(\w+)\(([^)]*)\)/g)) {
@@ -238,6 +248,14 @@ export function createMemoryClient({ seed, session, storageKey = 'student-schedu
     }
 
     run() {
+      const absentCols = missingColumns[this.name];
+      if (absentCols && absentCols.length) {
+        const asked = this.op === 'select'
+          ? String(this.cols || '').split(',').map((c) => c.trim()).filter((c) => c && c !== '*' && !c.includes('('))
+          : (Array.isArray(this.payload) ? this.payload : [this.payload]).flatMap((p) => Object.keys(p || {}));
+        const bad = asked.find((c) => absentCols.includes(c));
+        if (bad) return { data: null, error: { message: `column ${this.name}.${bad} does not exist`, code: '42703' } };
+      }
       if (missingTables.has(this.name)) {
         return { data: null, error: { message: `relation "public.${this.name}" does not exist`, code: '42P01' } };
       }

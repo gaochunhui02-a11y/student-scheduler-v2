@@ -10,8 +10,9 @@ import { todayStr, addDays } from '../shared/dates.js';
 import { listCourses, listTaskRowsInWindow, listAllClassSeries } from '../academics/academicsData.js';
 import { listExams } from '../exams/examsData.js';
 import { listBoards } from '../board/boardData.js';
+import { listProjects, listProjectTaskRows } from '../projects/projectsData.js';
 
-let index = { courses: [], tasks: [], exams: [], series: [], boards: [] };
+let index = { courses: [], tasks: [], exams: [], series: [], boards: [], projects: [] };
 let pending = null;
 let stale = true;
 
@@ -21,16 +22,21 @@ export async function refreshSearchIndex() {
   if (!ctx.userId) return index;
   pending = (async () => {
     const today = todayStr();
-    const [courses, rows, exams, series, boards] = await Promise.all([
+    const [courses, windowRows, exams, series, boards, projects, projectRows] = await Promise.all([
       has('courses') ? listCourses(ctx.userId).catch(() => []) : [],
       listTaskRowsInWindow(ctx.userId, addDays(today, -30), addDays(today, 90)).catch(() => []),
       has('exams') ? listExams(ctx.userId).catch(() => []) : [],
       listAllClassSeries(ctx.userId).catch(() => []),
       listBoards(ctx.userId).catch(() => []),
+      listProjects(ctx.userId).catch(() => []),
+      listProjectTaskRows(ctx.userId).catch(() => []),
     ]);
+    const byId = new Map(windowRows.map((r) => [r.id, r]));
+    projectRows.forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, r); });
+    const rows = [...byId.values()];
     // One entry per task (roots only — chunks of a multi-day task share it).
     const roots = rows.filter((r) => !r.origin_subject_id || !rows.some((x) => x.id === r.origin_subject_id));
-    index = { courses, tasks: roots, exams, series, boards };
+    index = { courses, tasks: roots, exams, series, boards, projects };
     stale = false;
     pending = null;
     return index;

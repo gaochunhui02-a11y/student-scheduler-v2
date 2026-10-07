@@ -20,12 +20,15 @@ function createDemoClient() {
       .forEach((name) => missing.add(name));
   }
   if (pre === 'v3' || pre === 'v4') {
-    ['spaces'].forEach((name) => missing.add(name));
+    ['spaces', 'projects', 'project_milestones'].forEach((name) => missing.add(name));
   }
   return createMemoryClient({
     seed: () => buildDemoSeed(new Date()),
     session: { user: { id: DEMO_USER_ID, email: DEMO_EMAIL, user_metadata: { name: 'Jordan' } }, access_token: 'demo' },
     missingTables: missing,
+    missingColumns: pre === 'v3' || pre === 'v4'
+      ? { study_subjects: ['space_id', 'project_id', 'project_milestone_id', 'due_time', 'start_time', 'status_override', 'project_sort'], courses: ['space_id'], boards: ['space_id'] }
+      : {},
   });
 }
 
