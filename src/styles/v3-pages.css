@@ -241,3 +241,14 @@
   .semester-week-flags { grid-column: 3; grid-row: 1; min-width: 0; }
   .semester-week-body { padding: 0 var(--space-4) var(--space-4); }
 }
+
+/* ---------------- Week (V2 grid, V3 widths) ----------------
+   The V3 nav rail is wider, so seven fixed columns no longer fit between
+   ~900px and ~1240px: four columns there, and columns may shrink (long
+   class names already ellipsize). Smaller breakpoints are restated so they
+   still apply after this base rule. */
+.week-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.week-day-card { min-width: 0; }
+@media (max-width: 1240px) { .week-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .week-grid { grid-template-columns: 1fr; } }

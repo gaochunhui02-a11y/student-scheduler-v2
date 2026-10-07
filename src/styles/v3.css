@@ -863,3 +863,21 @@ a.course-chip:hover { filter: brightness(0.96); }
 .auth-wrap { background: var(--canvas-glow), var(--bg); }
 a.card-link { text-decoration: none; }
 a.card-link:hover { text-decoration: underline; }
+
+/* Short screens (laptops at ~800px tall): tighten the rail so the account
+   controls at the bottom stay visible without scrolling the sidebar. */
+@media (max-height: 880px) {
+  .brand { padding-bottom: var(--space-2); }
+  .sidebar-actions { padding-bottom: var(--space-2); gap: 6px; }
+  .sidebar-nav { gap: var(--space-2); }
+  .nav-section { gap: 0; }
+  .nav-section-label { padding-bottom: 2px; }
+  .nav-item { min-height: 28px; padding-top: 4px; padding-bottom: 4px; }
+  .sidebar-bottom { gap: 6px; padding-top: 8px; margin-top: 8px; }
+  .sidebar-user { padding-bottom: 4px; }
+}
+@media (max-height: 740px) {
+  .nav-section-label { font-size: 0; padding: 0; height: 1px; margin: 3px var(--space-2); background: var(--nav-border); }
+  .nav-item { min-height: 26px; padding-top: 3px; padding-bottom: 3px; }
+  .sidebar { padding-top: var(--space-3); padding-bottom: var(--space-3); }
+}

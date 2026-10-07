@@ -86,3 +86,50 @@ body.is-offline .workspace .btn--primary { opacity: .5; pointer-events: none; }
   .onb-row-task3 > .onb-field:first-child { grid-column: 1 / -1; }
   .onb-row-class3 > .onb-field:nth-child(5), .onb-row-class3 > .onb-check { grid-column: auto; }
 }
+
+/* ---------------- Settings layout ----------------
+   Nine sections: a vertical section list on wide screens (one glance shows
+   them all), a horizontal strip with an edge fade (a scroll hint) on narrow
+   ones. Only the visible panel takes part in the grid. */
+@media (min-width: 901px) {
+  .settings-view:not([hidden]) {
+    display: grid;
+    grid-template-columns: 196px minmax(0, 680px);
+    column-gap: var(--space-6);
+    align-items: start;
+  }
+  .settings-view > .board-header { grid-column: 1 / -1; }
+  .settings-view > .settings-tabs {
+    grid-column: 1;
+    grid-row: 2 / span 20;
+    position: sticky;
+    top: var(--space-4);
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    border-bottom: 0;
+    overflow: visible;
+  }
+  .settings-view > .settings-panel { grid-column: 2; max-width: none; }
+  .settings-view .settings-tab {
+    text-align: left;
+    padding: 8px 12px;
+    margin: 0;
+    border-bottom: 0;
+    border-radius: var(--radius-sm);
+    font-weight: 550;
+  }
+  .settings-view .settings-tab:hover { background: var(--surface-2); }
+  .settings-view .settings-tab.active { background: var(--accent-soft); color: var(--accent-strong); }
+  .settings-view .settings-tab:focus-visible { border-radius: var(--radius-sm); }
+}
+@media (max-width: 900px) {
+  .settings-tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    padding-right: 24px;
+  }
+}
+/* Board's header rule right-aligns its stacked toolbar on phones; Settings
+   reuses the header markup but has no toolbar, so keep its title left. */
+.settings-view > .board-header { align-items: flex-start; }
