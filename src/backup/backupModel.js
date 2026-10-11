@@ -135,6 +135,11 @@ const S = {
   resources: {
     id: ['id', true], course_id: ['ref'], task_id: ['ref'], title: ['text', true, 200], url: ['url', true], kind: ['enum', false, ['link', 'document', 'lecture', 'syllabus', 'reference']], notes: ['text', false, 2000],
   },
+  // V4-G (0024)
+  attendance_records: {
+    id: ['id', true], course_id: ['ref', true], class_series_id: ['ref'], attended_on: ['date', true], start_minutes: ['int', true, [0, 1439]],
+    status: ['enum', false, ['present', 'late', 'absent', 'excused']], note: ['text', false, 500],
+  },
   focus_sessions: {
     id: ['id', true], schedule_item_id: ['ref'], task_id: ['ref'], course_id: ['ref'], started_at: ['ts', true], ended_at: ['ts'], planned_minutes: ['int', false, [0, 1440]],
     actual_minutes: ['int', false, [0, 1440]], outcome: ['enum', false, ['completed', 'finished_early', 'stopped']], notes: ['text', false, 2000],
@@ -168,6 +173,7 @@ export const REFS = {
   board_nodes: { board_id: 'boards', linked_study_subject_id: 'study_subjects', course_id: 'courses' },
   board_edges: { board_id: 'boards', source_node_id: 'board_nodes', target_node_id: 'board_nodes' },
   grade_categories: { course_id: 'courses' },
+  attendance_records: { course_id: 'courses', class_series_id: 'class_series' },
   grade_items: { course_id: 'courses', category_id: 'grade_categories' },
   resources: { course_id: 'courses', task_id: 'study_subjects' },
   focus_sessions: { schedule_item_id: 'schedule_items', task_id: 'study_subjects', course_id: 'courses' },
@@ -315,7 +321,7 @@ export const CAPABILITY_COLUMNS = {
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
   spaces: 'spaces', projects: 'projects', project_milestones: 'projects',
-  goals: 'goals', goal_milestones: 'goals', goal_progress_log: 'goals', routines: 'routines', routine_completions: 'routines', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
+  goals: 'goals', goal_milestones: 'goals', goal_progress_log: 'goals', routines: 'routines', routine_completions: 'routines', attendance_records: 'attendance', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
   task_recurrence_rules: 'recurringTasks', task_dependencies: 'dependencies', resources: 'resources', focus_sessions: 'focusSessions',
 };
 

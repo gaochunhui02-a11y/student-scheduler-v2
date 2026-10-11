@@ -18,6 +18,7 @@ import { initRoutinesPage } from '../routines/routinesPage.js';
 import '../tasks/taskEditorSections.js';
 import '../resources/resourcesUI.js';
 import '../board/boardCourseWidget.js';
+import '../attendance/attendanceUI.js';
 
 function placeholderSection(viewId, titleKey) {
   const root = document.getElementById(viewId);

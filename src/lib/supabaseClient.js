@@ -23,7 +23,9 @@ function createDemoClient() {
   if (pre === 'v4c') {
     ['goals', 'goal_milestones', 'goal_progress_log', 'routines', 'routine_completions'].forEach((name) => missing.add(name));
   }
+  if (pre === 'v4c' || pre === 'v4g') missing.add('attendance_records');
   if (pre === 'v3' || pre === 'v4') {
+    missing.add('attendance_records');
     ['spaces', 'projects', 'project_milestones', 'goals', 'goal_milestones', 'goal_progress_log', 'routines', 'routine_completions'].forEach((name) => missing.add(name));
   }
   return createMemoryClient({

@@ -216,6 +216,22 @@ check('bad goal mode / routine frequency / completion status are rejected', () =
   const problems = bad.errors.map((e) => `${e.table}.${e.column}`);
   ['goals.progress_mode', 'routines.frequency', 'routines.days_of_week', 'routine_completions.status'].forEach((p) => assert.ok(problems.includes(p), p));
 });
+check('V4-G attendance round-trips with its course and recurring class remapped', () => {
+  const c = { ...course, id: uid() };
+  const se = { id: uid(), name: 'Lecture', days_of_week: [1, 3], start_time: '09:00', end_time: '09:50', start_date: '2026-10-01', end_date: '2026-12-01', course_id: c.id };
+  const a = { id: uid(), course_id: c.id, class_series_id: se.id, attended_on: '2026-10-05', start_minutes: 540, status: 'late' };
+  const v = validateBackup({ ...backup, tables: { courses: [c], class_series: [se], attendance_records: [a] } });
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const plan = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  const na = plan.inserts.attendance_records[0];
+  assert.equal(na.course_id, plan.inserts.courses[0].id);
+  assert.equal(na.class_series_id, plan.inserts.class_series[0].id);
+  assert.equal(na.status, 'late');
+  const old = restoreAvailability({ courses: 1, courseLinks: 1, classCourseLinks: 1 });
+  assert.ok(planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, ...old, newId: newIds(), userId: 'me' }).unavailable.includes('attendance_records'));
+  const bad = validateBackup({ ...backup, tables: { attendance_records: [{ ...a, status: 'skipped', start_minutes: 2000 }] } });
+  assert.ok(bad.errors.some((e) => e.column === 'status') && bad.errors.some((e) => e.column === 'start_minutes'));
+});
 check('a bad project status / task status override is rejected', () => {
   const bad = validateBackup({ ...backup, tables: { projects: [{ id: uid(), title: 'x', status: 'done' }], study_subjects: [{ ...subj, status_override: 'done' }] } });
   const problems = bad.errors.map((e) => `${e.table}.${e.column}`);

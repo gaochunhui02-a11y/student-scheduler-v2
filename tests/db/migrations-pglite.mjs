@@ -291,6 +291,35 @@ await expectOk('A deletes the routine', `delete from public.routines where id = 
 const rcLeft = (await rows(`select count(*)::int n from public.routine_completions where routine_id = $1`, [rA]))[0].n;
 rcLeft === 0 ? ok('deleting a routine removes its completions') : bad('completions remain', String(rcLeft));
 
+console.log('\n=== V4-G attendance (0024) ===');
+await as(A);
+const courseAtt = await ins('A course for attendance', `insert into public.courses (user_id, name) values ($1, 'Statistics')`, [A]);
+const seriesAtt = await ins('A weekly class of it', `insert into public.class_series (user_id, name, days_of_week, start_time, end_time, start_date, end_date, course_id) values ($1, 'Stats lecture', '[1,3]', '09:00', '09:50', '2026-10-01', '2026-12-01', $2)`, [A, courseAtt]);
+const attA = await ins('A marks a session present', `insert into public.attendance_records (user_id, course_id, class_series_id, attended_on, start_minutes) values ($1, $2, $3, '2026-10-05', 540)`, [A, courseAtt, seriesAtt]);
+await ins('A marks a one-off session (no series) late', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes, status) values ($1, $2, '2026-10-06', 900, 'late')`, [A, courseAtt]);
+const attDef = await rows(`select status, note from public.attendance_records where id = $1`, [attA]);
+attDef[0].status === 'present' && attDef[0].note === '' ? ok('attendance defaults present / empty note') : bad('attendance defaults', JSON.stringify(attDef));
+await expectErr('second record for the same session rejected', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes, status) values ($1, $2, '2026-10-05', 540, 'absent')`, [A, courseAtt], /duplicate|unique/);
+await ins('a different start time the same day is another session', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes, status) values ($1, $2, '2026-10-05', 840, 'absent')`, [A, courseAtt]);
+await expectErr('bad attendance status rejected', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes, status) values ($1, $2, '2026-10-07', 540, 'skipped')`, [A, courseAtt], /check/);
+await expectErr('start minute out of range rejected', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes) values ($1, $2, '2026-10-07', 1440)`, [A, courseAtt], /check/);
+await expectErr('attendance needs a course', `insert into public.attendance_records (user_id, attended_on, start_minutes) values ($1, '2026-10-07', 540)`, [A], /null|not-null/);
+await as(B);
+const ba = (await rows(`select count(*)::int n from public.attendance_records`))[0].n;
+ba === 0 ? ok("B sees 0 of A's attendance") : bad('B sees A attendance', String(ba));
+await expectErr('B attendance -> A course', `insert into public.attendance_records (user_id, course_id, attended_on, start_minutes) values ($1, $2, '2026-10-05', 540)`, [B, courseAtt], /42501|does not belong/);
+const courseB = await ins('B own course', `insert into public.courses (user_id, name) values ($1, 'B course')`, [B]);
+await expectErr('B attendance -> A recurring class', `insert into public.attendance_records (user_id, course_id, class_series_id, attended_on, start_minutes) values ($1, $2, $3, '2026-10-05', 540)`, [B, courseB, seriesAtt], /42501|does not belong/);
+const bau = await db.query(`update public.attendance_records set status = 'absent' where id = $1`, [attA]);
+bau.affectedRows === 0 ? ok("B update of A's attendance affects 0 rows") : bad('B updated A attendance', String(bau.affectedRows));
+await as(A);
+await expectOk('A deletes the recurring class', `delete from public.class_series where id = $1`, [seriesAtt]);
+const afterSeries = await rows(`select class_series_id from public.attendance_records where id = $1`, [attA]);
+afterSeries.length === 1 && afterSeries[0].class_series_id === null ? ok('deleting a recurring class keeps its attendance (series -> null)') : bad('series delete', JSON.stringify(afterSeries));
+await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseAtt]);
+const attLeft = (await rows(`select count(*)::int n from public.attendance_records where course_id = $1`, [courseAtt]))[0].n;
+attLeft === 0 ? ok('deleting a course removes its attendance') : bad('attendance remains', String(attLeft));
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

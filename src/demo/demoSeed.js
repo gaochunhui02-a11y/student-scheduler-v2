@@ -53,7 +53,7 @@ export function buildDemoSeed(now = new Date()) {
     profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240 } }],
     schedules: [], classes: [], study_subjects: [], schedule_items: [], study_subject_subtasks: [],
     class_series: [], class_series_exceptions: [], boards: [], board_nodes: [], board_edges: [],
-    spaces: [], projects: [], project_milestones: [], goals: [], goal_milestones: [], goal_progress_log: [], routines: [], routine_completions: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
+    spaces: [], projects: [], project_milestones: [], goals: [], goal_milestones: [], goal_progress_log: [], routines: [], routine_completions: [], attendance_records: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
     task_dependencies: [], task_recurrence_rules: [], resources: [], focus_sessions: [],
   };
 
@@ -486,6 +486,25 @@ export function buildDemoSeed(now = new Date()) {
   [[240, 1], [200, 1], [150, 1], [110, 1], [70, 1], [30, 1]].forEach(([d, v]) => log(gBooks, d, v));
   log(gBooks, 9, 1, 'Finished “Atomic Habits”');
   [[30, 3], [21, 3.5], [14, 4.2], [7, 5], [2, 5.5]].forEach(([d, v]) => log(gRun, d, v));
+
+  // ---------------- attendance (V4-G) ----------------
+  // Mostly present, a few late / absent / excused; the newest couple of
+  // sessions of each course are left unmarked so "Mark all present" shows.
+  db.class_series.forEach((se, si) => {
+    const sessions = [];
+    for (let dte = se.start_date; dte < today; dte = addDays(dte, 1)) {
+      const dow = new Date(`${dte}T00:00:00Z`).getUTCDay();
+      if (!se.days_of_week.includes(dow)) continue;
+      if (db.class_series_exceptions.some((e) => e.series_id === se.id && e.exception_date === dte && e.action === 'skip')) continue;
+      sessions.push(dte);
+    }
+    const [hh, mm] = se.start_time.split(':').map(Number);
+    sessions.slice(0, Math.max(0, sessions.length - 2)).forEach((dte, i) => {
+      const n = i + si * 3;
+      const status = n % 11 === 7 ? 'absent' : n % 9 === 4 ? 'late' : n % 17 === 12 ? 'excused' : 'present';
+      db.attendance_records.push({ id: id(), user_id: U, course_id: se.course_id, class_series_id: se.id, attended_on: dte, start_minutes: hh * 60 + mm, status, note: '', created_at: ts, updated_at: ts });
+    });
+  });
 
   // ---------------- routines (V4-C) ----------------
   const routineBase = { user_id: U, space_id: null, goal_id: null, notes: '', days_of_week: [], weekly_target: 3, duration_minutes: null, end_date: null, paused: false, paused_at: null, archived: false, created_at: ts, updated_at: ts };

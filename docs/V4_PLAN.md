@@ -463,3 +463,46 @@ Any combination is valid. Overdue depends only on the due date.
 - The matrix's urgency window (2 days) is fixed.
 - Reflections are private notes in preferences; they are not part of the
   JSON backup yet.
+
+### V4-G — Academic tools (done)
+
+**Migration (file only — not applied):** `0024_attendance.sql` —
+`attendance_records` (course, optional recurring class, day, start minute,
+status present / late / absent / excused, note) with a **unique (course,
+day, start minute)** index, RLS (four own-row policies), ownership triggers
+on course and recurring class. Deleting a course deletes its attendance
+(CASCADE); deleting a recurring class keeps its records (series → NULL).
+
+**Attendance (`src/attendance/*`):**
+- A session = one meeting of a course (course, day, start time), from its
+  recurring classes (skips removed, moved times applied) and one-off
+  classes — so it works however the class was entered.
+- Course › Attendance tab: every held session of the term (semester start →
+  today, else the last 10 weeks), Present / Late / Absent / Excused buttons
+  (press again to clear), rate, counts, "You can miss N more classes and
+  stay at 80% or above", and a confirmed "Mark N unmarked as present".
+- Rate = (present + late) / (marked − excused); unmarked sessions are listed,
+  never counted as absences. On track ≥ 90%, Watch it ≥ 80%, else Below 80%
+  (80% is a hint, never enforced).
+- Course Overview card, rate badge on Courses cards, and quick Present /
+  Absent buttons on today's classes in Today's schedule.
+
+**Break it down (`src/tasks/breakdown*.js`):** from the task editor
+(More options) for open tasks. Seven templates (essay, lab report, problem
+set, presentation, project, exam prep, reading) suggested from the task
+name (en/zh/ja); each step gets a share of the time (exact total, 5-minute
+rounding) and a staggered "done by" date up to the due date. Two outputs:
+- *Separate tasks* (unscheduled, ready for Plan my backlog; same course /
+  project / goal / space / tags) — only when no study has been done on the
+  task yet; the task itself becomes the final step, so total time is
+  unchanged.
+- *A checklist inside the task* (existing subtasks) — always available.
+
+**Already in V3 and kept:** grade "what do I need" calculators (remaining
+work, a specific item, a final exam with a custom weight), course progress
+on the course Overview, exam revision plans added to the Planner.
+
+**Known limitations (V4-G):**
+- The 80% attendance threshold is a fixed hint, not a per-course setting.
+- Attendance for classes without a course can't be tracked.
+- Breakdown templates are fixed (no custom templates yet).

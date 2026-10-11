@@ -14,6 +14,7 @@ import { buildCalendarEvents } from '../calendar/calendarEvents.js';
 import { listClassesForScheduleIds } from '../dashboard/data.js';
 import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
 import { loadReviews } from '../review/reviewData.js';
+import { todayAttendance } from '../attendance/attendanceUI.js';
 
 export async function loadToday() {
   const ctx = app();
@@ -45,5 +46,6 @@ export async function loadToday() {
       classes, series, exceptions, subjects: forecast.input.subjects, groups, exams, courses,
     }).filter((e) => !e.allDay && ['class', 'study', 'external', 'exam'].includes(e.kind));
   }
-  return { today, groups, blocked, courses, exams, events, routines, completions, reviews };
+  const attendance = await todayAttendance(ctx.userId, today).catch(() => new Map());
+  return { today, groups, blocked, courses, exams, events, routines, completions, reviews, attendance };
 }

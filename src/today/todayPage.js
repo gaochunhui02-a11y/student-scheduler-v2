@@ -22,6 +22,9 @@ import { loadToday } from './todayData.js';
 import { buildTodayLists, timelineStates, parseQuickTask, todaySummary } from './todayModel.js';
 import { countCatchUp, openCatchUp } from '../planner/catchUpUI.js';
 import { reviewDue } from '../review/reviewModel.js';
+import { quickMarkHtml } from '../attendance/attendanceUI.js';
+import { setAttendance } from '../attendance/attendanceData.js';
+import { toggleStatus } from '../attendance/attendanceModel.js';
 import { isModuleEnabled } from '../workspace/modules.js';
 
 const REASON_KIND = { overdue: 'danger', dueToday: 'warning', highPriority: 'accent', planned: 'outline' };
@@ -139,6 +142,7 @@ export function initTodayPage() {
           <span class="today-ev-time tabular">${fmtClock(e.start)}<span class="sr-only"> – </span><small>${fmtClock(e.end)}</small></span>
           <span class="today-ev-body"><span class="today-ev-title">${e.title}</span><span class="today-ev-meta">${t(kindKey)}${course ? ` · ${course.code || course.name}` : ''}${e.completed ? ` · ${t('today.evDone')}` : ''}</span></span>
           ${e.state === 'now' ? badge(t('home3.happeningNow'), 'now') : e.state === 'next' ? badge(fill('home3.startsIn', { time: fmtMinutes(e.start - now) }), 'outline') : ''}
+          ${e.kind === 'class' && e.courseId && has('attendance') && e.state !== 'later' && e.state !== 'next' ? html`<span class="today-ev-att">${quickMarkHtml(e, d.attendance.get(`${e.courseId}|${e.start}`) || null)}</span>` : ''}
         </li>`;
       })}</ol>` : html`<div class="card-body">${emptyState({ iconName: 'calendar', title: t('today.scheduleEmptyTitle'), body: t('today.scheduleEmpty'), compact: true })}</div>`}
       ${studyEvents.some((e) => !e.completed && e.end > now) ? html`<div class="card-body today-focus-row">${button(t('home3.focusNext'), { size: 'sm', action: 'today-planner', iconName: 'play' })}</div>` : ''}
@@ -207,6 +211,17 @@ export function initTodayPage() {
         });
         await render();
         root.querySelector('#todayPlannedHead')?.closest('section')?.querySelector(`[data-task-id="${g.id}"] .task-open`)?.focus();
+      } catch (err) {
+        console.error(err);
+        toast(t('v3.saveError'), { kind: 'error' });
+      }
+    } else if (a === 'att-quick' && d) {
+      const key = `${el.dataset.course}|${el.dataset.start}`;
+      const next = toggleStatus(d.attendance.get(key) || null, el.dataset.status);
+      try {
+        await setAttendance(ctx.userId, { course_id: el.dataset.course, attended_on: d.today, start_minutes: Number(el.dataset.start), class_series_id: el.dataset.series || null }, next);
+        await render();
+        root.querySelector(`[data-action="att-quick"][data-course="${el.dataset.course}"][data-start="${el.dataset.start}"][data-status="${el.dataset.status}"]`)?.focus();
       } catch (err) {
         console.error(err);
         toast(t('v3.saveError'), { kind: 'error' });

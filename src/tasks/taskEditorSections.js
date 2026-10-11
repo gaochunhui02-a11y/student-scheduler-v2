@@ -325,3 +325,21 @@ registerTaskEditorSection({
     };
   },
 });
+
+// ---------------- break it down (V4-G) ----------------
+registerTaskEditorSection({
+  id: 'breakdown',
+  render(container, { task }) {
+    if (!task || task.done) return {};
+    const btn = h('button', { type: 'button', class: 'btn btn--secondary btn--sm' });
+    btn.innerHTML = icon('branch');
+    btn.appendChild(h('span', {}, t('breakdown.open')));
+    btn.addEventListener('click', async () => {
+      const [{ closeAllDrawers }, { openBreakdown }] = await Promise.all([import('../ui/drawer.js'), import('./breakdownUI.js')]);
+      closeAllDrawers();
+      openBreakdown(task);
+    });
+    container.appendChild(h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('breakdown.sectionTitle')), h('p', { class: 'field-hint' }, t('breakdown.sectionHint')), btn));
+    return {};
+  },
+});

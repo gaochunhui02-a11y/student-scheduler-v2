@@ -46,6 +46,7 @@ export const TABLE_DEFAULTS = {
   goal_progress_log: () => ({ logged_on: new Date().toISOString().slice(0, 10), note: '' }),
   routines: () => ({ space_id: null, goal_id: null, notes: '', frequency: 'daily', days_of_week: [], weekly_target: 3, time_of_day: 'anytime', duration_minutes: null, start_date: new Date().toISOString().slice(0, 10), end_date: null, paused: false, paused_at: null, archived: false, sort_order: 0 }),
   routine_completions: () => ({ status: 'done', note: '' }),
+  attendance_records: () => ({ class_series_id: null, status: 'present', note: '' }),
   courses: () => ({ space_id: null, semester_id: null, code: null, instructor: null, color: null, location: null, notes: '', target_grade: null, credits: null, archived: false, sort_order: 0 }),
   grade_categories: () => ({ weight: 0, sort_order: 0 }),
   grade_items: () => ({ category_id: null, earned_points: null, due_date: null, counts: true, notes: '', sort_order: 0 }),
@@ -82,6 +83,8 @@ const CASCADES = [
   ['goal_milestones', 'goals', 'goal_id'],
   ['goal_progress_log', 'goals', 'goal_id'],
   ['routine_completions', 'routines', 'routine_id'],
+  // V4-G: attendance belongs to its course
+  ['attendance_records', 'courses', 'course_id'],
 ];
 const SET_NULLS = [
   ['schedule_items', 'study_subjects', 'source_subject_id'],
@@ -115,6 +118,7 @@ const SET_NULLS = [
   ['study_subjects', 'goals', 'goal_id'],
   ['projects', 'goals', 'goal_id'],
   ['routines', 'goals', 'goal_id'],
+  ['attendance_records', 'class_series', 'class_series_id'],
 ];
 
 function cmp(a, b) {

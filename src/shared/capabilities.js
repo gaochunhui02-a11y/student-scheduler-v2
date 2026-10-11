@@ -34,6 +34,7 @@ const PROBES = {
   goals: ['goal_progress_log', 'id, goal_id, value'],
   goalLinks: ['study_subjects', 'id, goal_id'],
   routines: ['routine_completions', 'id, routine_id, status'],
+  attendance: ['attendance_records', 'id, start_minutes, status'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -60,6 +61,7 @@ export const FEATURE_MIGRATIONS = {
   goals: '0022_goals.sql',
   goalLinks: '0022_goals.sql',
   routines: '0023_routines.sql',
+  attendance: '0024_attendance.sql',
 };
 
 let state = null;
