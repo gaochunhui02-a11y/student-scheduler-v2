@@ -15,10 +15,29 @@ import { capabilityFilter } from '../tasks/tasksData.js';
 import { getDailyMaxStudyMinutes, loadPlannedRange } from './loadData.js';
 import { dayWindow, mealIntervals, freeSlots, findSlot } from './rebalanceModel.js';
 import { buildWorkloadForecast } from './workloadModel.js';
-import { todayStr } from '../shared/dates.js';
+import { todayStr, dateRange } from '../shared/dates.js';
+import { loadEnergy } from '../planner/energyData.js';
+import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
+import { routineMinutesOn } from '../routines/routineModel.js';
+
+async function routineMinutesInRange(userId, today, end) {
+  if (!has('routines')) return {};
+  const [routines, completions] = await Promise.all([listRoutines(userId), listRecentCompletions(userId, today)]);
+  const out = {};
+  dateRange(today, end).forEach((d) => {
+    const m = routineMinutesOn(routines, completions, d);
+    if (m > 0) out[d] = m;
+  });
+  return out;
+}
 
 export async function loadForecastInput(userId, today, days) {
   const end = addDays(today, days - 1);
+  // V4-E: energy preferences + routine time (never block the forecast).
+  const [energy, routineMinutesByDate] = await Promise.all([
+    loadEnergy(userId).catch(() => null),
+    routineMinutesInRange(userId, today, end).catch(() => ({})),
+  ]);
   const [dailyMax, range, series, exceptions, rows, exams, topics] = await Promise.all([
     getDailyMaxStudyMinutes(userId).catch(() => 240),
     loadPlannedRange(userId, today, end),
@@ -47,7 +66,7 @@ export async function loadForecastInput(userId, today, days) {
     return [r.id, (root && root.due_date) || r.due_date || null];
   }));
   return {
-    input: { today, days, dailyMax, schedules: range.schedules, items: range.items, subjects: range.subjects, classes, series, exceptions, groups, exams, examPrepByExam },
+    input: { today, days, dailyMax, schedules: range.schedules, items: range.items, subjects: range.subjects, classes, series, exceptions, groups, exams, examPrepByExam, energy, routineMinutesByDate },
     dueBySubject,
   };
 }

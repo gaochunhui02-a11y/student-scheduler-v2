@@ -2,6 +2,15 @@ import { supabase } from '../lib/supabaseClient.js';
 import { tomorrowDateStr, addDaysToDateStr } from './dateUtils.js';
 import { aggregateScheduleHistory } from './history.js';
 import { extractPlanningFields, buildCopiedClassRows, buildCopiedSubjectRows } from './copySchedule.js';
+import { peekEnergy } from '../planner/energyData.js';
+import { defaultStudyPeriod } from '../planner/energyModel.js';
+
+// V4-E: the only non-default value a new day can get is the preferred study
+// period from the student's energy preferences (peak focus time).
+function newDayDefaults() {
+  const period = defaultStudyPeriod(peekEnergy());
+  return period === 'none' ? {} : { preferred_study_period: period };
+}
 
 export { tomorrowDateStr, addDaysToDateStr };
 
@@ -22,7 +31,8 @@ export async function getMostRecentScheduleDate(userId) {
 
 // Every date is its own independent schedule row (schedules.for_date is
 // unique per user — see supabase/schema.sql), fetched or created on demand.
-// A freshly created row gets only the table's own defaults — never copies
+// A freshly created row gets only the table's own defaults (plus, in V4, the
+// student's peak study period — see newDayDefaults) — never copies
 // classes/subjects/settings from any other date.
 export async function getOrCreateScheduleForDate(userId, forDate) {
   const { data: existing, error: fetchError } = await supabase
@@ -36,7 +46,9 @@ export async function getOrCreateScheduleForDate(userId, forDate) {
 
   const { data: created, error: insertError } = await supabase
     .from('schedules')
-    .insert({ user_id: userId, for_date: forDate })
+    // V4-E: a new day starts with the student's peak focus time as its
+    // preferred study period (only when one is set; the Planner can change it).
+    .insert({ user_id: userId, for_date: forDate, ...newDayDefaults() })
     .select()
     .single();
   if (insertError) throw insertError;

@@ -1199,6 +1199,7 @@ async function init(session) {
       { id: 'toggle-dark', group: 'commands', title: t('search.toggleDark'), keywords: ['theme', 'dark', 'light', 'night'], run: toggleDarkMode },
       { id: 'shortcuts', group: 'commands', title: t('search.shortcuts'), keywords: ['keyboard', 'keys', 'hotkeys'], run: openShortcutHelp },
       { id: 'focus-next', group: 'commands', title: t('search.focusNext'), keywords: ['focus', 'timer', 'pomodoro'], run: () => openPlannerForDate(todayDateStr()) },
+      { id: 'catch-up', group: 'commands', title: t('catchup.title'), keywords: ['missed', 'overdue', 'reschedule', 'catch up', 'carry over', 'behind'], run: async () => { const [{ loadToday }, { openCatchUp }] = await Promise.all([import('../today/todayData.js'), import('../planner/catchUpUI.js')]); const d = await loadToday(); openCatchUp(d.groups); } },
       { id: 'customize-nav', group: 'commands', title: t('nav.customize'), keywords: ['sidebar', 'modules', 'workspace', 'mode', 'navigation'], run: () => openSettingsTab('workspace') },
     ];
     // V4-A: switch space (the sidebar switcher does the work, so both stay in sync).

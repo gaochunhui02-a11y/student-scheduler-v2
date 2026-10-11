@@ -17,6 +17,7 @@ import { pickCurrentSemester, semesterProgress } from '../academics/semesterMode
 import { getDailyMaxStudyMinutes } from '../workload/loadData.js';
 import { todayStr } from '../shared/dates.js';
 import { fmtDate, fmtDateWithYear } from '../ui/format.js';
+import { renderEnergy } from './energySettings.js';
 import { buildShortcutList } from '../shared/shortcutList.js';
 import { exportBackup, prepareRestore, executeRestore } from '../backup/backupData.js';
 import { parseBackup, validateBackup, backupFilename, BACKUP_TABLES } from '../backup/backupModel.js';
@@ -119,7 +120,7 @@ async function renderAcademics(root) {
         const prefs = { ...((data && data.preferences) || {}), maxDailyStudyMinutes: value };
         const { error } = await supabase.from('profiles').update({ preferences: prefs }).eq('id', userId);
         if (error) throw error;
-        invalidate('prefs:');
+        invalidate('prefs');
         emitChange('preferences');
         msg.textContent = t('settings3.saved');
       } catch (err) {
@@ -336,6 +337,7 @@ export function initSettingsV3() {
   return {
     onTab(key) {
       if (key === 'academics' && panels.academics) renderAcademics(panels.academics);
+      if (key === 'planner') renderEnergy(document.getElementById('energySettings'));
       if (key === 'workspace' && panels.workspace) renderWorkspace(panels.workspace);
       if (key === 'keyboard' && panels.keyboard) renderKeyboard(panels.keyboard);
       if (key === 'about' && panels.about) renderAbout(panels.about);

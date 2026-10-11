@@ -384,3 +384,44 @@ Any combination is valid. Overdue depends only on the due date.
   device.
 - Quick capture understands only a trailing duration (no dates/priority
   parsing).
+
+### V4-E — Adaptive planner (done)
+
+**No migration.** Energy preferences live in `profiles.preferences.energy`.
+
+**Catch up on missed work (`src/planner/catchUp*.js`)** — confirm-first:
+- Finds open tasks with time left that were planned on a past day
+  (*missed*) or are past due and planned nowhere (*overdue*), and have no
+  part planned today or later. Deferred tasks are left alone.
+- Preview drawer: untick anything, choose "Start from Today / Tomorrow"
+  (tomorrow by default after 19:00), see each task's proposed day, Tight /
+  After its due date flags, and minutes kept in locked sessions. Nothing is
+  written until "Move N tasks".
+- Day choice = the "Plan my backlog" rules (earliest due first; first day
+  before the due date with room; else the roomiest day, Tight; else left
+  for the student) over the next 14 days' free capacity.
+- Exact minute accounting, same as the Planner's Carry Over: a task with
+  no blocks just moves; a task with past blocks keeps them (history stays
+  true) and gets one carry-forward part on the new day holding the
+  unfinished, unlocked block minutes (recorded as `carried_over_minutes`,
+  block marked missed) plus any minutes a past part asked for but never got
+  a block (that part is trimmed to what was blocked). Locked blocks are
+  never touched. Re-running Catch up never offers the same minutes twice.
+- Entry points: a banner on Today ("N tasks need a new day") and the
+  command palette ("Catch up on missed work").
+
+**Energy & capacity (Settings › Planner):**
+- Peak focus time → the preferred study period of newly created days
+  (existing days are never changed).
+- Lighter weekdays with a % of the daily limit → lower capacity in the
+  workload forecast (with a reason), Plan my backlog and Catch up.
+- Optional "count routine time against my daily study limit" (off by
+  default); routine minutes always appear as a forecast reason.
+- Fixed a V3 bug found here: `invalidate('prefs:')` never cleared the
+  `prefs:*` cache, so a new daily study limit only applied after a minute.
+
+**Known limitations (V4-E):**
+- Catch up assigns whole tasks to single days (no splitting across days);
+  sessions are built by the Planner's Generate on that day.
+- Peak time doesn't yet order hard vs easy tasks inside a day.
+- Tasks whose only past part is older than ~60 days aren't seen by Catch up.

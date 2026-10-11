@@ -20,6 +20,7 @@ import { setCompletion } from '../routines/routinesData.js';
 import { routinesForDay, computeStreak, completionMap } from '../routines/routineModel.js';
 import { loadToday } from './todayData.js';
 import { buildTodayLists, timelineStates, parseQuickTask, todaySummary } from './todayModel.js';
+import { countCatchUp, openCatchUp } from '../planner/catchUpUI.js';
 
 const REASON_KIND = { overdue: 'danger', dueToday: 'warning', highPriority: 'accent', planned: 'outline' };
 
@@ -83,6 +84,14 @@ export function initTodayPage() {
       <p class="sr-only" id="todayCaptureHint">${t('today.captureHint')}</p>
     </form>`;
 
+    // V4-E: missed / overdue work from past days → one confirm-first "Catch up".
+    const catchUpCount = countCatchUp(d.groups, d.today);
+    const catchUpBanner = catchUpCount ? html`<div class="notice notice--warning today-catchup">
+      ${raw(icon('repeat'))}
+      <div style="flex:1"><p class="notice-title">${tCount('catchup.bannerTitle', catchUpCount)}</p><p>${t('catchup.bannerBody')}</p></div>
+      ${button(t('catchup.open'), { variant: 'primary', size: 'sm', action: 'today-catchup' })}
+    </div>` : '';
+
     const topCard = html`<section class="card card-flush v4-flush today-top" aria-labelledby="todayTopHead">
       <div class="card-head"><div><h2 class="card-title" id="todayTopHead">${t('today.topTitle')}</h2><p class="card-subtitle">${t('today.topSub')}</p></div></div>
       ${lists.top.length ? html`<ol class="list today-top-list">${lists.top.map(({ group: g, reason }, i) => html`<li class="today-top-item">
@@ -140,7 +149,7 @@ export function initTodayPage() {
       })}</ul>` : html`<div class="card-body"><p class="muted small" style="margin:0">${t('routines.noneTodayTitle')}</p></div>`}
     </section>` : '';
 
-    setHtml(root, [head(d, summary), capture, html`<div class="today-columns">
+    setHtml(root, [head(d, summary), catchUpBanner, capture, html`<div class="today-columns">
       <div class="stack">${topCard}${plannedCard}${dueCard}${overdueCard}</div>
       <div class="stack">${scheduleCard}${routinesCard}</div>
     </div>`]);
@@ -171,6 +180,7 @@ export function initTodayPage() {
     const ctx = app();
     if (a === 'today-retry') render();
     else if (a === 'today-planner') ctx.openPlannerForDate(d ? d.today : undefined);
+    else if (a === 'today-catchup' && d) openCatchUp(d.groups, () => render());
     else if (a === 'do-today') {
       const g = d && d.groups.find((x) => x.id === el.dataset.task);
       if (!g) return;

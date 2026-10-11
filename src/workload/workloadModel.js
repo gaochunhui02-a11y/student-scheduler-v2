@@ -22,6 +22,7 @@
 // UI translates, so "why is Thursday busy?" always has an answer.
 
 import { dateRange, addDays, diffDays, dayOfWeek, clockToMinutes } from '../shared/dates.js';
+import { adjustedCapacity, isLightDay } from '../planner/energyModel.js';
 
 export const LEVELS = ['light', 'balanced', 'busy', 'overloaded'];
 const LONG_DAY_MINUTES = 600;
@@ -68,10 +69,13 @@ function spread(minutes, fromDate, toDate, dates) {
  * @param {Object} [p.examPrepByExam]     uncovered revision minutes per exam id
  * @param {string[]} [p.blockedDates]     scenario: days with no study possible
  * @param {number|null} [p.dailyMaxOverride] scenario: one limit for every day
+ * @param {object|null} [p.energy]        V4-E energy preferences (light days, count routines)
+ * @param {Object<string,number>} [p.routineMinutesByDate] V4-E routine minutes per day
  */
 export function buildWorkloadForecast({
   today, days = 7, dailyMax = 240, schedules = [], items = [], subjects = [], classes = [], series = [], exceptions = [],
   groups = [], exams = [], examPrepByExam = {}, blockedDates = [], dailyMaxOverride = null,
+  energy = null, routineMinutesByDate = {},
 }) {
   const dates = dateRange(today, addDays(today, days - 1));
   const scheduleByDate = new Map(schedules.map((s) => [s.for_date, s]));
@@ -160,13 +164,19 @@ export function buildWorkloadForecast({
     const day = out.get(d);
     const sched = scheduleByDate.get(d);
     const baseCap = dailyMaxOverride || (sched && sched.max_daily_study_minutes) || dailyMax;
-    const capacity = blocked.has(d) ? 0 : baseCap;
+    // V4-E: light days and (optionally) routine time lower the day's limit.
+    // A What-if override is an explicit limit and is used as is.
+    const routineMinutes = Math.round(routineMinutesByDate[d] || 0);
+    const lightDay = !dailyMaxOverride && isLightDay(energy, d);
+    const capacity = blocked.has(d) ? 0 : (energy && !dailyMaxOverride ? adjustedCapacity(baseCap, energy, d, routineMinutes) : baseCap);
     const studyMinutes = Math.max(day.studyBlocksMinutes, day.askedMinutes);
     const studyLoad = Math.round(studyMinutes + day.backlogMinutes + day.examPrepMinutes);
     const total = studyLoad + day.classMinutes;
     const level = classifyDay(studyLoad, capacity, total);
     const reasons = [];
     if (blocked.has(d)) reasons.push({ key: 'workload.reasonBlocked' });
+    if (lightDay && !blocked.has(d)) reasons.push({ key: 'workload.reasonLightDay', params: { pct: energy.lightPercent, time: capacity } });
+    if (routineMinutes > 0) reasons.push({ key: energy && energy.countRoutines ? 'workload.reasonRoutinesCounted' : 'workload.reasonRoutines', params: { time: routineMinutes } });
     if (studyMinutes) reasons.push({ key: 'workload.reasonStudy', params: { time: Math.round(studyMinutes) } });
     if (day.classMinutes) reasons.push({ key: 'workload.reasonClasses', params: { time: day.classMinutes, n: day.classes.length } });
     if (day.backlogMinutes >= 1) reasons.push({ key: 'workload.reasonBacklog', params: { time: Math.round(day.backlogMinutes), n: day.backlogTasks.length } });
@@ -186,6 +196,8 @@ export function buildWorkloadForecast({
       overBy: Math.max(0, studyLoad - capacity),
       spare: Math.max(0, capacity - studyLoad),
       blocked: blocked.has(d),
+      lightDay,
+      routineMinutes,
       isToday: d === today,
       reasons,
     };
