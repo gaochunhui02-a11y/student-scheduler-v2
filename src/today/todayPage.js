@@ -22,6 +22,10 @@ import { loadToday } from './todayData.js';
 import { buildTodayLists, timelineStates, parseQuickTask, todaySummary } from './todayModel.js';
 import { countCatchUp, openCatchUp } from '../planner/catchUpUI.js';
 import { reviewDue } from '../review/reviewModel.js';
+import { buildOfflineSnapshot, saveOfflineSnapshot, loadOfflineSnapshot, isOffline } from '../offline/offlineSnapshot.js';
+import { offlineSnapshotView } from '../offline/offlineView.js';
+import { todayStr } from '../shared/dates.js';
+import { openFocusTimer } from '../focus/focusTimer.js';
 import { quickMarkHtml } from '../attendance/attendanceUI.js';
 import { setAttendance } from '../attendance/attendanceData.js';
 import { toggleStatus } from '../attendance/attendanceModel.js';
@@ -65,12 +69,17 @@ export function initTodayPage() {
       d = await loadToday();
     } catch (err) {
       console.error('Could not load Today', err);
-      if (my === token) setHtml(root, [head(null), errorNotice('', { retryAction: 'today-retry' })]);
+      if (my !== token) return;
+      // V4-I: offline → the last saved read-only snapshot (if this device keeps one).
+      const snap = isOffline() ? loadOfflineSnapshot(app().userId) : null;
+      if (snap) setHtml(root, [head(null), offlineSnapshotView(snap, { today: todayStr(), retryAction: 'today-retry' })]);
+      else setHtml(root, [head(null), errorNotice('', { retryAction: 'today-retry' })]);
       return;
     }
     if (my !== token) return;
     last = d;
     paint(d);
+    if (!app().isDemo) saveOfflineSnapshot(app().userId, buildOfflineSnapshot({ ...d, todayEvents: d.events, routinesToday: routinesForDay(d.routines, d.completions, d.today) }, new Date().toISOString()));
   }
 
   function paint(d) {
@@ -109,7 +118,7 @@ export function initTodayPage() {
       ${lists.top.length ? html`<ol class="list today-top-list">${lists.top.map(({ group: g, reason }, i) => html`<li class="today-top-item">
           <span class="today-top-n" aria-hidden="true">${i + 1}</span>
           <div class="today-top-body">${taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: Boolean(g.courseId), blockedInfo: d.blocked.get(g.id), today: d.today })}
-            ${reason === 'overdue' ? '' : html`<span class="today-top-reason">${badge(t(`today.reason_${reason}`), REASON_KIND[reason])}</span>`}</div>
+            <span class="today-top-reason">${reason === 'overdue' ? '' : badge(t(`today.reason_${reason}`), REASON_KIND[reason])}${button(t('focusTimer.focus'), { size: 'sm', variant: 'ghost', action: 'focus-task', iconName: 'play', attrs: `data-task="${g.id}" aria-label="${t('focusTimer.focus')}: ${g.name}"` })}</span></div>
         </li>`)}</ol>` : html`<div class="card-body">${emptyState({ iconName: 'check', title: t('today.topEmptyTitle'), body: t('today.topEmpty'), compact: true })}</div>`}
     </section>`;
 
@@ -194,6 +203,10 @@ export function initTodayPage() {
     if (a === 'today-retry') render();
     else if (a === 'today-planner') ctx.openPlannerForDate(d ? d.today : undefined);
     else if (a === 'today-catchup' && d) openCatchUp(d.groups, () => render());
+    else if (a === 'focus-task' && d) {
+      const g = d.groups.find((x) => x.id === el.dataset.task);
+      if (g) openFocusTimer({ task: { id: g.root.id, name: g.name, remainingMinutes: g.remainingMinutes } });
+    }
     else if (a === 'do-today') {
       const g = d && d.groups.find((x) => x.id === el.dataset.task);
       if (!g) return;

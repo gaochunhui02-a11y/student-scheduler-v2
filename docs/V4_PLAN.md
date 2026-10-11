@@ -552,3 +552,42 @@ Demo Mode's `?premigration=` switch now simulates each V4 level
 **Known limitations (V4-H):** no rich-text editor (Markdown subset only),
 no note attachments / images (links only), the library isn't filtered by
 the space switcher, note templates are fixed.
+
+### V4-I — Search, focus, reminders, export, privacy, offline (done)
+
+**No migration.** (Read-only share links — planned as optional `0027` —
+are deferred to V4.1: they need token design, a public read path and their
+own security review, which doesn't fit "only if it stays small".)
+
+- **Search & palette:** goals, routines and notes are searchable (note
+  text included); scope prefixes `>` commands · `t:` tasks · `p:` projects
+  · `g:` goals · `n:` notes · `c:` courses · `r:` routines · `e:` exams;
+  new commands: Start a focus timer, Plan my backlog, Customize dashboard,
+  Catch up, Open Library, and "Mark done: <routine>" for routines due today.
+- **Focus timer:** focus on any task (Today's "Start here", the task
+  editor) or on nothing (palette). 15 / 25 / 50 min or custom, pause /
+  resume / stop / finish; timestamp-based clock (no drift), screen-reader
+  announcements at 10 / 5 / 1 minutes left, tab title shows the time.
+  Every session ≥ 1 minute is saved to focus history (Insights, Weekly
+  review) and can add its minutes to the task's time spent.
+- **Reminders (opt-in, Settings › Notifications):** routines still unticked
+  (morning 8:00, afternoon 13:00, evening 19:00, any time 18:00) and the
+  weekly review (Friday 17:00, until reviewed); each sent once per device.
+- **Export as files (Settings › Data):** tasks.csv, notes.md, routine log,
+  attendance and goal check-ins — CSV cells starting with = + - @ are
+  prefixed with ' (no formula injection). The JSON backup stays the
+  complete, restorable copy.
+- **Privacy (new Settings tab):** what's stored in the account vs this
+  device, no AI / no tracking / private by default, a switch to stop keeping
+  the offline copy (deleting it at once), and "Clear this device's app data"
+  (filters, layouts, reminder settings, offline copy — never account data or
+  the sign-in).
+- **Offline:** the read-only snapshot (v2) now includes today's routines
+  and is shown by the Today page as well as Home when the app opens without
+  a connection. Notes are never stored offline. Fixed in passing: the focus
+  dialog's first paint ran before its drawer existed (caught in QA).
+
+**Known limitations (V4-I):** reminders only fire while the app is open
+(no push server); the focus timer isn't shared across tabs; Account
+deletion still has to be requested (no self-service delete in this
+version); exports don't include boards (the JSON backup does).

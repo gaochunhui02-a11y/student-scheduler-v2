@@ -149,7 +149,7 @@ export function initHomeV3() {
     if (my !== token) return;
     last = d;
     draw(d);
-    if (!app().isDemo) saveOfflineSnapshot(app().userId, buildOfflineSnapshot(d, new Date().toISOString()));
+    if (!app().isDemo) saveOfflineSnapshot(app().userId, buildOfflineSnapshot({ ...d, routinesToday: routinesForDay(d.routines || [], d.completions || [], d.today) }, new Date().toISOString()));
   }
 
   function draw(d) {

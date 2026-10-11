@@ -57,10 +57,26 @@ export function scoreCommand(command, query) {
   return best;
 }
 
+// V4-I: an optional scope prefix narrows the palette to one kind of thing:
+//   ">" commands & pages · "t:" tasks · "p:" projects · "g:" goals ·
+//   "n:" notes · "c:" courses · "r:" routines · "e:" exams
+export const SCOPES = {
+  '>': ['create', 'navigate', 'commands', 'settings', 'spaces'],
+  't:': ['tasks'], 'p:': ['projects'], 'g:': ['goals'], 'n:': ['notes'], 'c:': ['courses'], 'r:': ['routines', 'routinesToday'], 'e:': ['exams'],
+};
+export function parseScope(query) {
+  const raw = String(query ?? '');
+  const trimmed = raw.replace(/^\s+/, '');
+  const prefix = Object.keys(SCOPES).find((p) => trimmed.toLowerCase().startsWith(p));
+  if (!prefix) return { groups: null, rest: raw };
+  return { groups: SCOPES[prefix], rest: trimmed.slice(prefix.length) };
+}
+
 // Matching commands, best first. An empty query returns every command in
 // its original order (the caller's order is the "suggested" order).
-export function filterCommands(commands, query, limit = 50) {
-  const list = (commands || []).filter((c) => c && c.title);
+export function filterCommands(commands, rawQuery, limit = 50) {
+  const { groups, rest: query } = parseScope(rawQuery);
+  const list = (commands || []).filter((c) => c && c.title && (!groups || groups.includes(c.group)));
   if (!normalizeForSearch(query)) return list.slice(0, limit);
   return list
     .map((c, index) => ({ c, index, score: scoreCommand(c, query) }))

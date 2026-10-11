@@ -12,7 +12,8 @@ import { listExams } from '../exams/examsData.js';
 import { listBoards } from '../board/boardData.js';
 import { listProjects, listProjectTaskRows } from '../projects/projectsData.js';
 import { listGoals } from '../goals/goalsData.js';
-import { listRoutines } from '../routines/routinesData.js';
+import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
+import { routinesForDay } from '../routines/routineModel.js';
 import { listNotes } from '../notes/notesData.js';
 
 let index = { courses: [], tasks: [], exams: [], series: [], boards: [], projects: [], goals: [], routines: [], notes: [] };
@@ -25,7 +26,7 @@ export async function refreshSearchIndex() {
   if (!ctx.userId) return index;
   pending = (async () => {
     const today = todayStr();
-    const [courses, windowRows, exams, series, boards, projects, projectRows, goals, routines, notes] = await Promise.all([
+    const [courses, windowRows, exams, series, boards, projects, projectRows, goals, routines, notes, completions] = await Promise.all([
       has('courses') ? listCourses(ctx.userId).catch(() => []) : [],
       listTaskRowsInWindow(ctx.userId, addDays(today, -30), addDays(today, 90)).catch(() => []),
       has('exams') ? listExams(ctx.userId).catch(() => []) : [],
@@ -36,13 +37,14 @@ export async function refreshSearchIndex() {
       listGoals(ctx.userId).catch(() => []),
       listRoutines(ctx.userId).catch(() => []),
       listNotes(ctx.userId).catch(() => []),
+      listRecentCompletions(ctx.userId, today).catch(() => []),
     ]);
     const byId = new Map(windowRows.map((r) => [r.id, r]));
     projectRows.forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, r); });
     const rows = [...byId.values()];
     // One entry per task (roots only — chunks of a multi-day task share it).
     const roots = rows.filter((r) => !r.origin_subject_id || !rows.some((x) => x.id === r.origin_subject_id));
-    index = { courses, tasks: roots, exams, series, boards, projects, goals, routines, notes };
+    index = { courses, tasks: roots, exams, series, boards, projects, goals, routines, notes, routinesToday: routinesForDay(routines, completions, today) };
     stale = false;
     pending = null;
     return index;

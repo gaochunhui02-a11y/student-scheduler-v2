@@ -18,6 +18,13 @@ import { getDailyMaxStudyMinutes } from '../workload/loadData.js';
 import { todayStr } from '../shared/dates.js';
 import { fmtDate, fmtDateWithYear } from '../ui/format.js';
 import { renderEnergy } from './energySettings.js';
+import { renderFileExports, renderPrivacy, renderV4Reminders } from './v4Settings.js';
+import { startV4Reminders } from '../notifications/v4Reminders.js';
+import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
+import { routinesForDay } from '../routines/routineModel.js';
+import { loadReviews } from '../review/reviewData.js';
+import { weekBounds } from '../review/reviewModel.js';
+import { minutesOfDay as nowMinutesOfDay, dayOfWeek as weekdayOf } from '../shared/dates.js';
 import { buildShortcutList } from '../shared/shortcutList.js';
 import { exportBackup, prepareRestore, executeRestore } from '../backup/backupData.js';
 import { parseBackup, validateBackup, backupFilename, BACKUP_TABLES } from '../backup/backupModel.js';
@@ -334,10 +341,29 @@ export function initSettingsV3() {
       body: t(`notifications.exam_${stage}`).replace('{name}', exam.name),
     }),
   });
+  // V4-I: routine + weekly review reminders (opt-in, see Settings › Notifications).
+  startV4Reminders({
+    load: async () => {
+      await probeCapabilities();
+      const uid = app().userId;
+      const today = todayStr();
+      const [routines, completions, reviews] = await Promise.all([
+        has('routines') ? listRoutines(uid) : [], has('routines') ? listRecentCompletions(uid, today) : [], loadReviews(uid).catch(() => ({})),
+      ]);
+      const weekStart = weekBounds(today).start;
+      return { today, dow: weekdayOf(today), nowMinutes: nowMinutesOfDay(), todayList: routinesForDay(routines, completions, today), weekStart, reviewed: Boolean(reviews[weekStart] && reviews[weekStart].doneAt) };
+    },
+    format: (kind, routine) => (kind === 'routine'
+      ? { title: t('reminders4.routineTitle'), body: t('reminders4.routineBody').replace('{name}', routine.title) }
+      : { title: t('reminders4.reviewTitle'), body: t('reminders4.reviewBody') }),
+  });
   return {
     onTab(key) {
       if (key === 'academics' && panels.academics) renderAcademics(panels.academics);
       if (key === 'planner') renderEnergy(document.getElementById('energySettings'));
+      if (key === 'data') renderFileExports(document.getElementById('settingsExportV4'));
+      if (key === 'privacy') renderPrivacy(document.getElementById('settingsPanel-privacy'));
+      if (key === 'notifications') renderV4Reminders(document.getElementById('v4ReminderSettings'));
       if (key === 'workspace' && panels.workspace) renderWorkspace(panels.workspace);
       if (key === 'keyboard' && panels.keyboard) renderKeyboard(panels.keyboard);
       if (key === 'about' && panels.about) renderAbout(panels.about);

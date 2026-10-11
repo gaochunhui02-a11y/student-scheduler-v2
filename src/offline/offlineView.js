@@ -45,6 +45,10 @@ export function offlineSnapshotView(s, { today, retryAction }) {
         <span class="muted">${g.dueDate ? fmtDue(g.dueDate, today) : ''}${g.remainingMinutes ? ` · ${fmtMinutes(g.remainingMinutes)}` : ''}</span>
       </li>`)}</ul>` : html`<p class="hint">${t('offline.noTasks')}</p>`}
     </section>
+    ${(s.routines || []).length ? html`<section>
+      <h3>${t('nav.routines')}</h3>
+      <ul>${s.routines.map((r) => html`<li><span>${r.title}</span><span class="muted">${r.done ? t('offline.done') : ''}</span></li>`)}</ul>
+    </section>` : ''}
     ${s.exams.length ? html`<section>
       <h3>${t('offline.exams')}</h3>
       <ul>${s.exams.map((x) => html`<li><span>${dot(x.courseId)} ${x.name}</span><span class="muted">${fmtDate(x.date)}</span></li>`)}</ul>

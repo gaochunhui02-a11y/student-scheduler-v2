@@ -8,6 +8,8 @@
 // stays on this device, and it is deliberately small.
 
 const PREFIX = 'student-scheduler-offline:';
+const ENABLED_KEY = 'student-scheduler-offline-copy'; // V4-I privacy switch (per device)
+const MAX_ROUTINES = 20;
 const MAX_TASKS = 25;
 const MAX_EXAMS = 8;
 const MAX_COURSES = 30;
@@ -35,12 +37,28 @@ export function buildOfflineSnapshot(d, savedAt) {
     .sort((a, b) => a.exam_date.localeCompare(b.exam_date))
     .slice(0, MAX_EXAMS)
     .map((x) => ({ name: str(x.name, 120), date: x.exam_date, courseId: known.has(x.course_id) ? x.course_id : null }));
-  return { v: 1, savedAt, date: d.today, timeline, tasks, courses, exams };
+  // V4-I (v2): today's routines, titles + ticked state only.
+  const routines = (d.routinesToday || []).slice(0, MAX_ROUTINES).map((x) => ({ title: str(x.routine ? x.routine.title : x.title, 120), done: (x.status || (x.done ? 'done' : null)) === 'done' }));
+  return { v: 2, savedAt, date: d.today, timeline, tasks, courses, exams, routines };
+}
+
+/** V4-I: is keeping an offline copy on this device allowed? (default yes) */
+export function offlineCopyEnabled() {
+  try { return localStorage.getItem(ENABLED_KEY) !== 'off'; } catch { return false; }
+}
+export function setOfflineCopyEnabled(on) {
+  try {
+    if (on) localStorage.removeItem(ENABLED_KEY);
+    else {
+      localStorage.setItem(ENABLED_KEY, 'off');
+      clearOfflineSnapshots();
+    }
+  } catch { /* storage blocked */ }
 }
 
 /** Pure: is a stored value a usable snapshot? */
 export function isValidSnapshot(s) {
-  return Boolean(s && s.v === 1 && typeof s.savedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date || '')
+  return Boolean(s && (s.v === 1 || s.v === 2) && typeof s.savedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date || '')
     && Array.isArray(s.timeline) && Array.isArray(s.tasks) && Array.isArray(s.courses) && Array.isArray(s.exams));
 }
 
@@ -51,7 +69,7 @@ export function isFreshSnapshot(s, now = Date.now(), maxAgeDays = SNAPSHOT_MAX_A
 }
 
 export function saveOfflineSnapshot(userId, snapshot) {
-  if (!userId) return;
+  if (!userId || !offlineCopyEnabled()) return;
   try {
     localStorage.setItem(PREFIX + userId, JSON.stringify(snapshot));
   } catch {

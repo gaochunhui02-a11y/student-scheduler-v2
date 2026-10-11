@@ -31,6 +31,7 @@ export function initCommandPalette({ getCommands, t }) {
     goals: 'search.groupGoals',
     routines: 'search.groupRoutines',
     notes: 'search.groupNotes',
+    routinesToday: 'search.groupRoutinesToday',
   };
 
   function build() {
@@ -164,7 +165,7 @@ export function initCommandPalette({ getCommands, t }) {
     commands = getCommands(mode) || [];
     returnFocusTo = document.activeElement;
     titleEl.textContent = t(mode === 'create' ? 'palette.quickAddTitle' : 'palette.title');
-    input.placeholder = t(mode === 'create' ? 'palette.quickAddPlaceholder' : 'palette.placeholder');
+    input.placeholder = t(mode === 'create' ? 'palette.quickAddPlaceholder' : 'palette.placeholderV4');
     input.setAttribute('aria-label', input.placeholder);
     input.value = '';
     selected = -1;

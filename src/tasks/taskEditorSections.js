@@ -326,6 +326,24 @@ registerTaskEditorSection({
   },
 });
 
+// ---------------- focus timer (V4-I) ----------------
+registerTaskEditorSection({
+  id: 'focus',
+  render(container, { task }) {
+    if (!task || task.done) return {};
+    const btn = h('button', { type: 'button', class: 'btn btn--secondary btn--sm' });
+    btn.innerHTML = icon('play');
+    btn.appendChild(h('span', {}, t('focusTimer.focusOnTask')));
+    btn.addEventListener('click', async () => {
+      const [{ closeAllDrawers }, { openFocusTimer }] = await Promise.all([import('../ui/drawer.js'), import('../focus/focusTimer.js')]);
+      closeAllDrawers();
+      openFocusTimer({ task: { id: task.root.id, name: task.name, remainingMinutes: task.remainingMinutes } });
+    });
+    container.appendChild(h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('focusTimer.title')), btn));
+    return {};
+  },
+});
+
 // ---------------- break it down (V4-G) ----------------
 registerTaskEditorSection({
   id: 'breakdown',

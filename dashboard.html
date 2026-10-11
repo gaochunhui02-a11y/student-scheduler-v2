@@ -913,6 +913,7 @@
           <button type="button" class="settings-tab" role="tab" id="settingsTab-notifications" aria-controls="settingsPanel-notifications" aria-selected="false" tabindex="-1" data-settings-tab="notifications" data-i18n="notifications.title">Notifications</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-calendar" aria-controls="settingsPanel-calendar" aria-selected="false" tabindex="-1" data-settings-tab="calendar" data-i18n="settings.calendarTitle">Calendar</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-data" aria-controls="settingsPanel-data" aria-selected="false" tabindex="-1" data-settings-tab="data" data-i18n="settings.tabData">Data</button>
+          <button type="button" class="settings-tab" role="tab" id="settingsTab-privacy" aria-controls="settingsPanel-privacy" aria-selected="false" tabindex="-1" data-settings-tab="privacy" data-i18n="privacy.tab">Privacy</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-keyboard" aria-controls="settingsPanel-keyboard" aria-selected="false" tabindex="-1" data-settings-tab="keyboard" data-i18n="settings3.tabKeyboard">Keyboard</button>
           <button type="button" class="settings-tab" role="tab" id="settingsTab-about" aria-controls="settingsPanel-about" aria-selected="false" tabindex="-1" data-settings-tab="about" data-i18n="settings3.tabAbout">About</button>
         </div>
@@ -1028,6 +1029,7 @@
 
             <p class="hint" data-i18n="notifications.limitationNote">Reminders only work while this app is open in a browser tab — they can't wake your device when it's fully closed.</p>
           </div>
+          <div id="v4ReminderSettings" class="v4-reminder-settings"></div>
         </div>
 
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-calendar" aria-labelledby="settingsTab-calendar" hidden>
@@ -1041,6 +1043,7 @@
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-data" aria-labelledby="settingsTab-data" hidden>
           <h2 data-i18n="settings.tabData">Data</h2>
           <div id="settingsBackupV3"></div>
+          <div id="settingsExportV4" class="settings-export-v4"></div>
           <div class="v3-hidden">
           <p class="hint" data-i18n="settings.exportDataHint">Download everything you've saved — schedules, classes, tasks, study blocks, boards — as one JSON file. Nothing is changed or deleted.</p>
           <button type="button" class="btn-secondary settings-inline-btn" id="settingsExportDataBtn" data-i18n="settings.exportData">Export my data</button>
@@ -1049,6 +1052,7 @@
           </div>
         </div>
 
+        <div class="card settings-panel" role="tabpanel" id="settingsPanel-privacy" aria-labelledby="settingsTab-privacy" hidden></div>
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-keyboard" aria-labelledby="settingsTab-keyboard" hidden></div>
         <div class="card settings-panel" role="tabpanel" id="settingsPanel-about" aria-labelledby="settingsTab-about" hidden></div>
       </section>
