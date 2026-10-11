@@ -11,6 +11,7 @@ export const ROUTES = {
   courses: 'coursesView',
   tasks: 'tasksView',
   projects: 'projectsView',
+  today: 'todayView',
   goals: 'goalsView',
   routines: 'routinesView',
   grades: 'gradesView',

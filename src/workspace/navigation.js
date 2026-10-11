@@ -13,6 +13,11 @@ export function applyNavigation(ws) {
   document.querySelectorAll('[data-module]').forEach((btn) => {
     btn.hidden = !visible.has(btn.dataset.module);
   });
+  // V4-D: the mobile "Today" tab opens the Today page when it's switched on,
+  // otherwise today's Planner (V3 behaviour).
+  document.querySelectorAll('[data-bottom-today]').forEach((btn) => {
+    btn.hidden = (btn.dataset.bottomToday === 'page') !== visible.has('today');
+  });
   document.querySelectorAll('[data-nav-section]').forEach((sec) => {
     const items = sec.querySelectorAll('.nav-item');
     sec.hidden = items.length > 0 && [...items].every((b) => b.hidden);

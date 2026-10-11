@@ -56,7 +56,7 @@ function headFor(subtitle = true) {
   });
 }
 
-async function loadAll() {
+export async function loadProjectsData() {
   const ctx = app();
   const today = todayStr();
   const [projects, milestones, rows, courses] = await Promise.all([
@@ -70,7 +70,7 @@ async function loadAll() {
   return { today, projects, milestones, groups, courses };
 }
 
-function progressOf(data, project) {
+export function projectProgressOf(data, project) {
   return computeProjectProgress(project, data.groups.filter((g) => g.projectId === project.id), data.milestones.filter((m) => m.project_id === project.id));
 }
 
@@ -104,7 +104,7 @@ export function initProjectsPage() {
     if (!last) setHtml(root, [headFor(), skeletonRows(3, 110)]);
     let data;
     try {
-      data = await loadAll();
+      data = await loadProjectsData();
     } catch (err) {
       console.error('Could not load projects', err);
       if (my === token) setHtml(root, [headFor(), errorNotice('', { retryAction: 'retry' })]);
@@ -134,7 +134,7 @@ export function initProjectsPage() {
       body = html`<div class="card">${emptyState({ iconName: 'search', title: t('projects.noneInFilter'), body: t('projects.noneInFilterBody'), compact: true })}</div>`;
     } else {
       body = html`<div class="project-grid">${visible.map((p) => {
-        const pr = progressOf(data, p);
+        const pr = projectProgressOf(data, p);
         const sp = spaceOf(p.space_id);
         return html`<a class="project-card${p.status === 'archived' ? ' is-archived' : ''}" href="#/projects/${p.id}" style="--c:${safeColor(sp && sp.color, '#335cff')}">
           <span class="project-card-top">

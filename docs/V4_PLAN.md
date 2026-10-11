@@ -341,3 +341,46 @@ Any combination is valid. Overdue depends only on the due date.
 - Pause history keeps only the current pause; the skipped back-fill is
   capped at 120 days.
 - Goal pace ignores weekends and breaks (straight calendar line).
+
+### V4-D — Today + customizable dashboard (done)
+
+**No migration.** The dashboard layout lives in `profiles.preferences.dashboard`
+(0017, merged with the other keys; a per-device copy is used without 0017).
+
+**Today page (`#/today`, `src/today/*`):**
+- Quick capture: "Read chapter 4 45m" adds a task planned for today (a
+  trailing 45m / 1h / 1.5h / 1h30 sets the time needed; default 30 min).
+- *Start here*: up to three suggested tasks with the reason shown —
+  overdue (oldest first) → due today → high priority planned today →
+  other planned today. Tasks blocked by a dependency are never suggested.
+  Deterministic and never stored.
+- *Planned today* (scheduled on today, incl. later parts of multi-day
+  tasks), *Due today* (due today but planned elsewhere or unscheduled —
+  never mixed with planned), *Overdue*, each with a one-click
+  **Do today** (plans the task on today; Undo restores its old day or the
+  backlog).
+- *Schedule*: today's classes, study sessions, imported events and exams
+  with past / now / next states and study progress; *Routines* checklist.
+- Sidebar "Today" (Home section) and the mobile bottom-bar Today tab open
+  this page when the Today module is on; otherwise (legacy V3 accounts) the
+  tab still opens today's Planner as before.
+
+**Customizable dashboard (`src/home/dashboardLayout.js`):**
+- Eleven widgets: Now & next, Top three, Today's progress, Due soon,
+  Routines today, This week's deadlines, Exams, Workload this week, Active
+  projects, Goals, Courses & semester.
+- Defaults per workspace mode (School / Work / Personal / Self-study /
+  Multiple). A legacy account that never customized sees exactly the V3
+  dashboard (same cards, order and section headings).
+- "Customize" drawer: checkbox per widget + Move up / Move down buttons
+  (keyboard and screen-reader friendly, no drag), Reset to default, Save.
+  Saving the default removes the stored key.
+- Widgets whose feature is missing (database not migrated) or whose module
+  is off are skipped; their data is only loaded when they are switched on.
+
+**Known limitations (V4-D):**
+- "Start here" is a suggestion; it can't be pinned or reordered by hand.
+- Widgets have fixed sizes (no resizing); order is per account, not per
+  device.
+- Quick capture understands only a trailing duration (no dates/priority
+  parsing).

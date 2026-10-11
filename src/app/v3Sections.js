@@ -12,6 +12,7 @@ import { initExamsPage } from '../exams/examsPage.js';
 import { initTasksPage } from '../tasks/tasksPage.js';
 import { initProjectsPage } from '../projects/projectsPage.js';
 import { initGoalsPage } from '../goals/goalsPage.js';
+import { initTodayPage } from '../today/todayPage.js';
 import { initRoutinesPage } from '../routines/routinesPage.js';
 import '../tasks/taskEditorSections.js';
 import '../resources/resourcesUI.js';
@@ -32,6 +33,7 @@ export function initV3Sections() {
     tasksView: initTasksPage(),
     projectsView: initProjectsPage(),
     goalsView: initGoalsPage(),
+    todayView: initTodayPage(),
     routinesView: initRoutinesPage(),
     gradesView: initGradesPage(),
     examsView: initExamsPage(),

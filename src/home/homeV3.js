@@ -33,6 +33,28 @@ import { listClassesForScheduleIds } from '../dashboard/data.js';
 import { listAllClassSeries, listAllClassSeriesExceptions } from '../academics/academicsData.js';
 import { buildOfflineSnapshot, saveOfflineSnapshot, loadOfflineSnapshot, isOffline } from '../offline/offlineSnapshot.js';
 import { offlineSnapshotView } from '../offline/offlineView.js';
+// V4-D: customizable widgets
+import { visibleWidgets } from './dashboardLayout.js';
+import { loadDashboardLayout, readLocalDashboard } from './dashboardPrefs.js';
+import { openDashboardCustomizer } from './dashboardCustomizer.js';
+import { isModuleEnabled } from '../workspace/modules.js';
+import { buildTodayLists } from '../today/todayModel.js';
+import { listRoutines, listRecentCompletions, setCompletion } from '../routines/routinesData.js';
+import { routinesForDay, computeStreak } from '../routines/routineModel.js';
+import { loadGoalsData, goalProgressOf } from '../goals/goalsPage.js';
+import { loadProjectsData, projectProgressOf } from '../projects/projectsPage.js';
+
+// Which widgets can render on this database / workspace.
+export function widgetAvailable(w, ws) {
+  if (w.needs === 'routines' && !has('routines')) return false;
+  if (w.needs === 'goals' && !(has('goals') && has('goalLinks'))) return false;
+  if (w.needs === 'projects' && !(has('projects') && has('projectLinks'))) return false;
+  if (w.module && !isModuleEnabled(ws, w.module)) return false;
+  return true;
+}
+function workspaceMode(ws) {
+  return ws && ws.mode ? ws.mode : 'legacy';
+}
 
 function greetingKey(now = new Date()) {
   const hour = now.getHours();
@@ -58,6 +80,7 @@ export function initHomeV3() {
   view.prepend(root);
   let token = 0;
   let last = null;
+  let layout = readLocalDashboard(app().userId);
 
   async function load() {
     const ctx = app();
@@ -92,12 +115,20 @@ export function initHomeV3() {
         classes, series, exceptions, subjects: forecast.input.subjects, groups, exams, courses,
       }).filter((e) => !e.allDay && (e.kind === 'class' || e.kind === 'study' || e.kind === 'external' || e.kind === 'exam'));
     }
-    // Optional enrichments — never block the dashboard.
-    const [grades, sessions] = await Promise.all([
+    // Optional enrichments — never block the dashboard. V4-D widgets load
+    // their data only when they are switched on.
+    layout = await loadDashboardLayout(ctx.userId).catch(() => layout);
+    const ws = ctx.workspace();
+    const want = new Set(visibleWidgets(layout, workspaceMode(ws), (w) => widgetAvailable(w, ws)).map((w) => w.id));
+    const [grades, sessions, routines, completions, goalsData, projectsData] = await Promise.all([
       has('grades') ? loadGradeData(ctx.userId).catch(() => null) : null,
       has('focusSessions') ? listFocusSessions(ctx.userId).catch(() => []) : [],
+      want.has('routines') ? listRoutines(ctx.userId).catch(() => []) : [],
+      want.has('routines') ? listRecentCompletions(ctx.userId, today).catch(() => []) : [],
+      want.has('goals') ? loadGoalsData().catch(() => null) : null,
+      want.has('projects') ? loadProjectsData().catch(() => null) : null,
     ]);
-    return { today, groups, blocked, courses: sortCourses(courses).filter((c) => !c.archived), exams, topics, semester: pickCurrentSemester(semesters, today), days, risks, todayEvents, grades, sessions };
+    return { today, groups, blocked, courses: sortCourses(courses).filter((c) => !c.archived), exams, topics, semester: pickCurrentSemester(semesters, today), days, risks, todayEvents, grades, sessions, routines, completions, goalsData, projectsData };
   }
 
   async function render() {
@@ -146,6 +177,7 @@ export function initHomeV3() {
         <p class="page-subtitle">${summaryLine}</p>
       </div>
       <div class="page-head-actions">
+        ${button(t('dash.customize'), { variant: 'ghost', action: 'home-customize', iconName: 'sliders' })}
         ${button(t('palette.quickAdd'), { variant: 'secondary', action: 'home-quickadd', iconName: 'plus' })}
         ${button(t('home3.openToday'), { variant: 'primary', action: 'home-planner', iconName: 'arrowRight' })}
       </div>
@@ -277,13 +309,64 @@ export function initHomeV3() {
       </div>
     </section>`;
 
-    setHtml(root, html`${hero}
+    // ---------------- V4-D widgets ----------------
+    const lists = buildTodayLists(d.groups, d.today, { blocked: d.blocked });
+    const top3Card = html`<section class="card home3-top3">
+      <div class="card-head"><h2 class="card-title">${t('dash.w_top3')}</h2><a class="card-link" href="#/today">${t('today.open')}</a></div>
+      ${lists.top.length ? html`<ol class="list today-top-list">${lists.top.map(({ group: g, reason }, i) => html`<li class="list-row task-row" data-task-id="${g.id}">
+          <span class="today-top-n" aria-hidden="true">${i + 1}</span>
+          <span class="list-row-main"><span class="list-row-title">${g.name}</span><span class="list-row-meta">${badge(t(`today.reason_${reason}`), reason === 'overdue' ? 'danger' : reason === 'dueToday' ? 'warning' : 'outline')}${g.remainingMinutes ? html`<span>${fill('tasks.leftShort', { time: fmtMinutes(g.remainingMinutes) })}</span>` : ''}</span></span>
+          ${has('taskExtensions') ? html`<button type="button" class="task-check" data-action="home-done" aria-label="${t('tasks.markDone')}: ${g.name}">${raw(icon('check'))}</button>` : ''}
+        </li>`)}</ol>` : html`<p class="muted small" style="margin:0">${t('today.topEmpty')}</p>`}
+    </section>`;
+    const dayRoutines = routinesForDay(d.routines || [], d.completions || [], d.today);
+    const routinesCard = html`<section class="card home3-routines">
+      <div class="card-head"><h2 class="card-title">${t('dash.w_routines')}</h2><a class="card-link" href="#/routines">${t('common.viewAll')}</a></div>
+      ${dayRoutines.length ? html`<ul class="list">${dayRoutines.slice(0, 6).map(({ routine: r, status }) => {
+          const sk = computeStreak(r, d.completions, d.today);
+          return html`<li class="list-row routine-row${status ? ` is-${status}` : ''}">
+            <button type="button" class="task-check${status === 'done' ? ' is-checked' : ''}" data-action="home-routine" data-routine="${r.id}" aria-pressed="${status === 'done' ? 'true' : 'false'}" aria-label="${status === 'done' ? t('routines.untick') : t('routines.tick')}: ${r.title}">${raw(icon('check'))}</button>
+            <span class="list-row-main"><span class="list-row-title">${r.title}</span><span class="list-row-meta">${status === 'skipped' ? t('routines.skipped') : ''}${sk.current ? html`<span class="routine-streak">${raw(icon('flame'))}${tCount(sk.unit === 'week' ? 'routines.streakWeeks' : 'routines.streakDays', sk.current)}</span>` : ''}</span></span>
+          </li>`;
+        })}</ul>` : html`<p class="muted small" style="margin:0">${t('routines.noneTodayTitle')}</p>`}
+    </section>`;
+    const goalRows = d.goalsData ? d.goalsData.goals.filter((g) => g.status === 'active').map((g) => ({ g, ...goalProgressOf(d.goalsData, g) })).slice(0, 4) : [];
+    const goalsCard = html`<section class="card home3-goals">
+      <div class="card-head"><h2 class="card-title">${t('dash.w_goals')}</h2><a class="card-link" href="#/goals">${t('common.viewAll')}</a></div>
+      ${goalRows.length ? html`<ul class="list dash-progress-list">${goalRows.map(({ g, pr, pace }) => html`<li><a class="dash-progress-row" href="#/goals/${g.id}">
+          <span class="row-between"><span class="list-row-title">${g.title}</span><span class="small tabular">${pr.percent}%</span></span>
+          ${progressBar(pr.fraction, { thin: true, label: t('goals.progressLabel').replace('{n}', String(pr.percent)) })}
+          ${pace ? html`<span class="small muted">${t(`goals.pace_${pace.state}`)}</span>` : ''}
+        </a></li>`)}</ul>` : html`<p class="muted small" style="margin:0">${t('dash.noGoals')}</p>`}
+    </section>`;
+    const projRows = d.projectsData ? d.projectsData.projects.filter((p) => p.status === 'active').map((p) => ({ p, pr: projectProgressOf(d.projectsData, p) })).sort((a, b) => String(a.p.due_date || '9999').localeCompare(String(b.p.due_date || '9999'))).slice(0, 4) : [];
+    const projectsCard = html`<section class="card home3-projects">
+      <div class="card-head"><h2 class="card-title">${t('dash.w_projects')}</h2><a class="card-link" href="#/projects">${t('common.viewAll')}</a></div>
+      ${projRows.length ? html`<ul class="list dash-progress-list">${projRows.map(({ p, pr }) => html`<li><a class="dash-progress-row" href="#/projects/${p.id}">
+          <span class="row-between"><span class="list-row-title">${p.title}</span><span class="small tabular">${pr.percent}%</span></span>
+          ${progressBar(pr.percent / 100, { thin: true, label: t('projects.progressLabel').replace('{n}', String(pr.percent)) })}
+          ${p.due_date ? html`<span class="small muted">${fmtDue(p.due_date, d.today)}</span>` : ''}
+        </a></li>`)}</ul>` : html`<p class="muted small" style="margin:0">${t('dash.noProjects')}</p>`}
+    </section>`;
+
+    const cards = { now: nowCard, top3: top3Card, progress: progressCard, urgent: urgentCard, routines: routinesCard, deadlines: deadlinesCard, exams: examsCard, headsUp: headsUpCard, projects: projectsCard, goals: goalsCard, overview: overviewCard };
+    const ws = ctx.workspace();
+    const mode = workspaceMode(ws);
+    // A V3 account that never customized keeps the exact V3 layout (three sections).
+    if (!layout && mode === 'legacy') {
+      setHtml(root, html`${hero}
       <p class="section-label home3-section">${t('home3.sectionToday')}</p>
       <div class="home3-grid">${nowCard}${progressCard}${urgentCard}</div>
       <p class="section-label home3-section">${t('home3.sectionUpcoming')}</p>
       <div class="home3-grid">${deadlinesCard}${examsCard}${headsUpCard}</div>
       <p class="section-label home3-section">${t('home3.sectionOverview')}</p>
       ${overviewCard}`);
+      return;
+    }
+    const widgets = visibleWidgets(layout, mode, (w) => widgetAvailable(w, ws));
+    setHtml(root, html`${hero}
+      ${widgets.length ? html`<div class="home3-grid dash-grid">${widgets.map((w) => html`<div class="dash-widget dash-widget--${w.size}" data-widget="${w.id}">${cards[w.id]}</div>`)}</div>`
+        : html`<section class="card">${emptyState({ iconName: 'sliders', title: t('dash.emptyTitle'), body: t('dash.emptyBody'), actions: button(t('dash.customize'), { variant: 'primary', action: 'home-customize' }) })}</section>`}`);
   }
 
   on(root, 'click', '[data-action]', async (e, el) => {
@@ -291,6 +374,22 @@ export function initHomeV3() {
     const ctx = app();
     if (a === 'home-retry') render();
     else if (a === 'home-quickadd') ctx.openQuickAdd();
+    else if (a === 'home-customize') {
+      const ws = ctx.workspace();
+      openDashboardCustomizer({ layout, mode: workspaceMode(ws), isAvailable: (w) => widgetAvailable(w, ws), onSaved: (next) => { layout = next; render(); } });
+    } else if (a === 'home-routine') {
+      const r = last && (last.routines || []).find((x) => x.id === el.dataset.routine);
+      if (!r) return;
+      const current = (last.completions || []).find((c) => c.routine_id === r.id && c.completed_on === last.today);
+      try {
+        await setCompletion(ctx.userId, r.id, last.today, current && current.status === 'done' ? null : 'done');
+        await render();
+        root.querySelector(`[data-action="home-routine"][data-routine="${r.id}"]`)?.focus();
+      } catch (err) {
+        console.error(err);
+        toast(t('v3.saveError'), { kind: 'error' });
+      }
+    }
     else if (a === 'home-planner') ctx.openPlannerForDate(todayStr());
     else if (a === 'home-add-course') {
       const { openCourseEditor } = await import('../courses/courseEditor.js');
@@ -320,7 +419,7 @@ export function initHomeV3() {
   });
 
   onChange((topic) => {
-    if (!view.hidden && ['tasks', 'exams', 'courses', 'grades'].includes(topic)) render();
+    if (!view.hidden && ['tasks', 'exams', 'courses', 'grades', 'routines', 'goals', 'projects', 'dashboard', 'workspace'].includes(topic)) render();
   });
 
   return { onShow: () => render() };

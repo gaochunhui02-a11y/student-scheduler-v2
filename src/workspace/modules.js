@@ -18,7 +18,7 @@ export const SECTIONS = ['home', 'plan', 'work', 'academics', 'organize', 'revie
 // switched off (the app is unusable without them).
 export const MODULES = [
   { id: 'home', v3: true, section: 'home', view: 'analyticsView', labelKey: 'nav.home', built: true, core: true },
-  { id: 'today', section: 'home', view: 'todayView', labelKey: 'nav.today', built: false },
+  { id: 'today', section: 'home', view: 'todayView', labelKey: 'nav.today', built: true },
   { id: 'planner', v3: true, section: 'plan', view: 'plannerForm', labelKey: 'nav.planner', built: true, core: true },
   { id: 'week', v3: true, section: 'plan', view: 'weekView', labelKey: 'nav.week', built: true },
   { id: 'calendar', v3: true, section: 'plan', view: 'calendarView', labelKey: 'nav.calendar', built: true },

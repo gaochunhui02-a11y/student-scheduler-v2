@@ -62,7 +62,7 @@ function headFor() {
   });
 }
 
-async function loadAll() {
+export async function loadGoalsData() {
   const ctx = app();
   const today = todayStr();
   const projectsOn = has('projects') && has('projectLinks');
@@ -99,7 +99,7 @@ function linkedOf(data, goal) {
   };
 }
 
-function progressOf(data, goal) {
+export function goalProgressOf(data, goal) {
   const l = linkedOf(data, goal);
   const pr = computeGoalProgress(goal, { tasks: l.tasks, projects: l.projectInputs, milestones: l.milestones, logs: l.logs });
   return { pr, l, pace: goalPace(goal, pr, data.today) };
@@ -140,7 +140,7 @@ export function initGoalsPage() {
     if (!last) setHtml(root, [headFor(), skeletonRows(3, 110)]);
     let data;
     try {
-      data = await loadAll();
+      data = await loadGoalsData();
     } catch (err) {
       console.error('Could not load goals', err);
       if (my === token) setHtml(root, [headFor(), errorNotice('', { retryAction: 'retry' })]);
@@ -171,7 +171,7 @@ export function initGoalsPage() {
       body = html`<div class="card">${emptyState({ iconName: 'search', title: t('goals.noneInFilter'), body: t('goals.noneInFilterBody'), compact: true })}</div>`;
     } else {
       body = html`<div class="project-grid">${visible.map((g) => {
-        const { pr, pace } = progressOf(data, g);
+        const { pr, pace } = goalProgressOf(data, g);
         const sp = spaceOf(g.space_id);
         const next = nextGoalMilestone(data.milestones.filter((m) => m.goal_id === g.id));
         return html`<a class="project-card goal-card${g.status === 'archived' ? ' is-archived' : ''}" href="#/goals/${g.id}" style="--c:${safeColor(sp && sp.color, '#7c5cff')}">
@@ -214,7 +214,7 @@ export function initGoalsPage() {
 
   // ---------------- detail ----------------
   function renderDetail(goal, data) {
-    const { pr, l, pace } = progressOf(data, goal);
+    const { pr, l, pace } = goalProgressOf(data, goal);
     const sp = spaceOf(goal.space_id);
     const courseById = new Map(data.courses.map((c) => [c.id, c]));
     const archived = goal.status === 'archived';
@@ -370,7 +370,7 @@ export function initGoalsPage() {
         render();
       });
     } else if (a === 'check-in' && goal) {
-      const { pr } = progressOf(data, goal);
+      const { pr } = goalProgressOf(data, goal);
       openCheckInEditor({ goal, current: pr.value, onSaved: () => render() });
     } else if (a === 'delete-log') {
       const ok = await confirmAction({ title: t('goals.deleteCheckInTitle'), message: t('goals.deleteCheckInBody'), confirmLabel: t('common.delete'), danger: true });

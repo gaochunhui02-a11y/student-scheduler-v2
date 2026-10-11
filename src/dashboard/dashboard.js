@@ -427,6 +427,7 @@ async function init(session) {
     document.getElementById('examsView'),
     document.getElementById('projectsView'), // V4-B
     document.getElementById('goalsView'), // V4-C
+    document.getElementById('todayView'), // V4-D
     document.getElementById('routinesView'), // V4-C
     document.getElementById('semesterView'),
   ].filter(Boolean);
@@ -1176,6 +1177,7 @@ async function init(session) {
     const navigate = [
       go('open-today', 'search.openToday', () => openPlannerForDate(todayDateStr()), ['today', 'planner', 'schedule']),
       go('open-home', 'palette.openHome', () => activateView('analyticsView'), ['dashboard', 'home']),
+      go('open-today-page', 'search.openTodayPage', () => activateView('todayView'), ['today', 'focus', 'top three', 'due today']),
       go('open-planner', 'palette.openPlanner', () => activatePlannerScroll('plannerForm'), ['schedule', 'plan', 'day']),
       go('open-week', 'palette.openWeek', () => activateView('weekView'), ['week view', 'forecast', 'workload']),
       go('open-semester', 'search.openSemester', () => activateView('semesterView'), ['term', 'semester']),
