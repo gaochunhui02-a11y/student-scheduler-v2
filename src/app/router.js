@@ -12,6 +12,7 @@ export const ROUTES = {
   tasks: 'tasksView',
   projects: 'projectsView',
   today: 'todayView',
+  review: 'reviewView',
   goals: 'goalsView',
   routines: 'routinesView',
   grades: 'gradesView',

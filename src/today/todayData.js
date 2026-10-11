@@ -13,11 +13,12 @@ import { loadForecastInput } from '../workload/workloadData.js';
 import { buildCalendarEvents } from '../calendar/calendarEvents.js';
 import { listClassesForScheduleIds } from '../dashboard/data.js';
 import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
+import { loadReviews } from '../review/reviewData.js';
 
 export async function loadToday() {
   const ctx = app();
   const today = todayStr();
-  const [rows, courses, exams, forecast, deps, routines, completions] = await Promise.all([
+  const [rows, courses, exams, forecast, deps, routines, completions, reviews] = await Promise.all([
     listTaskRowsInWindow(ctx.userId, addDays(today, -60), addDays(today, 45)),
     has('courses') ? listCourses(ctx.userId).catch(() => []) : [],
     has('exams') ? listExams(ctx.userId).catch(() => []) : [],
@@ -25,6 +26,7 @@ export async function loadToday() {
     listDependencies(ctx.userId).catch(() => []),
     has('routines') ? listRoutines(ctx.userId).catch(() => []) : [],
     has('routines') ? listRecentCompletions(ctx.userId, today).catch(() => []) : [],
+    loadReviews(ctx.userId).catch(() => ({})),
   ]);
   const blocks = await listBlocksForSubjectIds(rows.map((r) => r.id)).catch(() => []);
   const todayScheduleIds = new Set(rows.filter((r) => r.for_date === today).map((r) => r.schedule_id));
@@ -43,5 +45,5 @@ export async function loadToday() {
       classes, series, exceptions, subjects: forecast.input.subjects, groups, exams, courses,
     }).filter((e) => !e.allDay && ['class', 'study', 'external', 'exam'].includes(e.kind));
   }
-  return { today, groups, blocked, courses, exams, events, routines, completions };
+  return { today, groups, blocked, courses, exams, events, routines, completions, reviews };
 }

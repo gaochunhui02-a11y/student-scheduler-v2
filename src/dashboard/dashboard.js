@@ -428,6 +428,7 @@ async function init(session) {
     document.getElementById('projectsView'), // V4-B
     document.getElementById('goalsView'), // V4-C
     document.getElementById('todayView'), // V4-D
+    document.getElementById('reviewView'), // V4-F
     document.getElementById('routinesView'), // V4-C
     document.getElementById('semesterView'),
   ].filter(Boolean);
@@ -1192,6 +1193,7 @@ async function init(session) {
       go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
       go('open-history', 'palette.openHistory', () => activateView('historyView'), ['past']),
       go('open-insights', 'palette.openInsights', () => activateView('insightsView'), ['analytics', 'stats']),
+      go('open-review', 'search.openReview', () => activateView('reviewView'), ['weekly review', 'reflect', 'retrospective', 'planned vs actual']),
       go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics']),
       go('search-tasks', 'palette.searchTasks', focusTaskSearch, ['find', 'filter']),
     ];

@@ -425,3 +425,41 @@ Any combination is valid. Overdue depends only on the due date.
   sessions are built by the Planner's Generate on that day.
 - Peak time doesn't yet order hard vs easy tasks inside a day.
 - Tasks whose only past part is older than ~60 days aren't seen by Catch up.
+
+### V4-F — Productivity intelligence (done)
+
+**No migration.** Weekly reflections live in `profiles.preferences.reviews`
+(newest 26 weeks, 1000 characters per answer).
+
+**Weekly review (`#/review`, `#/review/<monday>`, `src/review/*`):**
+- Tiles: studied vs planned (follow-through %), focus time and sessions,
+  tasks done / slipped, routine days kept.
+- Planned vs actual per day (planned blocks, completed minutes incl.
+  partial, focused minutes from focus sessions) as accessible bars (each
+  day has a text label) — "no rate" instead of 0% when nothing was planned.
+- Where the time went: planned vs done per course or per project.
+- Wins (tasks completed that week, project + goal milestones, goals
+  achieved), Slipped (due that week, still open) with Catch up, goal
+  check-ins (change or latest value), routines, and — for the current week
+  — next week's deadlines, exams and heavy days from the forecast.
+- Reflection: What went well / What got in the way / One focus for next
+  week; Save draft or Save & mark reviewed (first reviewed time kept).
+  Previous weeks can be browsed and reviewed.
+- Today shows "Your weekly review is ready" Friday–Sunday until the week
+  is marked reviewed (only when the Weekly review module is on — it is in
+  every mode's defaults; legacy accounts opt in).
+
+**Priority matrix (Tasks › Matrix):**
+- Open tasks of the current filters in Do now / Plan / Keep it short /
+  Later. Urgent = overdue or due within 2 days; Important = high priority —
+  both from existing fields, explained above the matrix.
+- "Important" / "Less important" moves a task between rows by changing its
+  priority (high ↔ medium), with Undo; columns follow the due date.
+- The List / Matrix choice is remembered per device.
+
+**Known limitations (V4-F):**
+- Planned vs actual counts generated study blocks only (tasks placed on a
+  day but never generated count as unplanned).
+- The matrix's urgency window (2 days) is fixed.
+- Reflections are private notes in preferences; they are not part of the
+  JSON backup yet.

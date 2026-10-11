@@ -9,7 +9,7 @@ import { todayStr, addDays, diffDays, startOfWeek, minutesOfDay } from '../share
 import { app, onChange } from '../app/context.js';
 import { html, raw, setHtml, on, h, debounce } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { pageHead, emptyState, button, skeletonRows, errorNotice, segmented, wireSegmented } from '../ui/components.js';
+import { pageHead, emptyState, button, badge, skeletonRows, errorNotice, segmented, wireSegmented } from '../ui/components.js';
 import { fmtMinutes, fmtWeekday, fmtDate } from '../ui/format.js';
 import { toast } from '../ui/toast.js';
 import { openDrawer, confirmAction } from '../ui/drawer.js';
@@ -18,7 +18,8 @@ import { sortCourses } from '../academics/courseModel.js';
 import { buildTaskGroups, sortTaskGroups } from './taskModel.js';
 import { computeBlockedState } from './dependencyModel.js';
 import { validateRuleFields, describeRuleDays } from './recurringModel.js';
-import { listDependencies, setTaskDone, listRecurrenceRules, saveRecurrenceRule, deleteRecurrenceRule, generateRecurringTasks } from './tasksData.js';
+import { listDependencies, setTaskDone, updateTask, listRecurrenceRules, saveRecurrenceRule, deleteRecurrenceRule, generateRecurringTasks } from './tasksData.js';
+import { QUADRANTS, URGENT_DAYS, buildMatrix, priorityForMove } from './priorityMatrix.js';
 import { openTaskEditor } from './taskEditor.js';
 import { taskRowHtml } from './taskRow.js';
 import { tagLabel } from './taskEditorSections.js';
@@ -31,6 +32,12 @@ import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
 import { listProjects, listProjectTaskRows } from '../projects/projectsData.js';
 
 const FILTER_KEY = 'student-scheduler-tasks-filters';
+const LAYOUT_KEY = 'student-scheduler-tasks-layout';
+const QUAD_KIND = { do: 'danger', plan: 'accent', quick: 'warning', later: 'outline' };
+
+function loadLayout() {
+  try { return localStorage.getItem(LAYOUT_KEY) === 'matrix' ? 'matrix' : 'list'; } catch { return 'list'; }
+}
 
 function loadFilters() {
   try {
@@ -52,6 +59,7 @@ export function initTasksPage() {
   if (!root) return null;
   let token = 0;
   let filters = loadFilters();
+  let layout = loadLayout(); // V4-F: list | priority matrix
   let last = null;
   let generatedToday = null;
 
@@ -153,11 +161,24 @@ export function initTasksPage() {
         ${['high', 'medium', 'low'].map((p) => html`<option value="${p}"${filters.priority === p ? raw(' selected') : ''}>${t(`taskFilter.priority${p[0].toUpperCase()}${p.slice(1)}`)}</option>`)}
       </select>
       <span class="toolbar-spacer"></span>
+      ${segmented('taskLayout', [{ value: 'list', label: t('matrix.layoutList') }, { value: 'matrix', label: t('matrix.layoutMatrix') }], layout, { label: t('matrix.layoutLabel') })}
       <span class="small muted">${filters.view === 'done' ? t('tasks.countDone').replace('{n}', String(filtered.length)) : t('tasks.countOpen').replace('{n}', String(filtered.length)).replace('{time}', fmtMinutes(remaining))}</span>
     </div>`;
 
     let body;
-    if (!data.groups.length) {
+    if (layout === 'matrix' && data.groups.length) {
+      const m = buildMatrix(filtered, data.today);
+      const open = filtered.filter((g) => !g.done).length;
+      body = html`<p class="hint matrix-hint">${t('matrix.explain').replace('{days}', String(URGENT_DAYS))}</p>
+      ${open ? html`<div class="matrix-grid" role="list">${QUADRANTS.map((q) => html`<section class="card card-flush v4-flush matrix-quad matrix-quad--${q}" role="listitem" aria-labelledby="quad-${q}">
+        <div class="card-head"><div><h2 class="card-title" id="quad-${q}">${t(`matrix.q_${q}`)} <span class="muted">${m[q].tasks.length || ''}</span></h2><p class="card-subtitle">${t(`matrix.h_${q}`)}</p></div>${m[q].minutes ? badge(fmtMinutes(m[q].minutes), QUAD_KIND[q]) : ''}</div>
+        ${m[q].tasks.length ? html`<div class="list">${m[q].tasks.map((g) => html`<div class="matrix-task">${taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: true, project: projectById.get(g.projectId), blockedInfo: data.blocked.get(g.id), today: data.today })}
+          <span class="matrix-move">${q === 'do' || q === 'plan'
+            ? button(t('matrix.notImportant'), { size: 'sm', variant: 'ghost', action: 'matrix-unimportant', iconName: 'chevronDown', attrs: `data-task="${g.id}" aria-label="${t('matrix.notImportant')}: ${g.name}"` })
+            : button(t('matrix.important'), { size: 'sm', variant: 'ghost', action: 'matrix-important', iconName: 'chevronUp', attrs: `data-task="${g.id}" aria-label="${t('matrix.important')}: ${g.name}"` })}</span>
+        </div>`)}</div>` : html`<div class="card-body"><p class="muted small" style="margin:0">${t('matrix.empty')}</p></div>`}
+      </section>`)}</div>` : html`<div class="card">${emptyState({ iconName: 'check', title: t('tasks.noneMatch'), body: t('tasks.noneMatchBody'), compact: true })}</div>`}`;
+    } else if (!data.groups.length) {
       body = html`<div class="card">${emptyState({ iconName: 'tasks', title: t('tasks.emptyTitle'), body: t('tasks.emptyBody'), actions: button(t('tasks.addTask'), { variant: 'primary', action: 'add-task', iconName: 'plus' }) })}</div>`;
     } else if (!filtered.length) {
       body = html`<div class="card">${emptyState({ iconName: 'check', title: filters.view === 'overdue' ? t('tasks.noneOverdue') : filters.view === 'today' ? t('tasks.noneToday') : t('tasks.noneMatch'), body: t('tasks.noneMatchBody'), compact: true })}</div>`;
@@ -171,6 +192,12 @@ export function initTasksPage() {
     }
     setHtml(root, [head || pageHead({ eyebrow: t('nav.sectionWork'), title: t('nav.tasks') }), spaceScopeNote(), toolbar, body]);
     wireSegmented(root, 'taskView', (v) => { filters.view = v; saveFilters(filters); draw(headCache); });
+    wireSegmented(root, 'taskLayout', (v) => {
+      layout = v;
+      try { localStorage.setItem(LAYOUT_KEY, v); } catch { /* per-viewer */ }
+      draw(headCache);
+      root.querySelector('[data-seg="taskLayout"] [aria-pressed="true"]')?.focus();
+    });
     const search = root.querySelector('#tasksSearch');
     search.addEventListener('input', debounce(() => {
       filters.search = search.value;
@@ -308,6 +335,24 @@ export function initTasksPage() {
   on(root, 'click', '[data-action]', async (e, el) => {
     const action = el.dataset.action;
     if (action === 'retry') render();
+    else if (action === 'matrix-important' || action === 'matrix-unimportant') {
+      const g = last && last.groups.find((x) => x.id === el.dataset.task);
+      const next = g && priorityForMove(g, action === 'matrix-important');
+      if (!next) return;
+      try {
+        await updateTask(g.root.id, { priority: next }, { refresh: false });
+        toast(t(action === 'matrix-important' ? 'matrix.movedImportant' : 'matrix.movedOther').replace('{name}', g.name), {
+          kind: 'success',
+          actionLabel: t('common.undo'),
+          onAction: async () => { await updateTask(g.root.id, { priority: g.priority }, { refresh: false }); render(); },
+        });
+        await render();
+        root.querySelector(`[data-task-id="${g.id}"] .task-open`)?.focus();
+      } catch (err) {
+        console.error(err);
+        toast(t('v3.saveError'), { kind: 'error' });
+      }
+    }
     else if (action === 'plan-backlog') {
       const scoped = filterTaskGroups(last.groups, { ...filters, view: 'unscheduled', space: currentSpaceFilter() }, last.today, new Map(last.courses.map((c) => [c.id, c])), new Map(last.projects.map((p) => [p.id, p])));
       const { openPlanBacklog } = await import('../planner/backlogUI.js');

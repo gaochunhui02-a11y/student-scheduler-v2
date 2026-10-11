@@ -21,6 +21,8 @@ import { routinesForDay, computeStreak, completionMap } from '../routines/routin
 import { loadToday } from './todayData.js';
 import { buildTodayLists, timelineStates, parseQuickTask, todaySummary } from './todayModel.js';
 import { countCatchUp, openCatchUp } from '../planner/catchUpUI.js';
+import { reviewDue } from '../review/reviewModel.js';
+import { isModuleEnabled } from '../workspace/modules.js';
 
 const REASON_KIND = { overdue: 'danger', dueToday: 'warning', highPriority: 'accent', planned: 'outline' };
 
@@ -92,6 +94,13 @@ export function initTodayPage() {
       ${button(t('catchup.open'), { variant: 'primary', size: 'sm', action: 'today-catchup' })}
     </div>` : '';
 
+    // V4-F: Friday–Sunday nudge until the week is reviewed (only where the module is on).
+    const reviewBanner = isModuleEnabled(app().workspace(), 'review') && reviewDue(d.reviews, d.today) ? html`<div class="notice notice--info today-catchup">
+      ${raw(icon('sparkle'))}
+      <div style="flex:1"><p class="notice-title">${t('today.reviewReadyTitle')}</p><p>${t('today.reviewReadyBody')}</p></div>
+      <a class="btn btn--secondary btn--sm" href="#/review"><span>${t('today.reviewOpen')}</span></a>
+    </div>` : '';
+
     const topCard = html`<section class="card card-flush v4-flush today-top" aria-labelledby="todayTopHead">
       <div class="card-head"><div><h2 class="card-title" id="todayTopHead">${t('today.topTitle')}</h2><p class="card-subtitle">${t('today.topSub')}</p></div></div>
       ${lists.top.length ? html`<ol class="list today-top-list">${lists.top.map(({ group: g, reason }, i) => html`<li class="today-top-item">
@@ -149,7 +158,7 @@ export function initTodayPage() {
       })}</ul>` : html`<div class="card-body"><p class="muted small" style="margin:0">${t('routines.noneTodayTitle')}</p></div>`}
     </section>` : '';
 
-    setHtml(root, [head(d, summary), catchUpBanner, capture, html`<div class="today-columns">
+    setHtml(root, [head(d, summary), catchUpBanner, reviewBanner, capture, html`<div class="today-columns">
       <div class="stack">${topCard}${plannedCard}${dueCard}${overdueCard}</div>
       <div class="stack">${scheduleCard}${routinesCard}</div>
     </div>`]);
