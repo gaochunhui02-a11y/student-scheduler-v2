@@ -29,6 +29,7 @@ import { computeGoalProgress, goalPace, filterGoals, sortGoals, nextGoalMileston
 import { openGoalEditor, openGoalMilestoneEditor, openCheckInEditor, openLinkProjectDialog } from './goalEditors.js';
 import { matchesSpace } from '../workspace/spacesModel.js';
 import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
+import { notesAndLinksCards } from '../notes/linkedPanels.js';
 
 const VIEWS = ['active', 'all', 'achieved', 'archived'];
 const FILTER_KEY = 'student-scheduler-goals-filter';
@@ -332,7 +333,12 @@ export function initGoalsPage() {
     setHtml(root, [header, summary, html`<div class="project-columns goal-columns">
       <div class="stack">${projectsCard}${tasksCard}</div>
       <div class="stack">${logsCard}${msCard}${routinesCard}</div>
-    </div>`]);
+    </div>`, html`<div class="project-columns lp-slot" data-lp-slot></div>`]);
+    root.dataset.goalId = goal.id;
+    notesAndLinksCards('goal_id', goal.id).then((frag) => {
+      const slot = root.querySelector('[data-lp-slot]');
+      if (slot && root.dataset.goalId === goal.id) setHtml(slot, frag);
+    }).catch((err) => console.error(err));
   }
 
   // ---------------- actions ----------------
@@ -421,7 +427,7 @@ export function initGoalsPage() {
   });
 
   onChange((topic) => {
-    if (!root.hidden && ['goals', 'projects', 'tasks', 'routines', 'spaces'].includes(topic)) render();
+    if (!root.hidden && ['goals', 'projects', 'tasks', 'routines', 'spaces', 'notes', 'resources'].includes(topic)) render();
   });
 
   return { onShow: (param) => render(param || null) };

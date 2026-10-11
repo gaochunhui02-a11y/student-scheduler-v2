@@ -429,6 +429,7 @@ async function init(session) {
     document.getElementById('goalsView'), // V4-C
     document.getElementById('todayView'), // V4-D
     document.getElementById('reviewView'), // V4-F
+    document.getElementById('notesView'), // V4-H
     document.getElementById('routinesView'), // V4-C
     document.getElementById('semesterView'),
   ].filter(Boolean);
@@ -1164,6 +1165,7 @@ async function init(session) {
       { id: 'new-task', group: 'create', title: t('search.newTask'), keywords: ['task', 'homework', 'assignment', 'study', 'todo'], run: () => openQuickAdd('task') },
       ...(hasCapability('projects') ? [{ id: 'new-project', group: 'create', title: t('search.newProject'), keywords: ['project', 'plan'], run: () => openQuickAdd('project') }] : []),
       ...(hasCapability('goals') ? [{ id: 'new-goal', group: 'create', title: t('search.newGoal'), keywords: ['goal', 'target', 'objective', 'outcome'], run: () => openQuickAdd('goal') }] : []),
+      ...(hasCapability('notes') ? [{ id: 'new-note', group: 'create', title: t('search.newNote'), keywords: ['note', 'notes', 'write', 'lecture notes'], run: () => openQuickAdd('note') }] : []),
       ...(hasCapability('routines') ? [{ id: 'new-routine', group: 'create', title: t('search.newRoutine'), keywords: ['routine', 'habit', 'daily', 'streak'], run: () => openQuickAdd('routine') }] : []),
       { id: 'new-course', group: 'create', title: t('search.newCourse'), keywords: ['course', 'class', 'subject'], run: () => openQuickAdd('course') },
       { id: 'new-exam', group: 'create', title: t('search.newExam'), keywords: ['exam', 'test', 'midterm', 'final'], run: () => openQuickAdd('exam') },
@@ -1193,6 +1195,8 @@ async function init(session) {
       go('open-board', 'palette.openBoard', () => activateView('boardView'), ['boards', 'projects']),
       go('open-history', 'palette.openHistory', () => activateView('historyView'), ['past']),
       go('open-insights', 'palette.openInsights', () => activateView('insightsView'), ['analytics', 'stats']),
+      go('open-notes', 'search.openNotes', () => activateView('notesView'), ['notes', 'notebook']),
+      go('open-library', 'search.openLibrary', () => activateView('notesView', 'library'), ['links', 'resources', 'library', 'bookmarks']),
       go('open-review', 'search.openReview', () => activateView('reviewView'), ['weekly review', 'reflect', 'retrospective', 'planned vs actual']),
       go('import-calendar', 'palette.importCalendar', () => openCalendarCard('calendarImportCard'), ['ics']),
       go('search-tasks', 'palette.searchTasks', focusTaskSearch, ['find', 'filter']),
@@ -1233,6 +1237,7 @@ async function init(session) {
       ...idx.courses.filter((c) => !c.archived).map((c) => ({ id: `course-${c.id}`, group: 'courses', title: c.code ? `${c.code} · ${c.name}` : c.name, hint: c.instructor || '', keywords: [c.instructor || '', c.location || ''], run: () => activateView('coursesView', c.id) })),
       ...(idx.projects || []).filter((p) => p.status !== 'archived').map((p) => ({ id: `project-${p.id}`, group: 'projects', title: p.title, hint: t(`projects.status_${p.status}`), keywords: ['project', p.description || ''], run: () => activateView('projectsView', p.id) })),
       ...(idx.goals || []).filter((g) => g.status !== 'archived').map((g) => ({ id: `goal-${g.id}`, group: 'goals', title: g.title, hint: t(`goals.status_${g.status}`), keywords: ['goal', g.description || ''], run: () => activateView('goalsView', g.id) })),
+      ...(idx.notes || []).filter((n) => !n.archived).map((n) => ({ id: `note-${n.id}`, group: 'notes', title: n.title || (n.body || '').split('\n')[0].replace(/^#+\s*/, '').slice(0, 80) || t('notes.untitled'), hint: t('nav.notes'), keywords: ['note', ...(n.tags || []), (n.body || '').slice(0, 300)], run: () => activateView('notesView', n.id) })),
       ...(idx.routines || []).filter((r) => !r.archived).map((r) => ({ id: `routine-${r.id}`, group: 'routines', title: r.title, hint: t('nav.routines'), keywords: ['routine', 'habit'], run: () => activateView('routinesView') })),
       ...idx.tasks.map((r) => ({ id: `task-${r.id}`, group: 'tasks', title: r.name, hint: [projectLabel(r.project_id), courseLabel(r.course_id), r.due_date ? formatDateLabel(r.due_date) : ''].filter(Boolean).join(' · '), keywords: (r.tags || []).concat(courseLabel(r.course_id), projectLabel(r.project_id)), run: () => openTaskById(r.id) })),
       ...idx.exams.map((e) => ({ id: `exam-${e.id}`, group: 'exams', title: e.name, hint: [courseLabel(e.course_id), formatDateLabel(e.exam_date)].filter(Boolean).join(' · '), keywords: [courseLabel(e.course_id)], run: () => activateView('examsView', e.id) })),

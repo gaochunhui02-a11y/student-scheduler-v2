@@ -30,6 +30,7 @@ export function initCommandPalette({ getCommands, t }) {
     projects: 'search.groupProjects',
     goals: 'search.groupGoals',
     routines: 'search.groupRoutines',
+    notes: 'search.groupNotes',
   };
 
   function build() {

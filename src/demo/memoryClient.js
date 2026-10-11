@@ -54,7 +54,8 @@ export const TABLE_DEFAULTS = {
   exam_topics: () => ({ difficulty: 2, confidence: 3, estimated_minutes: 60, completed_minutes: 0, status: 'not_started', sort_order: 0 }),
   task_dependencies: () => ({}),
   task_recurrence_rules: () => ({ course_id: null, priority: 'medium', tags: [], days_of_week: [], due_offset_days: 0, active: true }),
-  resources: () => ({ course_id: null, task_id: null, kind: 'link', notes: '' }),
+  resources: () => ({ course_id: null, task_id: null, kind: 'link', notes: '', project_id: null, goal_id: null, exam_id: null, space_id: null, in_library: false, favorite: false, tags: [] }),
+  notes: () => ({ space_id: null, course_id: null, project_id: null, goal_id: null, exam_id: null, task_id: null, title: '', body: '', tags: [], pinned: false, archived: false }),
   focus_sessions: () => ({ schedule_item_id: null, task_id: null, course_id: null, ended_at: null, planned_minutes: 0, actual_minutes: 0, outcome: 'completed', notes: '' }),
 };
 
@@ -85,6 +86,10 @@ const CASCADES = [
   ['routine_completions', 'routines', 'routine_id'],
   // V4-G: attendance belongs to its course
   ['attendance_records', 'courses', 'course_id'],
+  // V4-H: a link is deleted with its project / goal / exam (like course / task)
+  ['resources', 'projects', 'project_id'],
+  ['resources', 'goals', 'goal_id'],
+  ['resources', 'exams', 'exam_id'],
 ];
 const SET_NULLS = [
   ['schedule_items', 'study_subjects', 'source_subject_id'],
@@ -119,6 +124,14 @@ const SET_NULLS = [
   ['projects', 'goals', 'goal_id'],
   ['routines', 'goals', 'goal_id'],
   ['attendance_records', 'class_series', 'class_series_id'],
+  // V4-H: notes are never deleted with what they link to
+  ['resources', 'spaces', 'space_id'],
+  ['notes', 'spaces', 'space_id'],
+  ['notes', 'courses', 'course_id'],
+  ['notes', 'projects', 'project_id'],
+  ['notes', 'goals', 'goal_id'],
+  ['notes', 'exams', 'exam_id'],
+  ['notes', 'study_subjects', 'task_id'],
 ];
 
 function cmp(a, b) {

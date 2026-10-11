@@ -22,6 +22,7 @@ import { computeProjectProgress, filterProjects, sortProjects, sortProjectTasks,
 import { openProjectEditor, openMilestoneEditor } from './projectEditors.js';
 import { matchesSpace } from '../workspace/spacesModel.js';
 import { currentSpaceFilter, spaceScopeNote } from '../workspace/spaceScope.js';
+import { notesAndLinksCards } from '../notes/linkedPanels.js';
 
 const VIEWS = ['open', 'all', 'completed', 'archived'];
 const FILTER_KEY = 'student-scheduler-projects-filter';
@@ -255,8 +256,13 @@ export function initProjectsPage() {
       </li>`)}</ul>` : emptyState({ iconName: 'target', title: t('projects.noMilestonesTitle'), body: t('projects.noMilestonesBody'), compact: true })}
     </section>`;
 
-    setHtml(root, [header, summary, html`<div class="project-columns">${tasksCard}${msCard}</div>`]);
+    setHtml(root, [header, summary, html`<div class="project-columns">${tasksCard}${msCard}</div>`, html`<div class="project-columns lp-slot" data-lp-slot></div>`]);
     root.dataset.projectId = project.id;
+    // V4-H: notes and links for this project (loaded after the page shows).
+    notesAndLinksCards('project_id', project.id).then((frag) => {
+      const slot = root.querySelector('[data-lp-slot]');
+      if (slot && root.dataset.projectId === project.id) setHtml(slot, frag);
+    }).catch((err) => console.error(err));
   }
 
   // ---------------- actions ----------------
@@ -335,7 +341,7 @@ export function initProjectsPage() {
   });
 
   onChange((topic) => {
-    if (!root.hidden && ['projects', 'tasks', 'spaces'].includes(topic)) render();
+    if (!root.hidden && ['projects', 'tasks', 'spaces', 'notes', 'resources'].includes(topic)) render();
   });
 
   return { onShow: (param) => render(param || null) };

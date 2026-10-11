@@ -30,10 +30,21 @@ check('no saved workspace = legacy = every built V3 page visible', () => {
   assert.deepEqual(visibleModules(normalizeWorkspace(undefined)), builtV3);
   assert.deepEqual(builtV3, ['home', 'planner', 'week', 'calendar', 'semester', 'tasks', 'courses', 'exams', 'grades', 'board', 'history', 'insights']);
 });
-check('unbuilt V4 modules are never shown, even if enabled', () => {
-  const ws = normalizeWorkspace({ mode: 'work', modules: { notes: true } });
-  assert.equal(isModuleEnabled(ws, 'notes'), true);
-  assert.equal(visibleModules(ws).includes('notes'), false);
+check('unbuilt modules are never shown, even if enabled', () => {
+  // Every V4 module is built now; a temporary unbuilt one keeps the rule tested.
+  MODULES.push({ id: 'future', section: 'organize', view: 'futureView', labelKey: 'nav.future', built: false });
+  try {
+    const ws = normalizeWorkspace({ mode: 'work', modules: { future: true } });
+    assert.equal(isModuleEnabled(ws, 'future'), true);
+    assert.equal(visibleModules(ws).includes('future'), false);
+  } finally {
+    MODULES.pop();
+  }
+  assert.ok(MODULES.every((m) => m.built), 'every V4 module is built');
+});
+check('V4-H Notes is on in every mode except legacy, which opts in', () => {
+  ['school', 'work', 'personal', 'selfstudy', 'multiple'].forEach((mode) => assert.ok(visibleModules(normalizeWorkspace({ mode })).includes('notes'), mode));
+  assert.equal(visibleModules(normalizeWorkspace(null)).includes('notes'), false);
 });
 check('V4-C Goals and Routines follow the mode defaults; legacy accounts opt in', () => {
   const vis = (mode) => visibleModules(normalizeWorkspace({ mode }));

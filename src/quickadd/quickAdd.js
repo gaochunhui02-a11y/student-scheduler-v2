@@ -31,6 +31,7 @@ const TYPES = [
   { id: 'project', key: 'p', iconName: 'briefcase', labelKey: 'qa.project', hintKey: 'qa.projectHint' },
   { id: 'goal', key: 'g', iconName: 'target', labelKey: 'qa.goal', hintKey: 'qa.goalHint' },
   { id: 'routine', key: 'r', iconName: 'repeat', labelKey: 'qa.routine', hintKey: 'qa.routineHint' },
+  { id: 'note', key: 'n', iconName: 'file', labelKey: 'qa.note', hintKey: 'qa.noteHint' },
   { id: 'class', key: 'c', iconName: 'calendar', labelKey: 'qa.class', hintKey: 'qa.classHint' },
   { id: 'course', key: 'o', iconName: 'book', labelKey: 'qa.course', hintKey: 'qa.courseHint' },
   { id: 'exam', key: 'e', iconName: 'exam', labelKey: 'qa.exam', hintKey: 'qa.examHint' },
@@ -195,6 +196,7 @@ export function openQuickAdd(initialType = null) {
     else if (type === 'project') openProjectEditor({ onSaved: (p) => p && app().navigate('projectsView', p.id) });
     else if (type === 'goal') openGoalEditor({ onSaved: (g) => g && app().navigate('goalsView', g.id) });
     else if (type === 'routine') openRoutineEditor({ onSaved: () => app().navigate('routinesView') });
+    else if (type === 'note') import('../notes/notesData.js').then(({ createNote }) => createNote(app().userId, { title: '', body: '' })).then((row) => app().navigate('notesView', row.id)).catch((err) => console.error(err));
     else if (type === 'exam') openExamEditor({ onSaved: (x) => x && app().navigate('examsView', x.id) });
     else if (type === 'class') openClassForm();
     else if (type === 'study') openStudyForm();
@@ -212,7 +214,7 @@ export function openQuickAdd(initialType = null) {
     render: (body, api) => {
       const grid = h('div', { class: 'qa-grid', role: 'list' });
       TYPES.forEach((tp) => {
-        if ((tp.id === 'course' && !has('courses')) || (tp.id === 'exam' && !has('exams')) || (tp.id === 'project' && !has('projects')) || (tp.id === 'goal' && !(has('goals') && has('goalLinks'))) || (tp.id === 'routine' && !has('routines'))) return;
+        if ((tp.id === 'course' && !has('courses')) || (tp.id === 'exam' && !has('exams')) || (tp.id === 'project' && !has('projects')) || (tp.id === 'goal' && !(has('goals') && has('goalLinks'))) || (tp.id === 'routine' && !has('routines')) || (tp.id === 'note' && !has('notes'))) return;
         const btn = h('button', { type: 'button', class: 'qa-tile', role: 'listitem', 'data-qa': tp.id });
         btn.innerHTML = `<span class="qa-tile-icon">${icon(tp.iconName)}</span><span class="qa-tile-text"><strong></strong><span></span></span><kbd class="kbd"></kbd>`;
         btn.querySelector('strong').textContent = t(tp.labelKey);

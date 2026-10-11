@@ -80,6 +80,16 @@ v3.forEach((file) => {
     });
     assert.doesNotMatch(sql, /add column (?!if not exists)/, 'add column without "if not exists"');
   });
+  check(`${file}: a dropped constraint is re-added in the same file (reviewed widenings only)`, () => {
+    // Widening a CHECK keeps every existing row valid; each one is reviewed.
+    const REVIEWED = { '0026_resources_v4.sql': ['resources_kind_check', 'resources_has_parent', 'resources_tags_array'] };
+    const dropped = [...sql.matchAll(/drop constraint if exists (\w+)/g)].map((m) => m[1]);
+    dropped.forEach((name) => {
+      assert.match(sql, new RegExp(`add constraint ${name}\\b`), `${name} dropped but not re-added`);
+      assert.ok((REVIEWED[file] || []).includes(name), `unreviewed constraint change: ${name}`);
+    });
+    assert.doesNotMatch(sql, /drop constraint (?!if exists)/);
+  });
   check(`${file}: every dropped trigger is re-created`, () => {
     const dropped = [...sql.matchAll(/drop trigger if exists (\w+) on/g)].map((m) => m[1]);
     dropped.forEach((name) => assert.match(sql, new RegExp(`create trigger ${name}\\b`), `${name} dropped but not re-created`));

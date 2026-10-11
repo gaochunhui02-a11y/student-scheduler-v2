@@ -13,6 +13,7 @@ export const ROUTES = {
   projects: 'projectsView',
   today: 'todayView',
   review: 'reviewView',
+  notes: 'notesView',
   goals: 'goalsView',
   routines: 'routinesView',
   grades: 'gradesView',

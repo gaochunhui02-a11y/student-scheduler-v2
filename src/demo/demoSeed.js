@@ -50,10 +50,10 @@ export function buildDemoSeed(now = new Date()) {
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
   const db = {
-    profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240 } }],
+    profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240, workspace: { mode: 'multiple', modules: {}, defaultSpaceId: null } } }],
     schedules: [], classes: [], study_subjects: [], schedule_items: [], study_subject_subtasks: [],
     class_series: [], class_series_exceptions: [], boards: [], board_nodes: [], board_edges: [],
-    spaces: [], projects: [], project_milestones: [], goals: [], goal_milestones: [], goal_progress_log: [], routines: [], routine_completions: [], attendance_records: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
+    spaces: [], projects: [], project_milestones: [], goals: [], goal_milestones: [], goal_progress_log: [], routines: [], routine_completions: [], attendance_records: [], notes: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
     task_dependencies: [], task_recurrence_rules: [], resources: [], focus_sessions: [],
   };
 
@@ -486,6 +486,23 @@ export function buildDemoSeed(now = new Date()) {
   [[240, 1], [200, 1], [150, 1], [110, 1], [70, 1], [30, 1]].forEach(([d, v]) => log(gBooks, d, v));
   log(gBooks, 9, 1, 'Finished “Atomic Habits”');
   [[30, 3], [21, 3.5], [14, 4.2], [7, 5], [2, 5.5]].forEach(([d, v]) => log(gRun, d, v));
+
+  // ---------------- notes + library links (V4-H) ----------------
+  const noteBase = { user_id: U, space_id: null, course_id: null, project_id: null, goal_id: null, exam_id: null, task_id: null, tags: [], pinned: false, archived: false };
+  const stamp = (daysAgo) => new Date(now.getTime() - daysAgo * 86400000).toISOString();
+  db.notes.push(
+    { ...noteBase, id: id(), course_id: course.math.id, title: 'Integration by parts', body: '# Integration by parts\n\n∫u dv = uv − ∫v du\n\n## Key points\n- Pick **u** so it gets simpler when differentiated (LIATE)\n- Repeat when the new integral looks like the first one\n\n## Questions\n- [x] Why does LIATE work?\n- [ ] Ask about tabular method in office hours', tags: ['calculus'], pinned: true, created_at: stamp(6), updated_at: stamp(1) },
+    { ...noteBase, id: id(), project_id: portfolio.id, space_id: personalSpace.id, title: 'Portfolio — case study ideas', body: 'Three projects to feature:\n1. Weather dashboard (CS 101 Project 2)\n2. Study planner (this app!)\n3. Chemistry titration simulator\n\nInspiration: https://example.com/portfolio-tips', tags: ['ideas'], created_at: stamp(9), updated_at: stamp(3) },
+    { ...noteBase, id: id(), goal_id: gInternship.id, title: 'Internship applications tracker', body: '## Applied\n- [x] Acme Labs — sent Oct 2\n- [ ] Northwind — draft cover letter\n- [ ] Contoso — needs portfolio link\n\n> Tip from careers office: tailor the first paragraph.', tags: ['career'], created_at: stamp(12), updated_at: stamp(2) },
+    { ...noteBase, id: id(), title: 'Book list', body: '- Deep Work — Cal Newport\n- Atomic Habits — James Clear\n- The Pragmatic Programmer', space_id: personalSpace.id, created_at: stamp(30), updated_at: stamp(20) },
+  );
+  const libBase = { user_id: U, course_id: null, task_id: null, project_id: null, goal_id: null, exam_id: null, space_id: null, in_library: false, favorite: false, tags: [], notes: '', created_at: ts, updated_at: ts };
+  db.resources.push(
+    { ...libBase, id: id(), project_id: portfolio.id, title: 'Portfolio design inspiration', url: 'https://example.com/design-inspiration', kind: 'article', favorite: true, tags: ['design'] },
+    { ...libBase, id: id(), goal_id: gInternship.id, title: 'Résumé template', url: 'https://example.com/resume-template', kind: 'document' },
+    { ...libBase, id: id(), in_library: true, title: 'Khan Academy — Calculus', url: 'https://www.khanacademy.org/math/calculus-1', kind: 'video', favorite: true, tags: ['calculus'] },
+    { ...libBase, id: id(), in_library: true, title: 'Zotero (citation manager)', url: 'https://www.zotero.org', kind: 'tool' },
+  );
 
   // ---------------- attendance (V4-G) ----------------
   // Mostly present, a few late / absent / excused; the newest couple of

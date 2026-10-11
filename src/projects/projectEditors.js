@@ -11,6 +11,9 @@ import { createProject, updateProject, deleteProject, createMilestone, updateMil
 import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
 import { has } from '../shared/capabilities.js';
 import { listGoals } from '../goals/goalsData.js';
+import { todayStr } from '../shared/dates.js';
+import { PROJECT_TEMPLATE_IDS, buildFromTemplate } from './projectTemplates.js';
+import { createTask, canLeaveUnscheduled } from '../tasks/tasksData.js';
 
 function field(id, labelKey, control, { hint = '' } = {}) {
   const wrap = h('div', { class: 'field' });
@@ -50,6 +53,22 @@ export async function openProjectEditor({ project = null, defaults = {}, onSaved
   openDrawer({
     title: isNew ? t('projects.newTitle') : t('projects.editTitle'),
     render: (body) => {
+      // V4-H: a new project can start from a template (milestones + tasks).
+      if (isNew) {
+        const tpl = h('select', { id: 'pe-template' }, h('option', { value: '' }, t('projTpl.blank')));
+        PROJECT_TEMPLATE_IDS.forEach((id) => tpl.appendChild(h('option', { value: id }, t(`projTpl.${id}`))));
+        tpl.value = defaults.template || '';
+        body.appendChild(field('pe-template', 'projTpl.field', tpl, { hint: t('projTpl.hint') }));
+        tpl.addEventListener('change', () => {
+          const title = body.querySelector('#pe-title');
+          if (tpl.value && (!title.value.trim() || title.dataset.fromTemplate === '1')) {
+            title.value = t(`projTpl.${tpl.value}`);
+            title.dataset.fromTemplate = '1';
+          }
+          body.querySelector('#pe-template-preview').textContent = tpl.value ? t(`projTpl.${tpl.value}_summary`) : '';
+        });
+        body.appendChild(h('p', { class: 'field-hint', id: 'pe-template-preview', 'aria-live': 'polite' }));
+      }
       body.appendChild(field('pe-title', 'projects.fieldTitle', h('input', { type: 'text', id: 'pe-title', maxlength: '120', autocomplete: 'off', 'data-autofocus': true, value: project ? project.title : '', placeholder: t('projects.titlePlaceholder') })));
       const desc = h('textarea', { id: 'pe-desc', rows: '3', maxlength: '5000', placeholder: t('projects.descPlaceholder') });
       desc.value = project ? project.description || '' : '';
@@ -141,6 +160,8 @@ export async function openProjectEditor({ project = null, defaults = {}, onSaved
           api.setBusy(true);
           try {
             const saved = isNew ? await createProject(app().userId, v.fields) : await updateProject(project.id, v.fields);
+            const tplId = isNew && b.querySelector('#pe-template') ? b.querySelector('#pe-template').value : '';
+            if (tplId && saved) await applyProjectTemplate(saved, tplId);
             api.close(true);
             toast(isNew ? t('projects.created') : t('common.savedShort'), { kind: 'success' });
             if (onSaved) onSaved(saved);
@@ -214,4 +235,38 @@ export function openMilestoneEditor({ projectId, milestone = null, onSaved } = {
       },
     ],
   });
+}
+
+// V4-H: creates a template's milestones and tasks for a new project. Tasks
+// start unscheduled (with due dates) so "Plan my backlog" can place them.
+async function applyProjectTemplate(project, templateId) {
+  const start = project.start_date || todayStr();
+  const plan = buildFromTemplate(templateId, start, project.due_date || null);
+  const userId = app().userId;
+  const milestoneIds = [];
+  for (const m of plan.milestones) {
+    // eslint-disable-next-line no-await-in-loop
+    const row = await createMilestone(userId, project.id, { title: t(`projTpl.${templateId}_${m.key}`), due_date: m.dueDate });
+    milestoneIds.push(row.id);
+  }
+  const planDate = canLeaveUnscheduled() ? null : todayStr();
+  let order = 10;
+  for (const task of plan.tasks) {
+    // eslint-disable-next-line no-await-in-loop
+    await createTask(userId, {
+      planDate,
+      fields: {
+        name: t(`projTpl.${templateId}_${task.key}`),
+        minutes_requested: task.minutes,
+        due_date: task.dueDate,
+        project_id: project.id,
+        project_milestone_id: milestoneIds[task.milestoneIndex] || null,
+        project_sort: order,
+        space_id: project.space_id || null,
+        goal_id: project.goal_id || null,
+      },
+    });
+    order += 10;
+  }
+  if (!project.due_date && plan.dueDate) await updateProject(project.id, { due_date: plan.dueDate, start_date: start });
 }

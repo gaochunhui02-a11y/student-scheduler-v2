@@ -31,7 +31,7 @@ export const MODULES = [
   { id: 'exams', v3: true, section: 'academics', view: 'examsView', labelKey: 'nav.exams', built: true },
   { id: 'grades', v3: true, section: 'academics', view: 'gradesView', labelKey: 'nav.grades', built: true },
   { id: 'board', v3: true, section: 'organize', view: 'boardView', labelKey: 'nav.boards', built: true },
-  { id: 'notes', section: 'organize', view: 'notesView', labelKey: 'nav.notes', built: false },
+  { id: 'notes', section: 'organize', view: 'notesView', labelKey: 'nav.notes', built: true },
   { id: 'history', v3: true, section: 'review', view: 'historyView', labelKey: 'nav.history', built: true },
   { id: 'insights', v3: true, section: 'review', view: 'insightsView', labelKey: 'nav.insights', built: true },
   { id: 'review', section: 'review', view: 'reviewView', labelKey: 'nav.weeklyReview', built: true },
@@ -42,10 +42,10 @@ const ALL = MODULES.map((m) => m.id);
 // Default modules per mode (spec §3). Unbuilt ones are listed so they appear
 // automatically when their checkpoint lands.
 export const MODE_DEFAULTS = {
-  school: ['home', 'today', 'planner', 'week', 'calendar', 'semester', 'tasks', 'courses', 'exams', 'grades', 'board', 'insights', 'review'],
-  work: ['home', 'today', 'planner', 'week', 'calendar', 'tasks', 'projects', 'goals', 'board', 'insights', 'review'],
-  personal: ['home', 'today', 'planner', 'calendar', 'tasks', 'goals', 'routines', 'insights', 'review'],
-  selfstudy: ['home', 'today', 'planner', 'week', 'calendar', 'tasks', 'goals', 'routines', 'exams', 'board', 'insights', 'review'],
+  school: ['home', 'today', 'planner', 'week', 'calendar', 'semester', 'tasks', 'courses', 'exams', 'grades', 'board', 'notes', 'insights', 'review'],
+  work: ['home', 'today', 'planner', 'week', 'calendar', 'tasks', 'projects', 'goals', 'board', 'notes', 'insights', 'review'],
+  personal: ['home', 'today', 'planner', 'calendar', 'tasks', 'goals', 'routines', 'notes', 'insights', 'review'],
+  selfstudy: ['home', 'today', 'planner', 'week', 'calendar', 'tasks', 'goals', 'routines', 'exams', 'board', 'notes', 'insights', 'review'],
   multiple: ALL,
 };
 

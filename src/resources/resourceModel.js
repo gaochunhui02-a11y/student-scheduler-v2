@@ -4,6 +4,8 @@
 // script when clicked. Rendering always uses rel="noopener noreferrer".
 
 export const RESOURCE_KINDS = ['link', 'document', 'lecture', 'syllabus', 'reference'];
+// V4-H (0026): more kinds; the V3 list stays the default on older databases.
+export const RESOURCE_KINDS_V4 = [...RESOURCE_KINDS, 'video', 'article', 'tool', 'book', 'other'];
 
 // "example.com/x" -> "https://example.com/x"; returns null when the value
 // can't be made into a safe http(s) URL.
@@ -53,6 +55,30 @@ export function validateResourceFields(input = {}) {
   let title = typeof input.title === 'string' ? input.title.trim().slice(0, 200) : '';
   if (!title && url) title = hostOf(url);
   if (!title) errors.title = 'resources.errTitle';
-  const kind = RESOURCE_KINDS.includes(input.kind) ? input.kind : guessKind(url);
+  const kind = RESOURCE_KINDS_V4.includes(input.kind) ? input.kind : guessKind(url);
   return { ok: Object.keys(errors).length === 0, errors, fields: { url, title, kind, notes: typeof input.notes === 'string' ? input.notes.slice(0, 2000) : '' } };
+}
+
+/** V4-H: what a resource belongs to, for labels: [kind, id] pairs in priority order. */
+export const RESOURCE_PARENTS = ['course_id', 'project_id', 'goal_id', 'exam_id', 'task_id'];
+export function resourceParents(r) {
+  return RESOURCE_PARENTS.filter((k) => r && r[k]).map((k) => [k, r[k]]);
+}
+
+/**
+ * Library filter (V4-H).
+ * @param {{ search?: string, kind?: string, favorites?: boolean, parent?: string }} f
+ *   parent: 'library' (general links), a parent kind ('course_id' …) or ''
+ */
+export function filterLibrary(resources = [], f = {}, spaceMatch = () => true) {
+  const q = (f.search || '').trim().toLowerCase();
+  return resources.filter((r) => {
+    if (f.kind && r.kind !== f.kind) return false;
+    if (f.favorites && !r.favorite) return false;
+    if (f.parent === 'library' && !(r.in_library && !resourceParents(r).length)) return false;
+    if (f.parent && f.parent !== 'library' && !r[f.parent]) return false;
+    if (!spaceMatch(r)) return false;
+    if (q && !`${r.title} ${r.url} ${r.notes || ''} ${(r.tags || []).join(' ')}`.toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || String(b.created_at || '').localeCompare(String(a.created_at || '')));
 }

@@ -506,3 +506,49 @@ on the course Overview, exam revision plans added to the Planner.
 - The 80% attendance threshold is a fixed hint, not a per-course setting.
 - Attendance for classes without a course can't be tracked.
 - Breakdown templates are fixed (no custom templates yet).
+
+### V4-H — Notes, links everywhere, templates, demo (done)
+
+**Migrations (files only — not applied):**
+- `0025_notes.sql` — `notes` (title, body ≤ 50 000 chars, tags, pinned,
+  archived, optional space, course, project, goal, exam and task links),
+  RLS, ownership triggers on every link. Deleting what a note links to
+  NEVER deletes the note (all links ON DELETE SET NULL).
+- `0026_resources_v4.sql` — `resources` gets project / goal / exam links
+  (CASCADE, like course / task), `space_id` (SET NULL, never a parent),
+  `in_library` (a general link that belongs to nothing), `favorite`, `tags`.
+  Two reviewed widenings: `resources_kind_check` (+ video, article, tool,
+  book, other) and `resources_has_parent` (+ the new parents or in_library);
+  every existing row stays valid. The migration test now rejects any other
+  dropped constraint and requires drops to be re-added in the same file.
+
+**Notes (`#/notes`, `#/notes/<id>`):** list (search, All / Pinned /
+Archived, linked-item chips, checklist counts) + editor with autosave
+("Saving… / Saved"), Write / Preview, link to a course / project / goal /
+exam, tags, pin, archive, delete (confirmed), and templates (lecture,
+meeting, reading, weekly plan). The preview is a small Markdown subset
+(headings, lists, checklists, quotes, bold / italic / code, http(s) links)
+rendered by `src/notes/noteMarkdown.js`: everything is escaped first, only
+our own tags are emitted, links open with rel="noopener noreferrer";
+covered by adversarial XSS tests. Checklist items can be ticked in the
+preview (mouse or keyboard).
+
+**Library (`#/notes/library`):** every saved link in one place — course,
+task, project, goal, exam or "My library" — with search, kind, belongs-to
+and starred filters, add / edit / star / remove. Project and goal pages
+show Notes + Links cards; courses get a Notes tab (their Resources tab
+stays).
+
+**Project templates:** "Start from" in the new-project editor — Research
+paper, Internship / job applications, Portfolio website, Plan an event —
+creates milestones and unscheduled tasks with due dates stretched to the
+project's dates (or the template's default length).
+
+**Demo:** the demo account now uses the Multiple areas workspace (every
+V4 page visible) and includes notes, starred and general library links.
+Demo Mode's `?premigration=` switch now simulates each V4 level
+(`v4`, `v4c`, `v4g`, `v4h`).
+
+**Known limitations (V4-H):** no rich-text editor (Markdown subset only),
+no note attachments / images (links only), the library isn't filtered by
+the space switcher, note templates are fixed.

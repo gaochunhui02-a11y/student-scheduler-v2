@@ -232,6 +232,29 @@ check('V4-G attendance round-trips with its course and recurring class remapped'
   const bad = validateBackup({ ...backup, tables: { attendance_records: [{ ...a, status: 'skipped', start_minutes: 2000 }] } });
   assert.ok(bad.errors.some((e) => e.column === 'status') && bad.errors.some((e) => e.column === 'start_minutes'));
 });
+check('V4-H notes and V4 links round-trip; general links are left out on a database without 0026', () => {
+  const c = { ...course, id: uid() };
+  const pj = { id: uid(), title: 'Thesis' };
+  const n = { id: uid(), course_id: c.id, project_id: pj.id, title: 'Kant', body: '# Kant', tags: ['phil'], pinned: true };
+  const lib = { id: uid(), in_library: true, title: 'Khan', url: 'https://khan.org', kind: 'video', favorite: true, tags: ['calc'] };
+  const pl = { id: uid(), project_id: pj.id, title: 'Spec', url: 'https://x.io/spec', kind: 'article' };
+  const cl = { id: uid(), course_id: c.id, title: 'Syllabus', url: 'https://x.edu/s', kind: 'syllabus' };
+  const v = validateBackup({ ...backup, tables: { courses: [c], projects: [pj], notes: [n], resources: [lib, pl, cl] } });
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const plan = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  const nn = plan.inserts.notes[0];
+  assert.equal(nn.course_id, plan.inserts.courses[0].id);
+  assert.equal(nn.project_id, plan.inserts.projects[0].id);
+  assert.equal(plan.inserts.resources.length, 3);
+  assert.equal(plan.inserts.resources.find((r) => r.title === 'Spec').project_id, plan.inserts.projects[0].id);
+  // A V4-G database: no notes table, no V4 resource columns.
+  const old = restoreAvailability({ courses: 1, courseLinks: 1, resources: 1, projects: 1, projectLinks: 1 });
+  const planOld = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, ...old, newId: newIds(), userId: 'me' });
+  assert.ok(planOld.unavailable.includes('notes'));
+  assert.deepEqual(planOld.inserts.resources.map((r) => r.title), ['Syllabus']); // the general and project links can't be stored there
+  assert.equal(planOld.skipped.resources, 2);
+  assert.equal('favorite' in planOld.inserts.resources[0], false);
+});
 check('a bad project status / task status override is rejected', () => {
   const bad = validateBackup({ ...backup, tables: { projects: [{ id: uid(), title: 'x', status: 'done' }], study_subjects: [{ ...subj, status_override: 'done' }] } });
   const problems = bad.errors.map((e) => `${e.table}.${e.column}`);

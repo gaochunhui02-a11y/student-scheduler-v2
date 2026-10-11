@@ -133,7 +133,14 @@ const S = {
     due_date: ['date'], counts: ['bool'], notes: ['text', false, 2000], sort_order: ['int', false, [-1e6, 1e6]],
   },
   resources: {
-    id: ['id', true], course_id: ['ref'], task_id: ['ref'], title: ['text', true, 200], url: ['url', true], kind: ['enum', false, ['link', 'document', 'lecture', 'syllabus', 'reference']], notes: ['text', false, 2000],
+    id: ['id', true], course_id: ['ref'], task_id: ['ref'], title: ['text', true, 200], url: ['url', true], kind: ['enum', false, ['link', 'document', 'lecture', 'syllabus', 'reference', 'video', 'article', 'tool', 'book', 'other']], notes: ['text', false, 2000],
+    // V4-H (0026)
+    project_id: ['ref'], goal_id: ['ref'], exam_id: ['ref'], space_id: ['ref'], in_library: ['bool'], favorite: ['bool'], tags: ['tags'],
+  },
+  // V4-H (0025) — after everything a note can link to
+  notes: {
+    id: ['id', true], space_id: ['ref'], course_id: ['ref'], project_id: ['ref'], goal_id: ['ref'], exam_id: ['ref'], task_id: ['ref'],
+    title: ['text', false, 200], body: ['text', false, 50000], tags: ['tags'], pinned: ['bool'], archived: ['bool'],
   },
   // V4-G (0024)
   attendance_records: {
@@ -175,7 +182,8 @@ export const REFS = {
   grade_categories: { course_id: 'courses' },
   attendance_records: { course_id: 'courses', class_series_id: 'class_series' },
   grade_items: { course_id: 'courses', category_id: 'grade_categories' },
-  resources: { course_id: 'courses', task_id: 'study_subjects' },
+  resources: { course_id: 'courses', task_id: 'study_subjects', project_id: 'projects', goal_id: 'goals', exam_id: 'exams', space_id: 'spaces' },
+  notes: { space_id: 'spaces', course_id: 'courses', project_id: 'projects', goal_id: 'goals', exam_id: 'exams', task_id: 'study_subjects' },
   focus_sessions: { schedule_item_id: 'schedule_items', task_id: 'study_subjects', course_id: 'courses' },
 };
 
@@ -317,11 +325,12 @@ export const CAPABILITY_COLUMNS = {
   taskFieldsV4: { study_subjects: ['due_time', 'start_time', 'status_override', 'project_sort'] },
   unscheduledTasks: { study_subjects: ['planned_by'] },
   goalLinks: { study_subjects: ['goal_id'], projects: ['goal_id'] },
+  resourcesV4: { resources: ['project_id', 'goal_id', 'exam_id', 'space_id', 'in_library', 'favorite', 'tags'] },
 };
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
   spaces: 'spaces', projects: 'projects', project_milestones: 'projects',
-  goals: 'goals', goal_milestones: 'goals', goal_progress_log: 'goals', routines: 'routines', routine_completions: 'routines', attendance_records: 'attendance', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
+  goals: 'goals', goal_milestones: 'goals', goal_progress_log: 'goals', routines: 'routines', routine_completions: 'routines', attendance_records: 'attendance', notes: 'notes', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
   task_recurrence_rules: 'recurringTasks', task_dependencies: 'dependencies', resources: 'resources', focus_sessions: 'focusSessions',
 };
 
@@ -429,6 +438,15 @@ export function planRestore({ tables, existing, availableTables, unavailableColu
       if (table === 'study_subjects') {
         if (row.schedule_id && !idMap.schedules.get(row.schedule_id)) drop = true;
         if (!row.schedule_id && !allowUnscheduled) drop = true;
+      }
+      // V4-H: a link must still belong to something this database can store
+      // (resources_has_parent); on a database without 0026 only course/task
+      // links fit, and the newer kinds become "link".
+      if (table === 'resources') {
+        const gone = new Set(unavailableColumns.resources || []);
+        const parents = ['course_id', 'task_id', 'project_id', 'goal_id', 'exam_id'].filter((k) => next[k] && !gone.has(k));
+        if (!parents.length && !(next.in_library && !gone.has('in_library'))) drop = true;
+        if (gone.has('in_library') && !['link', 'document', 'lecture', 'syllabus', 'reference'].includes(next.kind)) next.kind = 'link';
       }
       if (drop) {
         skipped[table] = (skipped[table] || 0) + 1;

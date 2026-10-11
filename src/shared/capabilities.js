@@ -35,6 +35,8 @@ const PROBES = {
   goalLinks: ['study_subjects', 'id, goal_id'],
   routines: ['routine_completions', 'id, routine_id, status'],
   attendance: ['attendance_records', 'id, start_minutes, status'],
+  notes: ['notes', 'id, body, pinned, course_id, project_id, goal_id'],
+  resourcesV4: ['resources', 'id, project_id, goal_id, exam_id, in_library, favorite, tags'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -62,6 +64,8 @@ export const FEATURE_MIGRATIONS = {
   goalLinks: '0022_goals.sql',
   routines: '0023_routines.sql',
   attendance: '0024_attendance.sql',
+  notes: '0025_notes.sql',
+  resourcesV4: '0026_resources_v4.sql',
 };
 
 let state = null;
