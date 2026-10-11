@@ -58,10 +58,10 @@ read this one table.
 | `0021_unscheduled_tasks.sql` | B.1 | `study_subjects.schedule_id` nullable (unscheduled/backlog), `planned_by`, backlog index, schedule ownership trigger |
 | `0022_goals.sql` | C | `goals`, `goal_milestones`, `goal_progress_log`; nullable `goal_id` on `study_subjects`, `projects` |
 | `0023_routines.sql` | C | `routines`, `routine_completions` (unique per routine+date) |
-| `0024_attendance.sql` | G | `attendance_records` (unique per course/series + date) |
-| `0024_notes.sql` | H | `notes` (one optional parent per kind, ownership-checked) |
-| `0025_resources_v4.sql` | H | resource links to project/goal/exam/space, `tags`, `favorite`, wider `kind` check |
-| `0027_share_links.sql` | I (optional) | read-only share links with random tokens — **only if it stays small; otherwise V4.1** |
+| `0024_attendance.sql` | G | `attendance_records` (unique per course + day + start minute) |
+| `0025_notes.sql` | H | `notes` (one optional parent per kind, ownership-checked) |
+| `0026_resources_v4.sql` | H | resource links to project/goal/exam/space, `tags`, `favorite`, wider `kind` check |
+| ~~`0027_share_links.sql`~~ | — | read-only share links — **deferred to V4.1** (see V4-I) |
 
 Rules, enforced by `tests/migrations-v3.test.js` (extended to 0018+) and the
 PGlite database test: additive, idempotent, RLS + four own-row policies on
@@ -132,7 +132,7 @@ Default modules per mode (only built ones are shown):
 
 ## 6. Status
 
-### V4-A — Foundation (done, awaiting review)
+### V4-A — Foundation (done)
 - `0018_spaces.sql`: `spaces` + nullable `space_id` on `courses`,
   `study_subjects`, `boards` (ON DELETE SET NULL, ownership triggers, RLS).
 - Workspace modes (School / Work / Personal / Self-study / Multiple areas)
@@ -151,7 +151,7 @@ Default modules per mode (only built ones are shown):
 - Backup/restore includes spaces (same-name spaces are reused).
 - Settings › Workspace tab; About lists the two new database features.
 
-### V4-B — Projects + universal tasks (done, awaiting review)
+### V4-B — Projects + universal tasks (done)
 
 **Migrations (files only — not applied anywhere):**
 - `0019_projects.sql` — `projects` (title, description, space, status
@@ -214,7 +214,7 @@ Default modules per mode (only built ones are shown):
 - Demo mode can now simulate missing V4 tables *and* columns
   (`?premigration=v4|v3`) — still not a substitute for the real database.
 
-### V4-B.1 — True unscheduled (backlog) tasks (done, awaiting review)
+### V4-B.1 — True unscheduled (backlog) tasks (done)
 
 Supersedes the V4-B decision "tasks still live on a planned day".
 
@@ -274,7 +274,7 @@ Any combination is valid. Overdue depends only on the due date.
 - Rolling back to V3 after creating backlog tasks: V3 shows them without a
   planned date and can edit them, but cannot create new ones.
 
-### V4-C — Goals + routines (done, awaiting review)
+### V4-C — Goals + routines (done)
 
 **Migrations (files only — not applied anywhere):**
 - `0022_goals.sql` — `goals` (title, why/description, space, status
@@ -591,3 +591,44 @@ own security review, which doesn't fit "only if it stays small".)
 (no push server); the focus timer isn't shared across tabs; Account
 deletion still has to be requested (no self-service delete in this
 version); exports don't include boards (the JSON backup does).
+
+### V4-J — Full QA, docs, beta prep (done)
+
+**QA (Demo Mode in headless Chrome, `../student-scheduler-qa-harness`):**
+- Runtime sweep — 19 pages × 6 database levels (all migrations,
+  `?premigration=v4h`, `v4g`, `v4c`, `v4` = V3 database, `v3` = V2
+  database): 0 console errors, every page renders or shows its "needs a
+  database update" notice.
+- Accessibility — axe WCAG 2.1 A/AA on 20 pages (incl. Planner and
+  Library) in light and dark: 0 violations; plus the drawers and dialogs
+  added in V4-C…I (each checked when built).
+- Mobile — every page at phone width (headless minimum 500 px) in English,
+  Chinese and Japanese: no horizontal overflow, no errors.
+- V3-account regression — an account that never chose a mode sees exactly
+  the V3 navigation (12 pages), the three-section V3 Home and the mobile
+  Today tab opening the Planner.
+- Feature flows verified against the stored data at each checkpoint
+  (goals, routines, Today, customization, catch-up accounting, energy,
+  review, matrix, attendance, breakdown, notes, library, templates, focus
+  timer, exports, offline).
+
+**Automated tests:** `npm test` 1778 checks / 0 failures (60 files);
+PGlite database test 271 / 0 (all 26 migrations, idempotent re-run, RLS,
+ownership triggers, CHECKs, cascades as two users); production build passes.
+
+**Bundle:** JS 448 kB gzip (V3: 261 kB). Largest parts: the dashboard
+chunk (192 kB), all three languages' strings (130 kB), the Supabase client
+(71 kB). Loading only the active language's strings (~-85 kB) is the
+obvious next step; not done in beta to avoid changing the i18n boot path.
+
+**Release:** `package.json` / `APP_VERSION` are `4.0.0-beta.1`. The
+`v4.0.0-beta.1` tag is NOT created — by the V4 rules it is tagged only
+after Vercel Preview testing on a staging database (README › V4 migrations
+› Preview checklist). Nothing was merged to `master`, nothing deployed, no
+migration applied.
+
+**Deferred to V4.1:** read-only share links; per-course attendance
+threshold; custom templates (breakdown, notes, projects); splitting a
+catch-up task across days; reordering "Start here"; rich-text notes and
+attachments; push reminders while the app is closed; self-service account
+deletion; lazy-loaded language files.

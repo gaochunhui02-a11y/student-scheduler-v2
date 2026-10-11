@@ -25,6 +25,45 @@ all of that, a transparent scoring engine tells you what to work on next —
 using ordinary arithmetic on data you already entered, not a hosted AI
 model.
 
+## What's new in V4 (Productivity OS) — beta
+
+V4 (`v4-productivity-os` branch, version `4.0.0-beta.1`) keeps academics
+at the centre and adds what students juggle beside it — work, personal
+goals and habits — without turning into a generic to-do app. **Simple by
+default:** you pick what the app is for (School, Work, Personal,
+Self-study or Multiple areas) and only those pages appear. Accounts that
+never pick a mode keep exactly the V3 app. Everything is still rule-based;
+**no AI service is called.**
+
+- **Spaces & workspace modes** — group work into spaces (School, Job,
+  Personal…), filter everything by space, switch modules on and off.
+- **Projects** — milestones, progress, tasks that are the same tasks as
+  everywhere else; start from a template (research paper, applications,
+  portfolio, event).
+- **Goals** — progress from linked work, a number you check in, or your own
+  %; a deterministic "ahead / on track / behind" pace.
+- **Routines** — daily, chosen days or N× a week; streaks where skipping on
+  purpose (or pausing) never breaks them.
+- **Today** — quick capture ("Read chapter 4 45m"), three suggested tasks
+  with the reason, planned / due / overdue, schedule with a now marker,
+  routines; **customizable Home** widgets.
+- **Adaptive planning** — *Catch up* moves missed or overdue work to days
+  with room (preview first, exact carry-over accounting); energy settings
+  (peak time, lighter days) shape capacity.
+- **Weekly review** — planned vs actual per day and per course/project,
+  wins, slipped work, next week, and three reflection questions; a
+  priority **matrix** view of tasks.
+- **Academics** — attendance per course (rate, absences you can still
+  afford, quick marking on Today); *Break it down* for big assignments.
+- **Notes & Library** — notes with a safe Markdown preview, linked to
+  courses / projects / goals; every saved link in one library.
+- **Focus timer, reminders, exports, privacy** — focus on any task;
+  routine and weekly-review reminders; CSV / Markdown exports; a Privacy
+  tab; offline read-only Today.
+
+Full details, decisions and limitations per checkpoint:
+[`docs/V4_PLAN.md`](docs/V4_PLAN.md).
+
 ## What's new in V3 (Academic OS) — beta
 
 V3 (`v3-academic-os` branch, version `3.0.0-beta.1`) turns the planner into a
@@ -537,6 +576,53 @@ course/exam/task). No storage bucket is created.
 **Rollout order:** apply 0010 → 0017 in order, then deploy the V3 frontend.
 Deploying V3 first is also safe (features appear as their migrations land);
 the V2 (v1.x) frontend never reads any of these tables or columns.
+
+### V4 migrations 0018-0026
+
+**Not applied anywhere yet.** Apply by hand, in order, after review — only
+after 0001–0017. They follow the V3 rules (enforced by
+`tests/migrations-v3.test.js` and the PGlite test): new tables have RLS
+with select/insert/update/delete-own policies and an ownership trigger on
+every reference to a user-owned row; new columns are nullable or
+defaulted; nothing is dropped, renamed, retyped, updated or deleted. Two
+reviewed exceptions are allow-listed by the tests: 0021 relaxes
+`study_subjects.schedule_id` to nullable (backlog tasks), and 0026 widens
+two resource CHECKs (every existing row stays valid).
+
+| File | Adds | Used by |
+|---|---|---|
+| `0018_spaces.sql` | table `spaces`; nullable `space_id` on `courses`, `study_subjects`, `boards` | Spaces, space filter |
+| `0019_projects.sql` | tables `projects`, `project_milestones`; nullable `project_id`, `project_milestone_id` on tasks | Projects |
+| `0020_task_fields.sql` | `study_subjects.due_time`, `start_time`, `status_override`, `project_sort` | Universal tasks |
+| `0021_unscheduled_tasks.sql` | `study_subjects.schedule_id` nullable, `planned_by`, backlog index, schedule ownership trigger | Backlog, Plan my backlog, Catch up |
+| `0022_goals.sql` | tables `goals`, `goal_milestones`, `goal_progress_log`; nullable `goal_id` on tasks and projects | Goals |
+| `0023_routines.sql` | tables `routines`, `routine_completions` (unique per routine + day) | Routines, Today, reminders |
+| `0024_attendance.sql` | table `attendance_records` (unique per course + day + start) | Attendance |
+| `0025_notes.sql` | table `notes` (links SET NULL — never deleted with what they link to) | Notes |
+| `0026_resources_v4.sql` | `resources`: project / goal / exam / space links, `in_library`, `favorite`, `tags`; wider kind + parent CHECKs | Library, project/goal links |
+
+Workspace mode, modules, dashboard layout, energy, reminders, reflections
+live in `profiles.preferences` (0017) — no migration.
+
+**Rollout order:** apply 0018 → 0026 in order (staging first, run the
+PGlite test and a smoke test), then deploy the V4 frontend. Deploying V4
+before a migration is also safe: each feature shows "needs a database
+update" until its migration lands (the app probes capabilities at start).
+The V3 frontend keeps working on a V4 database — it never reads the new
+tables or columns. Rolling back to V3 after V4 writes keeps all tasks,
+courses and boards; V4-only data (goals, routines, notes…) is simply not
+shown.
+
+**Preview checklist (Vercel Preview, before `v4.0.0-beta.1`):**
+1. Staging database with 0001–0026 applied; `node tests/db/migrations-pglite.mjs` green.
+2. Sign up a fresh account → onboarding → pick each mode once.
+3. An existing V3 account: navigation and Home unchanged until a mode is chosen.
+4. Create a project from a template, a goal with check-ins, a routine; tick / skip / pause.
+5. Today: quick capture, Do today, Catch up preview → Move; Planner Generate on that day.
+6. Weekly review reflection save; Tasks › Matrix move; attendance marking.
+7. Notes (preview checklist tick), Library add + star; exports download.
+8. Backup → restore into a second account; offline reload shows the snapshot.
+9. zh / ja, dark mode, a phone-width browser.
 
 ## Deployment
 
