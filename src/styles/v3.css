@@ -11,6 +11,7 @@
 @import "./v3-settings.css";
 @import "./v4-workspace.css";
 @import "./v4-projects.css";
+@import "./v4-goals.css";
 
 /* ==========================================================================
    V3 component layer. Loaded after main.css. Two jobs:

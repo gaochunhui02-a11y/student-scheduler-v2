@@ -53,7 +53,7 @@ export function buildDemoSeed(now = new Date()) {
     profiles: [{ id: U, name: 'Jordan', created_at: ts, updated_at: ts, onboarding_completed_at: ts, preferences: { maxDailyStudyMinutes: 240 } }],
     schedules: [], classes: [], study_subjects: [], schedule_items: [], study_subject_subtasks: [],
     class_series: [], class_series_exceptions: [], boards: [], board_nodes: [], board_edges: [],
-    spaces: [], projects: [], project_milestones: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
+    spaces: [], projects: [], project_milestones: [], goals: [], goal_milestones: [], goal_progress_log: [], routines: [], routine_completions: [], semesters: [], courses: [], grade_categories: [], grade_items: [], exams: [], exam_topics: [],
     task_dependencies: [], task_recurrence_rules: [], resources: [], focus_sessions: [],
   };
 
@@ -465,6 +465,50 @@ export function buildDemoSeed(now = new Date()) {
   backlogTask('Rewrite About page', 45, { project_id: portfolio.id, project_milestone_id: msLaunch.id, due_date: addDays(today, 23), project_sort: 35 });
   backlogTask('Read “Deep Work”', 60, { space_id: personalSpace.id });
   backlogTask('Renew library card', 15, { due_date: addDays(today, 2), priority: 'low' });
+
+  // ---------------- goals (V4-C) ----------------
+  const goalBase = { user_id: U, space_id: null, description: '', status: 'active', start_date: null, target_date: null, progress_mode: 'auto', start_value: 0, target_value: null, unit: '', aggregate: 'sum', manual_progress: null, achieved_at: null, created_at: ts, updated_at: ts };
+  const gInternship = { ...goalBase, id: id(), title: 'Land a summer internship', description: 'A software internship for next summer.', start_date: addDays(today, -21), target_date: addDays(today, 75), sort_order: 0 };
+  const gBooks = { ...goalBase, id: id(), space_id: personalSpace.id, title: 'Read 12 books this year', progress_mode: 'numeric', target_value: 12, unit: 'books', start_date: addDays(today, -280), target_date: addDays(today, 85), sort_order: 1 };
+  const gRun = { ...goalBase, id: id(), space_id: personalSpace.id, title: 'Run 10 km without stopping', progress_mode: 'numeric', start_value: 2, target_value: 10, unit: 'km', aggregate: 'latest', start_date: addDays(today, -35), target_date: addDays(today, 40), sort_order: 2 };
+  const gDone = { ...goalBase, id: id(), title: 'Pass the driving test', status: 'achieved', achieved_at: ts, sort_order: 3 };
+  db.goals.push(gInternship, gBooks, gRun, gDone);
+  portfolio.goal_id = gInternship.id;
+  internships.goal_id = gInternship.id;
+  const gmBase = { user_id: U, completed_at: null, created_at: ts, updated_at: ts };
+  db.goal_milestones.push(
+    { ...gmBase, id: id(), goal_id: gInternship.id, title: 'Résumé reviewed by careers office', due_date: addDays(today, -5), status: 'done', completed_at: ts, sort_order: 0 },
+    { ...gmBase, id: id(), goal_id: gInternship.id, title: 'Send 10 applications', due_date: addDays(today, 45), status: 'open', sort_order: 1 },
+    { ...gmBase, id: id(), goal_id: gRun.id, title: 'First 5 km', due_date: addDays(today, 10), status: 'open', sort_order: 0 },
+  );
+  task(addDays(today, 1), 'Practice coding interview questions', 45, { goal_id: gInternship.id, due_date: addDays(today, 3), tags: ['coding'] });
+  const log = (goal, daysAgo, value, note = '') => db.goal_progress_log.push({ id: id(), user_id: U, goal_id: goal.id, logged_on: addDays(today, -daysAgo), value, note, created_at: ts });
+  [[240, 1], [200, 1], [150, 1], [110, 1], [70, 1], [30, 1]].forEach(([d, v]) => log(gBooks, d, v));
+  log(gBooks, 9, 1, 'Finished “Atomic Habits”');
+  [[30, 3], [21, 3.5], [14, 4.2], [7, 5], [2, 5.5]].forEach(([d, v]) => log(gRun, d, v));
+
+  // ---------------- routines (V4-C) ----------------
+  const routineBase = { user_id: U, space_id: null, goal_id: null, notes: '', days_of_week: [], weekly_target: 3, duration_minutes: null, end_date: null, paused: false, paused_at: null, archived: false, created_at: ts, updated_at: ts };
+  const rStretch = { ...routineBase, id: id(), title: 'Morning stretch', frequency: 'daily', time_of_day: 'morning', duration_minutes: 10, start_date: addDays(today, -40), sort_order: 0 };
+  const rGym = { ...routineBase, id: id(), space_id: personalSpace.id, goal_id: gRun.id, title: 'Run', frequency: 'days', days_of_week: [1, 3, 5], time_of_day: 'evening', duration_minutes: 40, start_date: addDays(today, -35), sort_order: 1 };
+  const rSpanish = { ...routineBase, id: id(), title: 'Spanish on Duolingo', frequency: 'daily', time_of_day: 'anytime', duration_minutes: 15, start_date: addDays(today, -60), sort_order: 2 };
+  const rRead = { ...routineBase, id: id(), space_id: personalSpace.id, goal_id: gBooks.id, title: 'Read before bed', frequency: 'weekly_count', weekly_target: 4, time_of_day: 'evening', duration_minutes: 20, start_date: addDays(today, -50), sort_order: 3 };
+  const rMeditate = { ...routineBase, id: id(), title: 'Meditate', frequency: 'daily', time_of_day: 'morning', duration_minutes: 10, start_date: addDays(today, -30), paused: true, paused_at: addDays(today, -4), sort_order: 4 };
+  db.routines.push(rStretch, rGym, rSpanish, rRead, rMeditate);
+  const tick = (r, daysAgo, status = 'done') => db.routine_completions.push({ id: id(), user_id: U, routine_id: r.id, completed_on: addDays(today, -daysAgo), status, note: '', created_at: ts });
+  for (let d = 1; d <= 40; d += 1) {
+    if (d % 6 !== 4) tick(rStretch, d); // mostly kept, a gap every ~6 days
+    if (d <= 60 && d % 9 !== 0) tick(rSpanish, d);
+    if (d <= 50 && d % 7 !== 2 && d % 7 !== 5 && d % 7 !== 6) tick(rRead, d);
+    if (d > 4 && d <= 30 && d % 5 !== 0) tick(rMeditate, d);
+  }
+  tick(rSpanish, 9, 'skipped');
+  tick(rStretch, 0);
+  for (let d = 1; d <= 35; d += 1) {
+    const date = addDays(today, -d);
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    if ([1, 3, 5].includes(dow) && d !== 19) tick(rGym, d);
+  }
 
   return db;
 }

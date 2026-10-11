@@ -9,6 +9,8 @@ import { app } from '../app/context.js';
 import { PROJECT_STATUSES, PROJECT_PRIORITIES, validateProjectFields, validateMilestoneFields } from './projectModel.js';
 import { createProject, updateProject, deleteProject, createMilestone, updateMilestone, deleteMilestone } from './projectsData.js';
 import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
+import { has } from '../shared/capabilities.js';
+import { listGoals } from '../goals/goalsData.js';
 
 function field(id, labelKey, control, { hint = '' } = {}) {
   const wrap = h('div', { class: 'field' });
@@ -34,8 +36,17 @@ function options(select, values, labelPrefix, current) {
   return select;
 }
 
-export function openProjectEditor({ project = null, onSaved, onDeleted } = {}) {
+export async function openProjectEditor({ project = null, defaults = {}, onSaved, onDeleted } = {}) {
   const isNew = !project;
+  // V4-C: a project can serve one goal.
+  let goals = [];
+  if (has('goals') && has('goalLinks')) {
+    try {
+      goals = (await listGoals(app().userId)).filter((g) => ['active', 'on_hold'].includes(g.status) || (project && g.id === project.goal_id) || g.id === defaults.goalId);
+    } catch {
+      goals = [];
+    }
+  }
   openDrawer({
     title: isNew ? t('projects.newTitle') : t('projects.editTitle'),
     render: (body) => {
@@ -51,6 +62,12 @@ export function openProjectEditor({ project = null, onSaved, onDeleted } = {}) {
       body.appendChild(grid);
       const space = spaceSelect('pe-space', project ? project.space_id : defaultSpaceForNew());
       if (space) body.appendChild(field('pe-space', 'spaces.field', space));
+      if (goals.length) {
+        const gs = h('select', { id: 'pe-goal' }, h('option', { value: '' }, t('goals.noGoal')));
+        goals.forEach((g) => gs.appendChild(h('option', { value: g.id }, g.title)));
+        gs.value = (project ? project.goal_id : defaults.goalId) || '';
+        body.appendChild(field('pe-goal', 'goals.field', gs));
+      }
 
       const more = h('details', { class: 'disclosure' }, h('summary', {}, t('common.moreOptions')));
       const mb = h('div', { class: 'disclosure-body' });
@@ -119,6 +136,7 @@ export function openProjectEditor({ project = null, onSaved, onDeleted } = {}) {
             return;
           }
           if (!b.querySelector('#pe-space')) delete v.fields.space_id;
+          if (b.querySelector('#pe-goal')) v.fields.goal_id = b.querySelector('#pe-goal').value || null;
           btn.textContent = t('common.saving');
           api.setBusy(true);
           try {

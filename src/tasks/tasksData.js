@@ -27,6 +27,7 @@ export function capabilityFilter(fields) {
   if (!has('projectLinks')) { delete out.project_id; delete out.project_milestone_id; } // V4 (0019)
   if (!has('taskFieldsV4')) ['due_time', 'start_time', 'status_override', 'project_sort'].forEach((k) => delete out[k]); // V4 (0020)
   if (!has('unscheduledTasks')) delete out.planned_by; // V4 (0021)
+  if (!has('goalLinks')) delete out.goal_id; // V4-C (0022)
   if (!has('taskExtensions')) {
     ['completed_at', 'actual_minutes', 'dependency_override', 'exam_topic_id', 'recurrence_rule_id', 'recurrence_date'].forEach((k) => delete out[k]);
   }

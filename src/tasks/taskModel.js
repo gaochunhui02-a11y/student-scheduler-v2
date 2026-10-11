@@ -109,6 +109,7 @@ export function buildTaskGroups(rows = [], blocks = [], ctx = {}) {
       // V4-B universal task fields (all null/0 for V3 tasks)
       projectId: root.project_id || null,
       milestoneId: root.project_milestone_id || null,
+      goalId: root.goal_id || null,
       dueTime: root.due_time ? String(root.due_time).slice(0, 5) : null,
       startTime: root.start_time ? String(root.start_time).slice(0, 5) : null,
       statusOverride: root.status_override || null,

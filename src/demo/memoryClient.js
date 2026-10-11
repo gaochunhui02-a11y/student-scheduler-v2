@@ -27,7 +27,7 @@ export const TABLE_DEFAULTS = {
   }),
   classes: () => ({ sort_order: 0, source: 'manual', course_id: null }),
   study_subjects: () => ({
-    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null, project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0, planned_by: null,
+    sort_order: 0, priority: 'medium', notes: '', due_date: null, tags: [], origin_subject_id: null, course_id: null, space_id: null, project_id: null, project_milestone_id: null, due_time: null, start_time: null, status_override: null, project_sort: 0, planned_by: null, goal_id: null,
     actual_minutes: null, completed_at: null, dependency_override: false, exam_topic_id: null, recurrence_rule_id: null, recurrence_date: null,
   }),
   schedule_items: () => ({ sort_order: 0, locked: false, completed: false, completed_minutes: 0, missed: false, carried_over_minutes: 0, source_subject_id: null }),
@@ -39,8 +39,13 @@ export const TABLE_DEFAULTS = {
   class_series_exceptions: () => ({ override_name: null, override_start_time: null, override_end_time: null }),
   semesters: () => ({ breaks: [], is_current: false }),
   spaces: () => ({ icon: 'circle', color: null, archived: false, sort_order: 0 }),
-  projects: () => ({ space_id: null, description: '', status: 'active', priority: 'medium', start_date: null, due_date: null, estimated_minutes: null, progress_mode: 'auto', manual_progress: null, sort_order: 0, completed_at: null }),
+  projects: () => ({ goal_id: null, space_id: null, description: '', status: 'active', priority: 'medium', start_date: null, due_date: null, estimated_minutes: null, progress_mode: 'auto', manual_progress: null, sort_order: 0, completed_at: null }),
   project_milestones: () => ({ description: '', due_date: null, status: 'open', completed_at: null, sort_order: 0 }),
+  goals: () => ({ space_id: null, description: '', status: 'active', start_date: null, target_date: null, progress_mode: 'auto', start_value: 0, target_value: null, unit: '', aggregate: 'sum', manual_progress: null, sort_order: 0, achieved_at: null }),
+  goal_milestones: () => ({ due_date: null, status: 'open', completed_at: null, sort_order: 0 }),
+  goal_progress_log: () => ({ logged_on: new Date().toISOString().slice(0, 10), note: '' }),
+  routines: () => ({ space_id: null, goal_id: null, notes: '', frequency: 'daily', days_of_week: [], weekly_target: 3, time_of_day: 'anytime', duration_minutes: null, start_date: new Date().toISOString().slice(0, 10), end_date: null, paused: false, paused_at: null, archived: false, sort_order: 0 }),
+  routine_completions: () => ({ status: 'done', note: '' }),
   courses: () => ({ space_id: null, semester_id: null, code: null, instructor: null, color: null, location: null, notes: '', target_grade: null, credits: null, archived: false, sort_order: 0 }),
   grade_categories: () => ({ weight: 0, sort_order: 0 }),
   grade_items: () => ({ category_id: null, earned_points: null, due_date: null, counts: true, notes: '', sort_order: 0 }),
@@ -73,6 +78,10 @@ const CASCADES = [
   ['resources', 'study_subjects', 'task_id'],
   // V4-B: milestones belong to their project
   ['project_milestones', 'projects', 'project_id'],
+  // V4-C: milestones and check-ins belong to their goal; completions to their routine
+  ['goal_milestones', 'goals', 'goal_id'],
+  ['goal_progress_log', 'goals', 'goal_id'],
+  ['routine_completions', 'routines', 'routine_id'],
 ];
 const SET_NULLS = [
   ['schedule_items', 'study_subjects', 'source_subject_id'],
@@ -100,6 +109,12 @@ const SET_NULLS = [
   ['projects', 'spaces', 'space_id'],
   ['study_subjects', 'projects', 'project_id'],
   ['study_subjects', 'project_milestones', 'project_milestone_id'],
+  // V4-C: deleting a goal keeps its tasks, projects and routines
+  ['goals', 'spaces', 'space_id'],
+  ['routines', 'spaces', 'space_id'],
+  ['study_subjects', 'goals', 'goal_id'],
+  ['projects', 'goals', 'goal_id'],
+  ['routines', 'goals', 'goal_id'],
 ];
 
 function cmp(a, b) {

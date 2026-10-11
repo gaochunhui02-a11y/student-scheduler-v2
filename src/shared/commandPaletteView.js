@@ -28,6 +28,8 @@ export function initCommandPalette({ getCommands, t }) {
     // V4
     spaces: 'search.groupSpaces',
     projects: 'search.groupProjects',
+    goals: 'search.groupGoals',
+    routines: 'search.groupRoutines',
   };
 
   function build() {

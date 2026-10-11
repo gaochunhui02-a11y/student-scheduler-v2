@@ -11,6 +11,8 @@ export const ROUTES = {
   courses: 'coursesView',
   tasks: 'tasksView',
   projects: 'projectsView',
+  goals: 'goalsView',
+  routines: 'routinesView',
   grades: 'gradesView',
   exams: 'examsView',
   planner: 'plannerForm',

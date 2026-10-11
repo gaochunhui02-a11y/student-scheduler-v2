@@ -215,6 +215,82 @@ await expectErr("B can't move own task onto A's schedule", `update public.study_
 await expectOk('B creates own backlog task', `insert into public.study_subjects (user_id, name, minutes_requested) values ($1, 'B backlog', 20)`, [B]);
 await as(A);
 
+console.log('\n=== V4-C goals (0022) ===');
+await as(A);
+const spaceG = await ins('A personal space', `insert into public.spaces (user_id, name, icon) values ($1, 'Personal', 'home')`, [A]);
+const goalA = await ins('A auto goal in a space', `insert into public.goals (user_id, space_id, title, start_date, target_date) values ($1, $2, 'Internship', '2026-10-01', '2027-03-01')`, [A, spaceG]);
+const goalN = await ins('A numeric goal (latest)', `insert into public.goals (user_id, title, progress_mode, start_value, target_value, unit, aggregate) values ($1, 'Run 10 km', 'numeric', 2, 10, 'km', 'latest')`, [A]);
+const gmA = await ins('A goal milestone', `insert into public.goal_milestones (user_id, goal_id, title, due_date) values ($1, $2, 'Send 10 applications', '2026-12-01')`, [A, goalA]);
+const logA = await ins('A check-in', `insert into public.goal_progress_log (user_id, goal_id, logged_on, value, note) values ($1, $2, '2026-10-05', 5.5, 'park')`, [A, goalN]);
+const projG = await ins('A project serving the goal', `insert into public.projects (user_id, title, goal_id) values ($1, 'Portfolio 3', $2)`, [A, goalA]);
+const taskG = await ins('A task serving the goal (no course, no project, no day)', `insert into public.study_subjects (user_id, name, minutes_requested, goal_id) values ($1, 'Mock interview', 45, $2)`, [A, goalA]);
+const v3goal = await rows(`select goal_id from public.study_subjects where id = $1`, [taskA2]);
+v3goal[0].goal_id === null ? ok('existing tasks get goal_id NULL') : bad('goal_id default', JSON.stringify(v3goal));
+const gDef = await rows(`select status, progress_mode, start_value::float8 as sv, aggregate, unit from public.goals where id = $1`, [goalA]);
+JSON.stringify(gDef[0]) === JSON.stringify({ status: 'active', progress_mode: 'auto', sv: 0, aggregate: 'sum', unit: '' }) ? ok('goal defaults active / auto / 0 / sum') : bad('goal defaults', JSON.stringify(gDef));
+await expectErr('numeric goal without a target rejected', `insert into public.goals (user_id, title, progress_mode) values ($1, 'x', 'numeric')`, [A], /check/);
+await expectErr('numeric goal with target = start rejected', `insert into public.goals (user_id, title, progress_mode, start_value, target_value) values ($1, 'x', 'numeric', 5, 5)`, [A], /check/);
+await expectErr('bad goal status rejected', `insert into public.goals (user_id, title, status) values ($1, 'x', 'done')`, [A], /check/);
+await expectErr('goal target before start rejected', `insert into public.goals (user_id, title, start_date, target_date) values ($1, 'x', '2026-12-01', '2026-11-01')`, [A], /check/);
+await expectErr('blank goal title rejected', `insert into public.goals (user_id, title) values ($1, '  ')`, [A], /check/);
+await expectErr('manual goal progress over 100 rejected', `insert into public.goals (user_id, title, progress_mode, manual_progress) values ($1, 'x', 'manual', 140)`, [A], /check/);
+await expectErr('bad aggregate rejected', `insert into public.goals (user_id, title, aggregate) values ($1, 'x', 'avg')`, [A], /check/);
+await expectErr('check-in note over 500 chars rejected', `insert into public.goal_progress_log (user_id, goal_id, value, note) values ($1, $2, 1, repeat('x', 501))`, [A, goalN], /check/);
+await as(B);
+for (const tbl of ['goals', 'goal_milestones', 'goal_progress_log']) {
+  const n = (await rows(`select count(*)::int n from public.${tbl}`))[0].n;
+  n === 0 ? ok(`B sees 0 rows in ${tbl}`) : bad(`B sees A's ${tbl}`, String(n));
+}
+const bg = await db.query(`update public.goals set title = 'hacked' where id = $1`, [goalA]);
+bg.affectedRows === 0 ? ok("B update of A's goal affects 0 rows") : bad('B updated A goal', String(bg.affectedRows));
+const bgd = await db.query(`delete from public.goal_progress_log where id = $1`, [logA]);
+bgd.affectedRows === 0 ? ok("B delete of A's check-in affects 0 rows") : bad('B deleted A check-in', String(bgd.affectedRows));
+await expectErr('B task -> A goal', `insert into public.study_subjects (user_id, name, minutes_requested, goal_id) values ($1, 'x', 30, $2)`, [B, goalA], /42501|does not belong/);
+await expectErr('B project -> A goal', `insert into public.projects (user_id, title, goal_id) values ($1, 'x', $2)`, [B, goalA], /42501|does not belong/);
+await expectErr('B milestone -> A goal', `insert into public.goal_milestones (user_id, goal_id, title) values ($1, $2, 'x')`, [B, goalA], /42501|does not belong/);
+await expectErr('B check-in -> A goal', `insert into public.goal_progress_log (user_id, goal_id, value) values ($1, $2, 1)`, [B, goalN], /42501|does not belong/);
+await expectErr('B goal -> A space', `insert into public.goals (user_id, title, space_id) values ($1, 'x', $2)`, [B, spaceG], /42501|does not belong/);
+await expectErr('B cannot insert a goal owned by A', `insert into public.goals (user_id, title) values ($1, 'x')`, [A], /row-level security/);
+
+console.log('\n=== V4-C routines (0023) ===');
+await as(A);
+const rA = await ins('A routine on chosen days serving a goal', `insert into public.routines (user_id, title, frequency, days_of_week, goal_id, space_id, duration_minutes) values ($1, 'Run', 'days', '[1,3,5]', $2, $3, 40)`, [A, goalN, spaceG]);
+const rA2 = await ins('A daily routine with defaults', `insert into public.routines (user_id, title) values ($1, 'Stretch')`, [A]);
+const rDef = await rows(`select frequency, weekly_target, time_of_day, paused, archived, start_date is not null as has_start from public.routines where id = $1`, [rA2]);
+JSON.stringify(rDef[0]) === JSON.stringify({ frequency: 'daily', weekly_target: 3, time_of_day: 'anytime', paused: false, archived: false, has_start: true }) ? ok('routine defaults daily / 3 / anytime / start today') : bad('routine defaults', JSON.stringify(rDef));
+await ins('A completion', `insert into public.routine_completions (user_id, routine_id, completed_on) values ($1, $2, '2026-10-05')`, [A, rA]);
+await ins('A skipped day', `insert into public.routine_completions (user_id, routine_id, completed_on, status) values ($1, $2, '2026-10-07', 'skipped')`, [A, rA]);
+await expectErr('second completion for the same routine + day rejected', `insert into public.routine_completions (user_id, routine_id, completed_on) values ($1, $2, '2026-10-05')`, [A, rA], /duplicate|unique/);
+await ins('same day on another routine is fine', `insert into public.routine_completions (user_id, routine_id, completed_on) values ($1, $2, '2026-10-05')`, [A, rA2]);
+await expectErr("'days' routine with no days rejected", `insert into public.routines (user_id, title, frequency, days_of_week) values ($1, 'x', 'days', '[]')`, [A], /check/);
+await expectErr('days_of_week must be an array', `insert into public.routines (user_id, title, days_of_week) values ($1, 'x', '{"mon":true}')`, [A], /check/);
+await expectErr('weekly target 1-7', `insert into public.routines (user_id, title, frequency, weekly_target) values ($1, 'x', 'weekly_count', 8)`, [A], /check/);
+await expectErr('bad frequency rejected', `insert into public.routines (user_id, title, frequency) values ($1, 'x', 'hourly')`, [A], /check/);
+await expectErr('routine end before start rejected', `insert into public.routines (user_id, title, start_date, end_date) values ($1, 'x', '2026-10-10', '2026-10-01')`, [A], /check/);
+await expectErr('paused_at only while paused', `insert into public.routines (user_id, title, paused, paused_at) values ($1, 'x', false, '2026-10-01')`, [A], /check/);
+await expectErr('bad completion status rejected', `insert into public.routine_completions (user_id, routine_id, completed_on, status) values ($1, $2, '2026-10-09', 'half')`, [A, rA], /check/);
+await expectOk('pause records the first paused day', `update public.routines set paused = true, paused_at = '2026-10-08' where id = $1`, [rA]);
+await as(B);
+for (const tbl of ['routines', 'routine_completions']) {
+  const n = (await rows(`select count(*)::int n from public.${tbl}`))[0].n;
+  n === 0 ? ok(`B sees 0 rows in ${tbl}`) : bad(`B sees A's ${tbl}`, String(n));
+}
+await expectErr('B completion -> A routine', `insert into public.routine_completions (user_id, routine_id, completed_on) values ($1, $2, '2026-10-06')`, [B, rA], /42501|does not belong/);
+await expectErr('B routine -> A goal', `insert into public.routines (user_id, title, goal_id) values ($1, 'x', $2)`, [B, goalA], /42501|does not belong/);
+await expectErr('B routine -> A space', `insert into public.routines (user_id, title, space_id) values ($1, 'x', $2)`, [B, spaceG], /42501|does not belong/);
+const br = await db.query(`update public.routines set title = 'hacked' where id = $1`, [rA]);
+br.affectedRows === 0 ? ok("B update of A's routine affects 0 rows") : bad('B updated A routine', String(br.affectedRows));
+await as(A);
+await expectOk('A deletes the goal', `delete from public.goals where id = $1`, [goalA]);
+const afterGoal = await rows(`select (select goal_id from public.projects where id = $1) as p, (select goal_id from public.study_subjects where id = $2) as t, (select count(*)::int from public.goal_milestones where id = $3) as m, (select count(*)::int from public.projects where id = $1) + (select count(*)::int from public.study_subjects where id = $2) as kept`, [projG, taskG, gmA]);
+afterGoal[0].p === null && afterGoal[0].t === null && afterGoal[0].m === 0 && afterGoal[0].kept === 2 ? ok('deleting a goal KEEPS its project and task (goal_id -> null) and removes its milestones') : bad('goal delete', JSON.stringify(afterGoal));
+await expectOk('A deletes the numeric goal', `delete from public.goals where id = $1`, [goalN]);
+const afterN = await rows(`select (select count(*)::int from public.goal_progress_log where id = $1) as l, (select goal_id from public.routines where id = $2) as r, (select count(*)::int from public.routines where id = $2) as kept`, [logA, rA]);
+afterN[0].l === 0 && afterN[0].r === null && afterN[0].kept === 1 ? ok('deleting a goal removes its check-ins and keeps routines (goal_id -> null)') : bad('numeric goal delete', JSON.stringify(afterN));
+await expectOk('A deletes the routine', `delete from public.routines where id = $1`, [rA]);
+const rcLeft = (await rows(`select count(*)::int n from public.routine_completions where routine_id = $1`, [rA]))[0].n;
+rcLeft === 0 ? ok('deleting a routine removes its completions') : bad('completions remain', String(rcLeft));
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

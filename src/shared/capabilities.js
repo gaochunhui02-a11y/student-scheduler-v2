@@ -31,6 +31,9 @@ const PROBES = {
   projectLinks: ['study_subjects', 'id, project_id, project_milestone_id'],
   taskFieldsV4: ['study_subjects', 'id, due_time, start_time, status_override, project_sort'],
   unscheduledTasks: ['study_subjects', 'id, planned_by'],
+  goals: ['goal_progress_log', 'id, goal_id, value'],
+  goalLinks: ['study_subjects', 'id, goal_id'],
+  routines: ['routine_completions', 'id, routine_id, status'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -54,6 +57,9 @@ export const FEATURE_MIGRATIONS = {
   projectLinks: '0019_projects.sql',
   taskFieldsV4: '0020_task_fields.sql',
   unscheduledTasks: '0021_unscheduled_tasks.sql',
+  goals: '0022_goals.sql',
+  goalLinks: '0022_goals.sql',
+  routines: '0023_routines.sql',
 };
 
 let state = null;

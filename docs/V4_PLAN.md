@@ -273,3 +273,71 @@ Any combination is valid. Overdue depends only on the due date.
 - Unscheduling a task leaves any already-generated blocks on their day.
 - Rolling back to V3 after creating backlog tasks: V3 shows them without a
   planned date and can edit them, but cannot create new ones.
+
+### V4-C — Goals + routines (done, awaiting review)
+
+**Migrations (files only — not applied anywhere):**
+- `0022_goals.sql` — `goals` (title, why/description, space, status
+  active/on_hold/achieved/archived, start/target dates, progress mode
+  auto/numeric/manual, start/target value, unit, aggregate sum/latest,
+  manual %, sort order, achieved_at), `goal_milestones` (goal, title, due
+  date, open/done), `goal_progress_log` (check-ins: day, value, note);
+  RLS with four own-row policies on all three; nullable
+  `study_subjects.goal_id` and `projects.goal_id`; ownership triggers on
+  every reference (space → goal → milestone/check-in/task/project).
+  CHECKs: a numeric goal needs a target different from its start; values
+  within ±1e9; dates in order; manual % 0–100.
+- `0023_routines.sql` — `routines` (title, notes, space, goal, frequency
+  daily/days/weekly_count, days_of_week jsonb array, weekly target 1–7, time
+  of day, optional minutes, start/end date, paused + paused_at, archived)
+  and `routine_completions` (routine, day, done/skipped, note) with a
+  **unique (routine, day)** index; RLS + ownership triggers.
+
+**Deletion behaviour (deliberate):**
+- Deleting a goal keeps its linked tasks, projects and routines (`goal_id`
+  ON DELETE SET NULL); its milestones and check-ins go with it (CASCADE).
+  The confirmation says so and recommends Archive.
+- Deleting a routine deletes its completion history (CASCADE); the
+  confirmation recommends Pause or Archive instead.
+
+**Behaviour:**
+- Goals page (`#/goals`, `#/goals/<id>`): status views, search, space
+  filter, cards with one progress number and a pace badge. Goal page:
+  progress ring, pace line, linked projects (link / unlink / new project),
+  linked tasks (add task with the goal preselected), milestones, check-ins
+  (numeric goals) and the routines that serve it.
+- Progress — one number per goal: *auto* = done tasks + done milestones +
+  each linked project's own progress fraction, over all of them (Achieved
+  shows 100%); *numeric* = check-ins from start to target (sum adds each
+  check-in, latest uses the newest; falling targets like 76 → 70 kg work);
+  *manual* = the student's %.
+- Pace (deterministic): with both dates, compares progress with the
+  straight line from start to target date — Ahead / On track / Behind
+  (> 10 points behind) / Past target date.
+- Routines page (`#/routines`): today's routines to tick or skip (unticked
+  first, by time of day; N-per-week routines hide once the week's target is
+  met), then every routine with its schedule, a 14-day strip, current and
+  best streak and a 30-day completion rate. Ready-made examples on the empty
+  page.
+- Streaks: days (daily/days) or weeks (N per week). Skipped days neither
+  count nor break; today never breaks a streak. Pausing records paused_at;
+  resuming records the paused routine days as skipped, so a pause never
+  breaks a streak.
+- Routines never create tasks or blocks — the Planner, Tasks, Generate and
+  Carry Over are unchanged. `routineMinutesOn()` is ready for V4-E capacity.
+- Task and project editors get a Goal field (task: up front when opened
+  from a goal, otherwise under More options).
+- Quick Add (G / R), command palette (new / open / search goals and
+  routines), backup/restore (all five tables, links remapped; left out on a
+  database without 0022/0023), Demo Mode seed, `?premigration=v4c`.
+- Modules: Goals is on for Work, Personal, Self-study, Multiple; Routines
+  for Personal, Self-study, Multiple. Legacy (V3) and School accounts opt in
+  via Settings › Workspace (still reachable from Quick Add, palette, search).
+
+**Known limitations (V4-C):**
+- A project serves at most one goal; a task links to one goal.
+- Routine completions are per day only (no "twice a day" routines).
+- Routines don't reserve planner time yet (V4-E adaptive planner).
+- Pause history keeps only the current pause; the skipped back-fill is
+  capped at 120 days.
+- Goal pace ignores weekends and breaks (straight calendar line).

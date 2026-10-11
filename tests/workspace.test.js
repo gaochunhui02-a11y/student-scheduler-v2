@@ -31,9 +31,20 @@ check('no saved workspace = legacy = every built V3 page visible', () => {
   assert.deepEqual(builtV3, ['home', 'planner', 'week', 'calendar', 'semester', 'tasks', 'courses', 'exams', 'grades', 'board', 'history', 'insights']);
 });
 check('unbuilt V4 modules are never shown, even if enabled', () => {
-  const ws = normalizeWorkspace({ mode: 'work', modules: { goals: true } });
-  assert.equal(isModuleEnabled(ws, 'goals'), true);
-  assert.equal(visibleModules(ws).includes('goals'), false);
+  const ws = normalizeWorkspace({ mode: 'work', modules: { notes: true } });
+  assert.equal(isModuleEnabled(ws, 'notes'), true);
+  assert.equal(visibleModules(ws).includes('notes'), false);
+});
+check('V4-C Goals and Routines follow the mode defaults; legacy accounts opt in', () => {
+  const vis = (mode) => visibleModules(normalizeWorkspace({ mode }));
+  assert.deepEqual(['goals', 'routines'].map((m) => vis('work').includes(m)), [true, false]);
+  assert.deepEqual(['goals', 'routines'].map((m) => vis('personal').includes(m)), [true, true]);
+  assert.deepEqual(['goals', 'routines'].map((m) => vis('selfstudy').includes(m)), [true, true]);
+  assert.deepEqual(['goals', 'routines'].map((m) => vis('school').includes(m)), [false, false]);
+  assert.deepEqual(['goals', 'routines'].map((m) => vis('multiple').includes(m)), [true, true]);
+  const legacy = visibleModules(normalizeWorkspace(null));
+  assert.equal(legacy.includes('goals') || legacy.includes('routines'), false);
+  assert.equal(visibleModules(withModule(normalizeWorkspace({ mode: 'school' }), 'routines', true)).includes('routines'), true);
 });
 check('legacy (V3) accounts do not get new V4 pages until they opt in', () => {
   assert.equal(visibleModules(normalizeWorkspace(null)).includes('projects'), false);

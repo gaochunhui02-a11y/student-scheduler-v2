@@ -1,0 +1,67 @@
+/* ==========================================================================
+   V4-C: Goals (list cards + goal page reuse the project layout) and
+   Routines (today checklist, all-routines list with a 14-day strip).
+   ========================================================================== */
+
+.card-head-actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Flush cards keep their header and empty states inset (as on project pages). */
+.v4-flush > .card-head { margin: 0; padding: var(--space-4) var(--space-4) var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.v4-flush > .empty-state, .v4-flush > .card-body { padding: var(--space-5) var(--space-4); }
+.v4-flush .list-row-meta svg { width: 13px; height: 13px; flex: none; }
+.v4-flush .card-subtitle { margin: 2px 0 0; font-size: var(--text-sm); color: var(--muted); }
+
+/* goal page */
+.goal-summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+.goal-checkin-cta { align-self: center; }
+.goal-columns > .stack { min-width: 0; }
+.goal-links .list-row { gap: var(--space-3); }
+.goal-link-main { text-decoration: none; color: inherit; gap: 4px; }
+.goal-link-main:hover .list-row-title { text-decoration: underline; }
+.goal-link-main:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+.goal-link-main .bar { margin-top: 4px; max-width: 320px; }
+.goal-log .list-row-title { font-variant-numeric: tabular-nums; }
+.goal-numeric[hidden] { display: none; }
+
+/* routines: today */
+.routines-today > .bar { margin: var(--space-3) var(--space-4) var(--space-1); width: auto; }
+.routines-today-count { font-size: var(--text-sm); font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text-soft); }
+.routine-row.is-done .list-row-title { color: var(--muted); text-decoration: line-through; }
+.routine-row.is-skipped .list-row-title { color: var(--muted); }
+.routine-streak, .routine-goal { display: inline-flex; align-items: center; gap: 3px; }
+.routine-streak svg { width: 13px; height: 13px; color: var(--warning); flex: none; }
+.routine-goal svg { width: 12px; height: 12px; flex: none; }
+
+/* routines: all */
+.routines-all > .card-head { flex-wrap: wrap; gap: var(--space-3); }
+.routine-all-row { flex-wrap: wrap; row-gap: var(--space-2); }
+.routine-all-row .list-row-main { flex: 1 1 220px; text-align: left; }
+.routine-strip { display: inline-flex; gap: 3px; align-items: center; flex: none; }
+.routine-dot { width: 12px; height: 12px; border-radius: 3px; background: var(--border-subtle); border: 1px solid var(--border-subtle); }
+.routine-dot.is-done { background: var(--success); border-color: var(--success); }
+.routine-dot.is-skipped { background: transparent; border: 1px dashed var(--muted); }
+.routine-dot.is-missed { background: color-mix(in srgb, var(--danger) 22%, transparent); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.routine-dot.is-open { background: transparent; border: 2px solid var(--accent); }
+.routine-dot.is-off, .routine-dot.is-before { opacity: 0.45; }
+.routine-stats { display: inline-flex; gap: var(--space-4); flex: none; }
+.routine-stat { display: flex; flex-direction: column; align-items: center; min-width: 44px; line-height: 1.15; }
+.routine-stat strong { font-size: var(--text-md); font-variant-numeric: tabular-nums; }
+.routine-stat span { font-size: var(--text-2xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+.routine-examples .card-title { margin-bottom: var(--space-3); }
+.routine-example-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.routine-example-row svg { width: 14px; height: 14px; }
+
+/* editor: weekday group label */
+.field-label { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 6px; }
+
+@media (max-width: 900px) {
+  .goal-summary { grid-template-columns: auto minmax(0, 1fr); }
+  .goal-checkin-cta { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .routine-all-row .routine-strip { order: 3; }
+  .routine-all-row .routine-stats { order: 4; gap: var(--space-3); }
+  .routine-all-row .list-row-side { order: 2; margin-left: auto; }
+  .routine-dot { width: 11px; height: 11px; }
+}

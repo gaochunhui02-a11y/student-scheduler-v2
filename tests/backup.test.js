@@ -162,7 +162,7 @@ check('V4-B projects, milestones and project tasks round-trip with remapped link
   const tk = { id: uid(), schedule_id: s.id, name: 'Homepage', minutes_requested: 90, project_id: pj.id, project_milestone_id: ms.id, due_time: '23:59', start_time: '14:00', status_override: 'deferred', project_sort: 20 };
   const v4 = validateBackup({ ...backup, tables: { spaces: [sp], projects: [pj], project_milestones: [ms], schedules: [s], study_subjects: [tk] } });
   assert.equal(v4.ok, true, JSON.stringify(v4.errors));
-  assert.deepEqual(BACKUP_TABLES.slice(0, 3), ['spaces', 'projects', 'project_milestones']);
+  assert.deepEqual(BACKUP_TABLES.slice(0, 8), ['spaces', 'goals', 'goal_milestones', 'goal_progress_log', 'routines', 'routine_completions', 'projects', 'project_milestones']);
   const plan = planRestore({ tables: v4.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
   const np = plan.inserts.projects[0];
   const nm = plan.inserts.project_milestones[0];
@@ -178,6 +178,43 @@ check('V4-B projects, milestones and project tasks round-trip with remapped link
   assert.ok(plan3.unavailable.includes('projects'));
   const t3 = plan3.inserts.study_subjects[0];
   ['project_id', 'project_milestone_id', 'due_time', 'start_time', 'status_override', 'project_sort'].forEach((k) => assert.equal(k in t3, false, k));
+});
+check('V4-C goals, check-ins, routines and completions round-trip with remapped links', () => {
+  const sp = { id: uid(), name: 'Personal', icon: 'home' };
+  const g = { id: uid(), space_id: sp.id, title: 'Run 10 km', progress_mode: 'numeric', start_value: 2, target_value: 10, unit: 'km', aggregate: 'latest', status: 'active' };
+  const gm = { id: uid(), goal_id: g.id, title: 'First 5 km', status: 'open' };
+  const log = { id: uid(), goal_id: g.id, logged_on: '2026-10-01', value: '5.5', note: 'park' };
+  const r = { id: uid(), goal_id: g.id, space_id: sp.id, title: 'Run', frequency: 'days', days_of_week: [1, 3, 5], weekly_target: 3, start_date: '2026-09-01', paused: false };
+  const rc = { id: uid(), routine_id: r.id, completed_on: '2026-10-05', status: 'done' };
+  const pj = { id: uid(), title: 'Race plan', goal_id: g.id };
+  const s = { id: uid(), for_date: '2026-10-20' };
+  const tk = { id: uid(), schedule_id: s.id, name: 'Buy shoes', minutes_requested: 30, goal_id: g.id };
+  const v = validateBackup({ ...backup, tables: { spaces: [sp], goals: [g], goal_milestones: [gm], goal_progress_log: [log], routines: [r], routine_completions: [rc], projects: [pj], schedules: [s], study_subjects: [tk] } });
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  const plan = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, availableTables: all, newId: newIds(), userId: 'me' });
+  const ng = plan.inserts.goals[0];
+  assert.equal(ng.space_id, plan.inserts.spaces[0].id);
+  assert.equal(plan.inserts.goal_milestones[0].goal_id, ng.id);
+  assert.equal(plan.inserts.goal_progress_log[0].goal_id, ng.id);
+  assert.equal(plan.inserts.routines[0].goal_id, ng.id);
+  assert.equal(plan.inserts.routine_completions[0].routine_id, plan.inserts.routines[0].id);
+  assert.equal(plan.inserts.projects[0].goal_id, ng.id);
+  assert.equal(plan.inserts.study_subjects[0].goal_id, ng.id);
+  // On a V4-B database (no 0022/0023): goal/routine tables and goal_id columns are left out.
+  const v4b = restoreAvailability({ spaces: 1, spaceLinks: 1, projects: 1, projectLinks: 1, taskFieldsV4: 1, unscheduledTasks: 1 });
+  const planB = planRestore({ tables: v.tables, existing: { scheduleDates: new Set(), courses: [], semesters: [] }, ...v4b, newId: newIds(), userId: 'me' });
+  ['goals', 'goal_milestones', 'goal_progress_log', 'routines', 'routine_completions'].forEach((tb) => assert.ok(planB.unavailable.includes(tb), tb));
+  assert.equal('goal_id' in planB.inserts.projects[0], false);
+  assert.equal('goal_id' in planB.inserts.study_subjects[0], false);
+});
+check('bad goal mode / routine frequency / completion status are rejected', () => {
+  const bad = validateBackup({ ...backup, tables: {
+    goals: [{ id: uid(), title: 'x', progress_mode: 'vibes' }],
+    routines: [{ id: uid(), title: 'x', frequency: 'hourly', start_date: '2026-10-01', days_of_week: [9] }],
+    routine_completions: [{ id: uid(), routine_id: uid(), completed_on: '2026-10-01', status: 'half' }],
+  } });
+  const problems = bad.errors.map((e) => `${e.table}.${e.column}`);
+  ['goals.progress_mode', 'routines.frequency', 'routines.days_of_week', 'routine_completions.status'].forEach((p) => assert.ok(problems.includes(p), p));
 });
 check('a bad project status / task status override is rejected', () => {
   const bad = validateBackup({ ...backup, tables: { projects: [{ id: uid(), title: 'x', status: 'done' }], study_subjects: [{ ...subj, status_override: 'done' }] } });

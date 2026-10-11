@@ -31,7 +31,15 @@ export function listProjects(userId) {
   return cached('projects', async () => unwrap(await supabase.from('projects').select('*').eq('user_id', userId).order('sort_order', { ascending: true })));
 }
 
+// V4-C: projects.goal_id exists only with 0022.
+function projectFields(fields) {
+  const out = { ...fields };
+  if (!has('goalLinks')) delete out.goal_id;
+  return out;
+}
+
 export async function createProject(userId, fields) {
+  fields = projectFields(fields);
   const existing = await listProjects(userId).catch(() => []);
   const row = unwrap(await supabase.from('projects').insert({ user_id: userId, sort_order: existing.length, ...fields }).select().single());
   changed();
@@ -39,6 +47,7 @@ export async function createProject(userId, fields) {
 }
 
 export async function updateProject(id, fields) {
+  fields = projectFields(fields);
   const patch = { ...fields, updated_at: nowIso() };
   if (fields.status === 'completed') patch.completed_at = nowIso();
   else if (fields.status) patch.completed_at = null;

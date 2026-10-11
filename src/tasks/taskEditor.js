@@ -18,6 +18,7 @@ import { createTask, updateTask, moveTaskToDate, deleteTaskGroup, unscheduleTask
 import { validateTaskSchedule } from './taskModel.js';
 import { spaceSelect, defaultSpaceForNew } from '../workspace/spaceField.js';
 import { listProjects, listMilestones } from '../projects/projectsData.js';
+import { listGoals } from '../goals/goalsData.js';
 import { SETTABLE_STATUSES, universalStatus, overrideForStatus } from './universalStatus.js';
 import { pinStudyBlock, taskHasBlockOn } from '../planner/pinBlock.js';
 
@@ -72,6 +73,15 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
       projects = projects.filter((p) => p.status !== 'archived' || (task && p.id === task.projectId));
     } catch {
       projects = [];
+    }
+  }
+  // V4-C: goals (open ones, plus the task's own even if it was put away).
+  let goals = [];
+  if (has('goals') && has('goalLinks')) {
+    try {
+      goals = (await listGoals(ctx.userId)).filter((g) => ['active', 'on_hold'].includes(g.status) || (task && g.id === task.goalId) || g.id === defaults.goalId);
+    } catch {
+      goals = [];
     }
   }
   const v4Fields = has('taskFieldsV4');
@@ -130,6 +140,15 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
         select.value = (task ? task.projectId : defaults.projectId) || '';
         where.appendChild(field('te-project', 'tasks.fieldProject', select));
       }
+      const goalPicked = (task ? task.goalId : defaults.goalId) || '';
+      const goalField = () => {
+        const select = h('select', { id: 'te-goal' }, h('option', { value: '' }, t('goals.noGoal')));
+        goals.forEach((g) => select.appendChild(h('option', { value: g.id }, g.title)));
+        select.value = goalPicked;
+        return field('te-goal', 'goals.field', select);
+      };
+      // A task opened from a goal shows its goal up front; otherwise it's under More options.
+      if (goals.length && goalPicked) where.appendChild(goalField());
       if (where.childElementCount) body.appendChild(where);
       // V4: a task's own space; empty = follow its course's space.
       const space = spaceSelect('te-space', task ? task.spaceId : (defaults.spaceId || (defaults.courseId ? '' : defaultSpaceForNew())), 'spaces.fromCourse');
@@ -171,6 +190,7 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
         msField.hidden = !(projSel && projSel.value);
         if (projSel) projSel.addEventListener('change', () => fillMilestones(projSel.value, ''));
       }
+      if (goals.length && !goalPicked) moreGrid.appendChild(goalField());
       moreBody.appendChild(moreGrid);
       const notes = h('textarea', { id: 'te-notes', rows: '3', maxlength: '5000' });
       notes.value = root ? root.notes || '' : '';
@@ -237,6 +257,8 @@ export async function openTaskEditor({ task = null, defaults = {}, onSaved } = {
             const msSel = body.querySelector('#te-milestone');
             fields.project_milestone_id = fields.project_id && msSel ? msSel.value || null : null;
           }
+          const goalSel = body.querySelector('#te-goal');
+          if (goalSel) fields.goal_id = goalSel.value || null;
           let startTime = null;
           if (v4Fields) {
             fields.due_time = body.querySelector('#te-due-time').value || null;

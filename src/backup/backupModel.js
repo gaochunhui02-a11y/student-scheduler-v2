@@ -36,12 +36,31 @@ const S = {
     id: ['id', true], name: ['text', true, 60], icon: ['enum', false, ['school', 'briefcase', 'home', 'heart', 'dumbbell', 'language', 'code', 'book', 'flask', 'music', 'leaf', 'star', 'circle']],
     color: ['color'], archived: ['bool'], sort_order: ['int', false, [-1e6, 1e6]],
   },
+  // V4-C (0022, 0023) — before projects/tasks, which can point at a goal
+  goals: {
+    id: ['id', true], space_id: ['ref'], title: ['text', true, 120], description: ['text', false, 5000],
+    status: ['enum', false, ['active', 'on_hold', 'achieved', 'archived']], start_date: ['date'], target_date: ['date'],
+    progress_mode: ['enum', false, ['auto', 'numeric', 'manual']], start_value: ['num', false, [-1e9, 1e9]], target_value: ['num', false, [-1e9, 1e9]],
+    unit: ['text', false, 24], aggregate: ['enum', false, ['sum', 'latest']], manual_progress: ['int', false, [0, 100]], sort_order: ['int', false, [-1e6, 1e6]], achieved_at: ['ts'],
+  },
+  goal_milestones: {
+    id: ['id', true], goal_id: ['ref', true], title: ['text', true, 120], due_date: ['date'], status: ['enum', false, ['open', 'done']], completed_at: ['ts'], sort_order: ['int', false, [-1e6, 1e6]],
+  },
+  goal_progress_log: { id: ['id', true], goal_id: ['ref', true], logged_on: ['date', true], value: ['num', true, [-1e9, 1e9]], note: ['text', false, 500] },
+  routines: {
+    id: ['id', true], space_id: ['ref'], goal_id: ['ref'], title: ['text', true, 120], notes: ['text', false, 2000],
+    frequency: ['enum', false, ['daily', 'days', 'weekly_count']], days_of_week: ['days'], weekly_target: ['int', false, [1, 7]],
+    time_of_day: ['enum', false, ['anytime', 'morning', 'afternoon', 'evening']], duration_minutes: ['int', false, [1, 1440]],
+    start_date: ['date', true], end_date: ['date'], paused: ['bool'], paused_at: ['date'], archived: ['bool'], sort_order: ['int', false, [-1e6, 1e6]],
+  },
+  routine_completions: { id: ['id', true], routine_id: ['ref', true], completed_on: ['date', true], status: ['enum', false, ['done', 'skipped']], note: ['text', false, 500] },
   // V4-B (0019)
   projects: {
     id: ['id', true], space_id: ['ref'], title: ['text', true, 120], description: ['text', false, 5000],
     status: ['enum', false, ['planned', 'active', 'on_hold', 'completed', 'archived']], priority: ['enum', false, ['low', 'medium', 'high']],
     start_date: ['date'], due_date: ['date'], estimated_minutes: ['int', false, [1, 1000000]], progress_mode: ['enum', false, ['auto', 'manual']],
     manual_progress: ['int', false, [0, 100]], sort_order: ['int', false, [-1e6, 1e6]], completed_at: ['ts'],
+    goal_id: ['ref'], // V4-C (0022)
   },
   project_milestones: {
     id: ['id', true], project_id: ['ref', true], title: ['text', true, 120], description: ['text', false, 2000], due_date: ['date'],
@@ -92,6 +111,7 @@ const S = {
     project_id: ['ref'], project_milestone_id: ['ref'], due_time: ['time'], start_time: ['time'],
     status_override: ['enum', false, ['in_progress', 'deferred']], project_sort: ['int', false, [-1e6, 1e6]],
     planned_by: ['enum', false, ['user', 'planner']], // V4-B.1 (0021)
+    goal_id: ['ref'], // V4-C (0022)
   },
   study_subject_subtasks: { id: ['id', true], subject_id: ['ref', true], title: ['text', false, 200], completed: ['bool'], sort_order: ['int', false, [-1e6, 1e6]] },
   task_dependencies: { id: ['id', true], task_id: ['ref', true], depends_on_id: ['ref', true] },
@@ -126,7 +146,12 @@ export const BACKUP_TABLES = Object.keys(S);
 
 // Foreign keys to rewrite: table -> { column: parentTable }
 export const REFS = {
-  projects: { space_id: 'spaces' },
+  goals: { space_id: 'spaces' },
+  goal_milestones: { goal_id: 'goals' },
+  goal_progress_log: { goal_id: 'goals' },
+  routines: { space_id: 'spaces', goal_id: 'goals' },
+  routine_completions: { routine_id: 'routines' },
+  projects: { space_id: 'spaces', goal_id: 'goals' },
   project_milestones: { project_id: 'projects' },
   courses: { semester_id: 'semesters', space_id: 'spaces' },
   classes: { schedule_id: 'schedules', course_id: 'courses' },
@@ -135,7 +160,7 @@ export const REFS = {
   task_recurrence_rules: { course_id: 'courses' },
   exams: { course_id: 'courses' },
   exam_topics: { exam_id: 'exams' },
-  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules', space_id: 'spaces', project_id: 'projects', project_milestone_id: 'project_milestones' },
+  study_subjects: { schedule_id: 'schedules', origin_subject_id: 'study_subjects', course_id: 'courses', exam_topic_id: 'exam_topics', recurrence_rule_id: 'task_recurrence_rules', space_id: 'spaces', project_id: 'projects', project_milestone_id: 'project_milestones', goal_id: 'goals' },
   study_subject_subtasks: { subject_id: 'study_subjects' },
   task_dependencies: { task_id: 'study_subjects', depends_on_id: 'study_subjects' },
   schedule_items: { schedule_id: 'schedules', source_subject_id: 'study_subjects' },
@@ -285,10 +310,12 @@ export const CAPABILITY_COLUMNS = {
   projectLinks: { study_subjects: ['project_id', 'project_milestone_id'] },
   taskFieldsV4: { study_subjects: ['due_time', 'start_time', 'status_override', 'project_sort'] },
   unscheduledTasks: { study_subjects: ['planned_by'] },
+  goalLinks: { study_subjects: ['goal_id'], projects: ['goal_id'] },
 };
 // Which table each capability-gated table needs.
 export const TABLE_CAPABILITY = {
-  spaces: 'spaces', projects: 'projects', project_milestones: 'projects', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
+  spaces: 'spaces', projects: 'projects', project_milestones: 'projects',
+  goals: 'goals', goal_milestones: 'goals', goal_progress_log: 'goals', routines: 'routines', routine_completions: 'routines', semesters: 'semesters', courses: 'courses', grade_categories: 'grades', grade_items: 'grades', exams: 'exams', exam_topics: 'exams',
   task_recurrence_rules: 'recurringTasks', task_dependencies: 'dependencies', resources: 'resources', focus_sessions: 'focusSessions',
 };
 
