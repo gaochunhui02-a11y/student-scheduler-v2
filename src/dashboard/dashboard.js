@@ -114,6 +114,7 @@ import { resolveSpaceFilter } from '../workspace/spacesModel.js';
 import { clearOfflineSnapshots } from '../offline/offlineSnapshot.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 import { initOnboarding } from './onboarding.js';
+import { initHelpCenter, startTodayTourAfterOnboarding } from '../tour/helpCenter.js';
 import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { displayBlockName, mealLabel } from '../shared/blockLabels.js';
 import { scrollBehavior } from '../shared/motion.js';
@@ -123,7 +124,7 @@ import { shouldShowOnboarding } from './onboardingModel.js';
 import { IS_DEMO } from '../lib/supabaseClient.js';
 import { exitDemoMode } from '../demo/demoMode.js';
 import { probeCapabilities, has as hasCapability } from '../shared/capabilities.js';
-import { capabilityFilter, updateTask } from '../tasks/tasksData.js';
+import { capabilityFilter, updateTask, createTask } from '../tasks/tasksData.js';
 import { applyOnboardingAcademics, linkOnboardingClasses } from '../onboarding/onboardingAcademics.js';
 import { setAppContext, onChange, emitChange } from '../app/context.js';
 import { parseHash, pushRoute, onRouteChange } from '../app/router.js';
@@ -457,6 +458,11 @@ async function init(session) {
     currentViewKey = 'plannerForm';
     syncNavState();
     pushRoute('plannerForm');
+    announceView('plannerForm');
+  }
+  // V5: other features (product tours) listen for page changes.
+  function announceView(view) {
+    document.dispatchEvent(new CustomEvent('app:view', { detail: { view } }));
   }
   function showAltView(viewEl, param = null) {
     plannerForm.style.display = 'none';
@@ -468,6 +474,7 @@ async function init(session) {
       pushRoute(viewEl.id, param);
     }
     syncNavState();
+    if (viewEl) announceView(viewEl.id);
   }
 
   // Shared by Board's/Analytics' "go to Planner" bridges — switches back to
@@ -1012,6 +1019,7 @@ async function init(session) {
     spaces: () => spaceList,
     spaceFilter: () => spaceFilter,
     navigate: (view, param = null) => activateView(view, param),
+    currentView: () => currentViewKey,
     openCourse: (courseId) => activateView('coursesView', courseId),
     openPlannerForDate: (dateStr) => openPlannerForDate(dateStr),
     plannerDate: () => (schedule ? schedule.for_date : null),
@@ -4754,7 +4762,12 @@ async function init(session) {
     }
   }
 
-  async function applyOnboardingPlan(plan, academics = null) {
+  // V5: `deadlines` (onboarding's deadline plan, deadlinePlanner.withShortfall)
+  // spreads each task over days before its due date: today's part goes
+  // through the Planner rows + Generate below; every other day gets its own
+  // row, linked to the first part as a multi-day chunk (origin_subject_id),
+  // exactly like Plan across days. The full estimate is always kept.
+  async function applyOnboardingPlan(plan, academics = null, deadlines = null) {
     // V3: semester, courses and weekly classes first (Semester/Courses data
     // functions), so today's Planner below already shows the weekly classes.
     // The "classes changed" listener stands down meanwhile: this function
@@ -4776,12 +4789,20 @@ async function init(session) {
     }
     preferredPeriodEl.value = plan.prefs.preferred_study_period;
     if (plan.prefs.session_cap_minutes) sessionCapEl.value = String(plan.prefs.session_cap_minutes);
+    if (plan.prefs.max_daily_study_minutes && maxDailyStudyEl) maxDailyStudyEl.value = String(plan.prefs.max_daily_study_minutes);
     saveScheduleSettings();
     await scheduleSaveTarget._savePromise;
 
     const classRows = plan.classes.map((c) => addClassRow(c));
     classRows.forEach((row) => row.querySelector('.class-name').dispatchEvent(new Event('change', { bubbles: true })));
-    const taskRows = plan.tasks.map((task) => addStudyRow(task));
+    const todayStrNow = todayDateStr();
+    const partsOf = (i) => (deadlines || []).filter((a) => a.taskId === String(i)).sort((a, b) => a.date.localeCompare(b.date));
+    // Which tasks have a part today (all of them without a deadline plan).
+    const todayIdx = plan.tasks.map((_, i) => i).filter((i) => !deadlines || partsOf(i).some((a) => a.date === todayStrNow));
+    const taskRows = todayIdx.map((i) => {
+      const part = deadlines ? partsOf(i).find((a) => a.date === todayStrNow) : null;
+      return addStudyRow(part ? { ...plan.tasks[i], minutes_requested: part.minutes } : plan.tasks[i]);
+    });
     taskRows.forEach((row) => row.querySelector('.study-name').dispatchEvent(new Event('change', { bubbles: true })));
     await Promise.all([...classRows, ...taskRows].map((row) => row._savePromise));
 
@@ -4790,10 +4811,37 @@ async function init(session) {
     if ([...classRows, ...taskRows].some((row) => !row.dataset.id)) throw new Error('onboarding_save_failed');
     if (academics) {
       await linkOnboardingClasses(classRows.map((row) => row.dataset.id), academics, courseIds);
-      await Promise.all(taskRows.map((row, i) => {
-        const idx = academics.taskCourse[i];
+      await Promise.all(taskRows.map((row, k) => {
+        const idx = academics.taskCourse[todayIdx[k]];
         return idx !== null && idx !== undefined && courseIds[idx] ? updateTask(row.dataset.id, { course_id: courseIds[idx] }, { refresh: false }) : null;
       }));
+    }
+    if (deadlines) {
+      const courseFor = (i) => {
+        const idx = academics ? academics.taskCourse[i] : null;
+        return idx !== null && idx !== undefined && courseIds[idx] ? courseIds[idx] : null;
+      };
+      for (let i = 0; i < plan.tasks.length; i += 1) {
+        const parts = partsOf(i);
+        const k = todayIdx.indexOf(i);
+        let rootId = k >= 0 ? taskRows[k].dataset.id : null;
+        for (const part of parts) {
+          if (part.date === todayStrNow && rootId) continue;
+          const course = courseFor(i);
+          // eslint-disable-next-line no-await-in-loop
+          const row = await createTask(userId, {
+            planDate: part.date,
+            fields: {
+              name: plan.tasks[i].name,
+              minutes_requested: part.minutes,
+              ...(plan.tasks[i].due_date ? { due_date: plan.tasks[i].due_date } : {}),
+              ...(course ? { course_id: course } : {}),
+              ...(rootId ? { origin_subject_id: rootId } : {}),
+            },
+          });
+          if (!rootId) rootId = row.id;
+        }
+      }
     }
     if (taskRows.length > 0) await handleGenerateClick(generateBtn.hidden ? regenerateBtn : generateBtn);
     output.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
@@ -4825,6 +4873,11 @@ async function init(session) {
     isV3: () => hasCapability('courses'),
     today: () => todayDateStr(),
     applyPlan: applyOnboardingPlan,
+    // V5: finish on Today (the plan's home), then its guide.
+    afterBuild: () => {
+      if (!document.getElementById('todayView')) return;
+      startTodayTourAfterOnboarding().catch((err) => console.error('Could not start the Today guide', err));
+    },
     markComplete: async () => {
       try {
         localStorage.setItem(ONBOARDING_LOCAL_KEY, '1');
@@ -4834,6 +4887,12 @@ async function init(session) {
       await markOnboardingCompleted(userId);
     },
   });
+
+  // V5: Help & guides (`?` buttons) and first-visit guide offers.
+  initHelpCenter({
+    isOnboardingOpen: () => onboarding.isOpen(),
+    replayOnboarding: () => onboarding.open(),
+  }).catch((err) => console.error('Could not start Help', err));
 
   const replayOnboardingBtn = document.getElementById('settingsReplayOnboardingBtn');
   if (replayOnboardingBtn) {

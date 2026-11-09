@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#10131a">
 <link rel="stylesheet" href="/src/styles/main.css">
 <link rel="stylesheet" href="/src/styles/v3.css">
+<link rel="stylesheet" href="/src/styles/v5.css">
 </head>
 <body>
 <a class="skip-link" href="#mainContent" data-i18n="a11y.skipToContent">Skip to content</a>
@@ -154,6 +155,9 @@
         <button type="button" class="icon-btn" id="navCustomizeBtn" data-i18n-title="nav.customize" title="Customize sidebar" data-i18n-aria-label="nav.customize" aria-label="Customize sidebar">
           <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/></svg>
         </button>
+        <button type="button" class="icon-btn" id="helpBtn" data-open-help hidden data-i18n-title="help.open" title="Help &amp; guides" data-i18n-aria-label="help.open" aria-label="Help &amp; guides">
+          <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+        </button>
         <button type="button" class="icon-btn" id="themeToggle" data-i18n-title="theme.dark" title="Dark mode">
           <svg class="icon-btn-icon icon-theme-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
           <span id="themeToggleLabel" class="sr-only">Dark mode</span>
@@ -192,6 +196,9 @@
              greeting on Home + the sidebar's own name display already cover this
              visually now — a third "Hi, Name" line would just be noise. -->
         <span id="userName" class="sr-only">Loading…</span>
+        <button type="button" class="header-help icon-btn" data-open-help hidden data-i18n-aria-label="help.open" aria-label="Help &amp; guides">
+          <svg class="icon-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+        </button>
         <button type="button" class="header-quickadd" data-open-palette="create" data-i18n-aria-label="palette.quickAdd" aria-label="Quick add">+</button>
       </header>
 

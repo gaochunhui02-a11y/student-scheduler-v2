@@ -5,8 +5,12 @@
 // them, then generates. Skip/finish call host.markComplete.
 
 import { icon } from '../ui/icons.js';
+import { planDeadlines, groupByDay, withShortfall } from '../planner/deadlinePlanner.js';
 import {
-  onboardingStepsV4,
+  onboardingStepsV5 as onboardingStepsV4,
+  DAILY_TARGETS,
+  DEFAULT_DAILY_TARGET,
+  onboardingPlannerInput,
   PURPOSES,
   buildOnboardingAcademics,
   defaultOnboardingAnswersV3,
@@ -99,10 +103,12 @@ export function initOnboarding(host) {
       answers.tasks = Array.from(body.querySelectorAll('.onb-row')).map((row) => ({
         name: row.querySelector('.onb-name').value,
         minutes: row.querySelector('.onb-minutes').value,
+        due: row.querySelector('.onb-due') ? row.querySelector('.onb-due').value : '',
         course: courseOf(row),
       }));
     } else if (step === 'day') {
-      answers.day = { wake: body.querySelector('.onb-wake').value, sleep: body.querySelector('.onb-sleep').value };
+      const daily = body.querySelector('input[name="onbDaily"]:checked');
+      answers.day = { wake: body.querySelector('.onb-wake').value, sleep: body.querySelector('.onb-sleep').value, dailyMinutes: daily ? Number(daily.value) : DEFAULT_DAILY_TARGET };
     } else if (step === 'classes') {
       answers.classes = Array.from(body.querySelectorAll('.onb-row')).map((row) => {
         const weekly = row.querySelector('.onb-weekly');
@@ -194,6 +200,7 @@ export function initOnboarding(host) {
       });
       body.appendChild(group);
       body.appendChild(el('p', 'hint', t('onboarding.purposeChangeLater')));
+      body.insertBefore(hero(), group);
     } else if (step === 'courses') {
       const sem = el('div', 'onb-row onb-row-sem');
       sem.appendChild(labeled(t('onboarding.semesterName'), input('text', 'onb-sem-name', answers.semester.name, { placeholder: t('onboarding.semesterExample'), maxlength: '120' })));
@@ -214,6 +221,9 @@ export function initOnboarding(host) {
         const exampleKey = generalPurpose() ? `onboarding.taskGeneralExample${i + 1}` : `onboarding.taskExample${i + 1}`;
         row.appendChild(labeled(t('onboarding.taskName'), input('text', 'onb-name', task.name, { placeholder: t(exampleKey), maxlength: '80' })));
         row.appendChild(labeled(t('onboarding.minutes'), input('number', 'onb-minutes', task.minutes, { min: '15', max: '600', step: '15', inputmode: 'numeric' })));
+        // V5: when it's due (optional) — the plan step spreads the work before it.
+        row.appendChild(labeled(t('onboarding.dueDate'), input('date', 'onb-due', task.due || '', { min: host.today() })));
+        row.classList.add('onb-row-due');
         const cs = courseSelect(task.course);
         if (cs) row.appendChild(cs);
         body.appendChild(row);
@@ -223,6 +233,10 @@ export function initOnboarding(host) {
       row.appendChild(labeled(t('onboarding.wake'), input('time', 'onb-wake', answers.day.wake)));
       row.appendChild(labeled(t('onboarding.sleep'), input('time', 'onb-sleep', answers.day.sleep)));
       body.appendChild(row);
+      // V5: a realistic amount of focused work per day — the plan never goes over it.
+      body.appendChild(el('p', 'onb-field-label onb-spaced', t('onboarding.dailyQuestion')));
+      body.appendChild(choiceGroup('onbDaily', DAILY_TARGETS, Number(answers.day.dailyMinutes) || DEFAULT_DAILY_TARGET, (v) => hoursLabel(v)));
+      body.appendChild(el('p', 'hint', t('onboarding.dailyHint')));
     } else if (step === 'classes') {
       answers.classes.forEach((c) => {
         const row = el('div', v3 ? 'onb-row onb-row-class3' : 'onb-row onb-row-class');
@@ -247,12 +261,93 @@ export function initOnboarding(host) {
         body.appendChild(row);
       });
       body.appendChild(el('p', 'hint', t(v3 ? 'onboarding.classesWeeklyHint' : 'onboarding.classesRecurringHint')));
+    } else if (step === 'plan') {
+      renderPlanPreview(body);
     } else if (step === 'style') {
       body.appendChild(el('p', 'onb-field-label', t('onboarding.periodQuestion')));
       body.appendChild(choiceGroup('onbPeriod', STUDY_PERIODS, answers.style.period, (v) => t(PERIOD_KEYS[v])));
       body.appendChild(el('p', 'onb-field-label onb-spaced', t('onboarding.sessionQuestion')));
       body.appendChild(choiceGroup('onbSession', SESSION_LENGTHS, answers.style.sessionMinutes, (v) => t('onboarding.sessionMinutes').replace('{n}', v)));
     }
+  }
+
+  // ---------------- V5 helpers ----------------
+  const ILLUSTRATION = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="12" width="48" height="44" rx="8" fill="var(--surface-1)" stroke="var(--accent)" stroke-width="2"/><path d="M8 24h48" stroke="var(--accent)" stroke-width="2"/><path d="M20 8v8M44 8v8" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/><rect x="16" y="31" width="14" height="6" rx="2" fill="var(--accent)"/><rect x="34" y="31" width="14" height="6" rx="2" fill="var(--accent-soft-strong)"/><rect x="16" y="42" width="22" height="6" rx="2" fill="var(--accent-soft-strong)"/><circle cx="48" cy="46" r="8" fill="var(--success)"/><path d="m44.5 46 2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function hero() {
+    const box = el('div', 'onb-hero');
+    box.innerHTML = ILLUSTRATION;
+    box.appendChild(el('span', null, t('onboarding.heroLine')));
+    return box;
+  }
+  function hoursLabel(minutes) {
+    const h = minutes / 60;
+    return t('onboarding.hoursPerDay').replace('{h}', Number.isInteger(h) ? String(h) : h.toFixed(1));
+  }
+  function fmtMin(m) {
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    if (!h) return t('onboarding.durM').replace('{m}', String(mm));
+    if (!mm) return t('onboarding.durH').replace('{h}', String(h));
+    return t('onboarding.durHM').replace('{h}', String(h)).replace('{m}', String(mm));
+  }
+  function fmtDay(date) {
+    const today = host.today();
+    const [y, m, d] = today.split('-').map(Number);
+    const tomorrow = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    if (date === today) return t('catchup.today');
+    if (date === tomorrow) return t('catchup.tomorrow');
+    const lang = document.documentElement.lang || 'en';
+    try {
+      return new Date(`${date}T00:00:00Z`).toLocaleDateString(lang, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    } catch {
+      return date;
+    }
+  }
+  /** The deadline plan for the current answers (also what finish() saves). */
+  function currentDeadlinePlan() {
+    const plan = buildOnboardingPlan(answers);
+    const daily = Number(answers.day && answers.day.dailyMinutes) || DEFAULT_DAILY_TARGET;
+    const result = planDeadlines(onboardingPlannerInput(plan, { today: host.today(), dailyMinutes: daily }));
+    return { plan, result, saved: withShortfall(result, host.today()), daily };
+  }
+  function renderPlanPreview(body) {
+    const { plan, result, saved, daily } = currentDeadlinePlan();
+    if (!plan.tasks.length) {
+      body.appendChild(el('p', 'onb-preview-empty', t('onboarding.planEmpty')));
+      return;
+    }
+    const days = groupByDay(saved);
+    const list = el('ol', 'onb-preview');
+    list.setAttribute('aria-label', t('onboarding.planTitle'));
+    days.slice(0, 8).forEach((day) => {
+      const li = el('li', 'onb-preview-day');
+      const head = el('div', 'onb-preview-date');
+      head.append(el('span', null, fmtDay(day.date)), el('span', null, fmtMin(day.minutes)));
+      li.appendChild(head);
+      day.items.forEach((a) => {
+        const row = el('div', 'onb-preview-task');
+        const label = el('span', null, a.name);
+        const summary = result.tasks.find((s) => s.taskId === a.taskId);
+        if (summary && summary.dueDate) label.appendChild(el('span', 'onb-preview-why', ` · ${t('onboarding.planDue').replace('{date}', fmtDay(summary.dueDate))}`));
+        row.append(label, el('span', null, fmtMin(a.minutes)));
+        li.appendChild(row);
+      });
+      list.appendChild(li);
+    });
+    body.appendChild(list);
+    if (days.length > 8) body.appendChild(el('p', 'hint', t('onboarding.planMoreDays').replace('{n}', String(days.length - 8))));
+    result.tasks.filter((s) => s.shortBy > 0).forEach((s) => {
+      const lastDay = saved.filter((a) => a.taskId === s.taskId).pop();
+      const msg = t('onboarding.planShort')
+        .replace('{name}', s.name)
+        .replace('{need}', fmtMin(s.minutes))
+        .replace('{date}', s.dueDate ? fmtDay(s.dueDate) : '—')
+        .replace('{fit}', fmtMin(s.planned))
+        .replace('{daily}', fmtMin(daily))
+        .replace('{day}', lastDay ? fmtDay(lastDay.date) : fmtDay(host.today()));
+      body.appendChild(el('p', 'onb-preview-warn', msg));
+    });
+    body.appendChild(el('p', 'hint', t('onboarding.planNote')));
   }
 
   function render() {
@@ -264,7 +359,7 @@ export function initOnboarding(host) {
     q('.onboarding-eyebrow').textContent = t('onboarding.stepOf').replace('{n}', stepIndex + 1).replace('{total}', STEPS.length);
     // V3 rewords the classes step (a weekly timetable, not just today).
     // V3 rewords the classes step; V4 Work / Personal setups reword the tasks step.
-    const copyKey = v3 && step === 'classes' ? 'classes3' : step === 'tasks' && generalPurpose() ? 'tasksGeneral' : step;
+    const copyKey = v3 && step === 'classes' ? 'classes3' : step === 'tasks' ? (generalPurpose() ? 'tasksGeneral' : 'deadlines') : step === 'day' ? 'availability' : step;
     q('.onboarding-title').textContent = t(`onboarding.${copyKey}Title`);
     q('.onboarding-lead').textContent = t(`onboarding.${copyKey}Lead`);
     q('.onboarding-error').textContent = '';
@@ -287,7 +382,7 @@ export function initOnboarding(host) {
   }
 
   // Point at the exact field(s) an error is about.
-  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep', purpose: 'input[name="onbPurpose"]', semName: '.onb-sem-name', semDates: '.onb-sem-start, .onb-sem-end', weekday: '.onb-weekday' };
+  const FIELD_SELECTORS = { name: '.onb-name', minutes: '.onb-minutes', time: '.onb-start, .onb-end', wake: '.onb-wake', sleep: '.onb-sleep', purpose: 'input[name="onbPurpose"]', semName: '.onb-sem-name', semDates: '.onb-sem-start, .onb-sem-end', weekday: '.onb-weekday', due: '.onb-due', daily: 'input[name="onbDaily"]' };
   function markInvalid(errors) {
     const body = q('.onboarding-body');
     const rows = body.querySelectorAll(STEPS[stepIndex] === 'courses' ? '.onb-row-course' : '.onb-row');
@@ -308,7 +403,7 @@ export function initOnboarding(host) {
     if (busy) return;
     readStep();
     const step = STEPS[stepIndex];
-    const result = validateOnboardingStep(step, answers);
+    const result = validateOnboardingStep(step, { ...answers, today: host.today() });
     q('.onboarding-body').querySelectorAll('[aria-invalid]').forEach((node) => node.removeAttribute('aria-invalid'));
     if (!result.ok) {
       q('.onboarding-error').textContent = t(result.errors[0].key);
@@ -338,10 +433,13 @@ export function initOnboarding(host) {
         const academics = v3 ? buildOnboardingAcademics(answers, { today: host.today() }) : null;
         nextBtn.textContent = t('onboarding.building');
         const hasAcademics = academics && (academics.semester || academics.courses.length || academics.weeklyClasses.length);
-        if (plan.day || plan.classes.length || plan.tasks.length || hasAcademics) await host.applyPlan(plan, academics);
+        const deadlines = plan.tasks.length ? currentDeadlinePlan().saved : null;
+        if (plan.day || plan.classes.length || plan.tasks.length || hasAcademics) await host.applyPlan(plan, academics, deadlines);
       }
       await host.markComplete();
       close();
+      // V5: land on Today with the plan, and show its guide once.
+      if (build && typeof host.afterBuild === 'function') host.afterBuild();
     } catch (err) {
       console.error('Onboarding could not finish:', err);
       busy = false;
@@ -372,5 +470,5 @@ export function initOnboarding(host) {
     if (returnFocusTo && typeof returnFocusTo.focus === 'function') returnFocusTo.focus();
   }
 
-  return { open, close };
+  return { open, close, isOpen: () => Boolean(overlay && !overlay.hidden) };
 }

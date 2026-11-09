@@ -1,0 +1,147 @@
+/* ==========================================================================
+   V5 components — product tours, help center, onboarding plan preview,
+   Today "next" card. Built only from tokens.css variables so light/dark
+   themes follow automatically.
+   ========================================================================== */
+
+/* ---------------- product tour ---------------- */
+body.tour-open { overflow: hidden; }
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+.tour-blocker {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+.tour-root.is-centered .tour-blocker { background: rgba(10, 12, 18, 0.55); }
+.tour-spot {
+  position: fixed;
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 9999px rgba(10, 12, 18, 0.55), 0 0 0 2px var(--accent);
+  pointer-events: none;
+  transition: top var(--dur-slow) var(--ease-out), left var(--dur-slow) var(--ease-out), width var(--dur-slow) var(--ease-out), height var(--dur-slow) var(--ease-out);
+}
+.tour-card {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--surface-raised, var(--surface-1));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  transition: top var(--dur-slow) var(--ease-out), left var(--dur-slow) var(--ease-out);
+}
+.tour-card:focus { outline: none; }
+.tour-card:focus-visible { box-shadow: var(--shadow-lg), 0 0 0 3px var(--focus-ring); }
+.tour-card.is-sheet {
+  left: 0 !important;
+  right: 0;
+  bottom: 0;
+  top: auto !important;
+  width: auto;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+.tour-count {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.tour-title { margin: 0 0 var(--space-1); font-size: var(--text-lg); line-height: var(--leading-tight); }
+.tour-text { margin: 0 0 var(--space-4); color: var(--text-soft); font-size: var(--text-md); line-height: var(--leading); }
+.tour-foot { display: flex; align-items: center; gap: var(--space-2); }
+.tour-nav { display: inline-flex; gap: var(--space-2); margin-left: auto; }
+.tour-dots { display: inline-flex; gap: 4px; }
+.tour-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.tour-dots span.is-on { background: var(--accent); }
+.tour-skip { margin-left: calc(var(--space-2) * -1); }
+.tour-root.is-reduced .tour-spot,
+.tour-root.is-reduced .tour-card { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-card { transition: none; }
+}
+@media (forced-colors: active) {
+  .tour-spot { outline: 3px solid Highlight; }
+  .tour-card { border: 2px solid CanvasText; }
+}
+
+/* ---------------- help entry points ---------------- */
+.header-help { display: none; margin-left: auto; }
+@media (max-width: 860px) {
+  .header-help { display: inline-flex; }
+  .header-help + .header-quickadd { margin-left: var(--space-2); }
+}
+.help-guides { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: grid; gap: var(--space-2); }
+.help-guide {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.help-guide:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.help-guide:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.help-guide-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.help-guide-title { font-weight: 600; font-size: var(--text-md); }
+.help-guide-meta { color: var(--muted); font-size: var(--text-sm); }
+.help-extras { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.help-tips { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-soft); }
+
+/* ---------------- onboarding (V5) ---------------- */
+.onb-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+}
+.onb-hero svg { flex: 0 0 auto; width: 56px; height: 56px; }
+.onb-hero-demo { color: var(--accent-strong); font-weight: 600; }
+.onb-target { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.onb-preview { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.onb-preview-day {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-1);
+}
+.onb-preview-date { font-weight: 600; font-size: var(--text-sm); display: flex; justify-content: space-between; gap: var(--space-2); }
+.onb-preview-date span:last-child { color: var(--muted); font-weight: 500; }
+.onb-preview-task { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-soft); padding-top: 2px; }
+.onb-preview-why { color: var(--muted); font-size: var(--text-xs); }
+.onb-preview-warn {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  font-size: var(--text-sm);
+}
+.onb-preview-empty { color: var(--muted); font-size: var(--text-sm); }
+.onb-due { min-width: 0; }
+.onb-row.onb-row-due { grid-template-columns: minmax(0, 1fr) 84px 148px; }
+.onb-row.onb-row-task3.onb-row-due { grid-template-columns: minmax(0, 1fr) 80px 140px 140px; }
+@media (max-width: 600px) {
+  .onb-row.onb-row-due,
+  .onb-row.onb-row-task3.onb-row-due { grid-template-columns: 1fr 1fr; }
+  .onb-row.onb-row-due > .onb-field:first-child { grid-column: 1 / -1; }
+}
+.onboarding-body .choice-group, .onboarding-body [role="radiogroup"] { flex-wrap: wrap; }

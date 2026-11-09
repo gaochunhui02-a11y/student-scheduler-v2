@@ -30,6 +30,16 @@ export function onboardingStepsV4({ courses = false, purpose = null } = {}) {
   return ['purpose', ...rest];
 }
 
+// V5: the same steps, then a preview of the plan the answers produce
+// ("which day each deadline lands on") before anything is built.
+export function onboardingStepsV5(opts = {}) {
+  return [...onboardingStepsV4(opts), 'plan'];
+}
+
+// V5: "How much time do you realistically want to work each day?"
+export const DAILY_TARGETS = [60, 90, 120, 180, 240, 300, 360];
+export const DEFAULT_DAILY_TARGET = 180;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const STUDY_PERIODS = ['none', 'morning', 'afternoon', 'evening'];
 export const SESSION_LENGTHS = [25, 45, 60, 90];
@@ -71,6 +81,11 @@ export function validateOnboardingStep(step, answers = {}) {
       if (!name) errors.push({ index, field: 'name', key: 'onboarding.errTaskName' });
       const minutes = Number(minutesRaw);
       if (!Number.isFinite(minutes) || minutes < 15 || minutes > 600) errors.push({ index, field: 'minutes', key: 'onboarding.errTaskMinutes' });
+      // V5: an optional due date — a real date, not in the past.
+      if (task.due) {
+        if (!DATE_RE.test(task.due)) errors.push({ index, field: 'due', key: 'onboarding.errDueDate' });
+        else if (answers.today && task.due < answers.today) errors.push({ index, field: 'due', key: 'onboarding.errDuePast' });
+      }
     });
   } else if (step === 'day') {
     const { wake, sleep } = answers.day || {};
@@ -82,6 +97,8 @@ export function validateOnboardingStep(step, answers = {}) {
       const length = (toMinutes(sleep) - toMinutes(wake) + 1440) % 1440;
       if (length < 240) errors.push({ field: 'sleep', key: 'onboarding.errDayLength' });
     }
+    const daily = answers.day && answers.day.dailyMinutes;
+    if (daily !== undefined && daily !== null && daily !== '' && !DAILY_TARGETS.includes(Number(daily))) errors.push({ field: 'daily', key: 'onboarding.errChoose' });
   } else if (step === 'classes') {
     (answers.classes || []).forEach((c, index) => {
       const name = (c.name || '').trim();
@@ -122,7 +139,7 @@ export function validateOnboardingStep(step, answers = {}) {
 // at most MAX_ONBOARDING_ROWS of each. Assumes every step validated.
 export function buildOnboardingPlan(answers = {}) {
   const tasks = (answers.tasks || [])
-    .map((tk) => ({ name: (tk.name || '').trim(), minutes_requested: Math.round(Number(tk.minutes)) }))
+    .map((tk) => ({ name: (tk.name || '').trim(), minutes_requested: Math.round(Number(tk.minutes)), ...(tk.due && DATE_RE.test(tk.due) ? { due_date: tk.due } : {}) }))
     .filter((tk) => tk.name && Number.isFinite(tk.minutes_requested) && tk.minutes_requested > 0)
     .slice(0, MAX_ONBOARDING_ROWS);
   const classes = (answers.classes || [])
@@ -137,6 +154,7 @@ export function buildOnboardingPlan(answers = {}) {
     prefs: {
       preferred_study_period: STUDY_PERIODS.includes(style.period) ? style.period : 'none',
       session_cap_minutes: SESSION_LENGTHS.includes(Number(style.sessionMinutes)) ? Number(style.sessionMinutes) : null,
+      ...(DAILY_TARGETS.includes(Number(day.dailyMinutes)) ? { max_daily_study_minutes: Number(day.dailyMinutes) } : {}),
     },
     classes,
     tasks,
@@ -150,8 +168,8 @@ export function canBuildPlan(plan) {
 
 export function defaultOnboardingAnswers() {
   return {
-    tasks: [{ name: '', minutes: '' }, { name: '', minutes: '' }, { name: '', minutes: '' }],
-    day: { wake: '07:00', sleep: '23:00' },
+    tasks: [{ name: '', minutes: '', due: '' }, { name: '', minutes: '', due: '' }, { name: '', minutes: '', due: '' }],
+    day: { wake: '07:00', sleep: '23:00', dailyMinutes: DEFAULT_DAILY_TARGET },
     classes: [{ name: '', start: '', end: '' }, { name: '', start: '', end: '' }, { name: '', start: '', end: '' }],
     style: { period: 'none', sessionMinutes: 45 },
   };
@@ -215,4 +233,20 @@ export function defaultOnboardingAnswersV3(today) {
     classes: base.classes.map((c) => ({ ...c, weekly: true, weekday, course: '' })),
     tasks: base.tasks.map((tk) => ({ ...tk, course: '' })),
   };
+}
+
+/**
+ * V5: the onboarding deadlines as deadline-planner input (ids are the row
+ * indexes of buildOnboardingPlan().tasks), with the daily target as each
+ * day's free time, over enough days to reach the furthest due date.
+ */
+export function onboardingPlannerInput(plan, { today, dailyMinutes = DEFAULT_DAILY_TARGET, minDays = 14, maxDays = 120 } = {}) {
+  const tasks = (plan && plan.tasks ? plan.tasks : []).map((tk, i) => ({ id: String(i), name: tk.name, minutes: tk.minutes_requested, dueDate: tk.due_date || null }));
+  const furthest = tasks.reduce((m, tk) => (tk.dueDate && tk.dueDate > m ? tk.dueDate : m), today);
+  const span = Math.round((Date.parse(`${furthest}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000) + 1;
+  const count = Math.min(maxDays, Math.max(minDays, span));
+  const days = [];
+  const [y, m, d] = today.split('-').map(Number);
+  for (let i = 0; i < count; i += 1) days.push({ date: new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10), free: dailyMinutes });
+  return { tasks, days, start: today };
 }
