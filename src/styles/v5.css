@@ -239,3 +239,46 @@ body.tour-open { overflow: hidden; }
 /* ---------------- usual day (V5-B) ---------------- */
 .usual-day-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-2); }
 .usual-day-row .hint { margin: 0; }
+
+/* ---------------- syllabus import (V5-C) ---------------- */
+.imp-source { margin: var(--space-3) 0; }
+.imp-text { width: 100%; min-height: 200px; font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
+.imp-map, .imp-context, .imp-newcourse, .imp-range { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin: var(--space-2) 0; }
+.imp-pdf { margin-top: var(--space-2); }
+.imp-summary { margin: 0 0 var(--space-3); font-weight: 600; font-size: var(--text-sm); }
+.imp-row {
+  display: grid;
+  grid-template-columns: 18px minmax(120px, 150px) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+}
+.imp-when { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.imp-field { display: grid; gap: 2px; }
+.imp-field label { font-size: var(--text-2xs); color: var(--muted); }
+.imp-field .imp-date { width: 150px; }
+.imp-field .imp-time { width: 110px; }
+.imp-field .imp-min { width: 96px; }
+.imp-rows { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: grid; gap: var(--space-2); }
+.imp-row { padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-1); }
+.imp-row.is-off { opacity: 0.6; }
+.imp-row.is-blocked { border-color: var(--warning-border); background: var(--warning-soft); }
+.imp-row > input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.imp-row .v3-input { width: 100%; min-width: 0; margin: 0; }
+.imp-row [aria-invalid="true"] { border-color: var(--warning); box-shadow: 0 0 0 2px var(--warning-soft); }
+.imp-status { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.imp-status:empty { display: none; }
+.imp-flag { color: var(--text-soft); }
+.imp-source-line { grid-column: 2 / -1; margin: 0; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.imp-subhead { font-size: var(--text-md); margin: var(--space-4) 0 var(--space-2); }
+.imp-meetings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.imp-meeting { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); }
+.imp-meeting input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.imp-done { padding: var(--space-4) 0; }
+.imp-done-title { font-weight: 600; font-size: var(--text-lg); margin: 0 0 var(--space-2); }
+@media (max-width: 600px) {
+  .imp-row { grid-template-columns: 18px minmax(0, 1fr); }
+  .imp-row .imp-kind, .imp-row .imp-title { grid-column: 2; }
+  .imp-status, .imp-source-line { grid-column: 2; }
+}
+.badge-icon { display: inline-flex; width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
+.badge-icon svg { width: 100%; height: 100%; }

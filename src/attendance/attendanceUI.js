@@ -166,7 +166,7 @@ registerCourseCardProvider({
       const { from, to } = windowFor(c, semesters, today);
       const s = summarizeAttendance(sessionsForCourse({ courseId: c.id, series, exceptions, oneOffs, from, to }), mine, today, minutesOfDay());
       if (s.rate === null) return;
-      out[c.id] = `<span class="badge badge--${STATE_KIND[s.state] || 'outline'} tabular" title="${escapeHtml(t('attendance.title'))}">${escapeHtml(icon('user'))}${Math.round(s.rate * 100)}%</span>`;
+      out[c.id] = `<span class="badge badge--${STATE_KIND[s.state] || 'outline'} tabular" title="${escapeHtml(t('attendance.title'))}"><span class="badge-icon" aria-hidden="true">${icon('user')}</span>${Math.round(s.rate * 100)}%</span>`;
     });
     return out;
   },

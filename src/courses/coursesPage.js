@@ -124,7 +124,7 @@ export function initCoursesPage() {
       eyebrow: t('nav.sectionAcademics'),
       title: t('nav.courses'),
       subtitle: t('courses.subtitle'),
-      actions: [semesterSelect, button(t('courses.newCourse'), { variant: 'primary', action: 'new-course', iconName: 'plus' })],
+      actions: [semesterSelect, button(t('import.openButton'), { variant: 'secondary', action: 'import-syllabus', iconName: 'upload' }), button(t('courses.newCourse'), { variant: 'primary', action: 'new-course', iconName: 'plus' })],
     });
 
     let body;
@@ -133,7 +133,7 @@ export function initCoursesPage() {
         iconName: 'book',
         title: t('courses.emptyTitle'),
         body: t('courses.emptyBody'),
-        actions: button(t('courses.addFirst'), { variant: 'primary', action: 'new-course', iconName: 'plus' }),
+        actions: [button(t('courses.addFirst'), { variant: 'primary', action: 'new-course', iconName: 'plus' }), button(t('import.openButton'), { variant: 'secondary', action: 'import-syllabus', iconName: 'upload' })],
       })}</div>`;
     } else if (visible.length === 0) {
       body = html`<div class="card">${emptyState({ iconName: 'book', title: t('courses.noneInFilter'), body: t('courses.noneInFilterBody'), compact: true })}</div>`;
@@ -488,6 +488,10 @@ export function initCoursesPage() {
     if (action === 'retry') {
       if (current.courseId) renderDetail(current.courseId);
       else renderList();
+    } else if (action === 'import-syllabus') {
+      // V5-C: paste a syllabus / CSV / .ics → review → import (into this course when one is open).
+      const { openImport } = await import('../import/importUI.js');
+      openImport({ courseId: current.courseId || null, onDone: () => (current.courseId ? renderDetail(current.courseId) : renderList()) });
     } else if (action === 'new-course') {
       openCourseEditor({ onSaved: (saved) => (saved ? app().openCourse(saved.id) : renderList()) });
     } else if (action === 'edit-course' && course) {
