@@ -15,13 +15,14 @@ const V4_STEPS = [
   { level: 'v4c', tables: ['goals', 'goal_milestones', 'goal_progress_log', 'routines', 'routine_completions'], columns: { study_subjects: ['goal_id'], projects: ['goal_id'] } }, // 0022–0023
   { level: 'v4g', tables: ['attendance_records'], columns: {} }, // 0024
   { level: 'v4h', tables: ['notes'], columns: { resources: ['project_id', 'goal_id', 'exam_id', 'space_id', 'in_library', 'favorite', 'tags'] } }, // 0025–0026
+  { level: 'v5', tables: ['product_events', 'feedback', 'subscriptions', 'stripe_events'], columns: {} }, // 0027–0028
 ];
 
 function createDemoClient() {
   // Dev-only switch for QA: simulate a database where migrations haven't
   // been applied yet. ?premigration=v3 = no V3 migrations either;
   // v4 = a V3 database (no 0018+); v4c = a V4-B database (no 0022+);
-  // v4g = no 0024+; v4h = no 0025+.
+  // v4g = no 0024+; v4h = no 0025+; v5 = a V4 database (no 0027+).
   const missing = new Set();
   const missingColumns = {};
   const pre = import.meta.env.DEV ? new URLSearchParams(location.search).get('premigration') : null;

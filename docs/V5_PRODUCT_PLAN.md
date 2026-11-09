@@ -248,4 +248,4 @@ recognition) must check the `subscriptions` row in the Edge Function.
 
 ## 7. Progress log
 
-* **A** — see README "V5" section and commit messages `V5-A…`.
+* A 7410487 · B c36e6e5 · C 2c2f5e6 · D 98dc914 · E 53f0a98 · F release prep (docs/RELEASE_V5.md, KNOWN_ISSUES.md, CHANGELOG.md).

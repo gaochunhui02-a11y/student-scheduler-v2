@@ -25,6 +25,66 @@ all of that, a transparent scoring engine tells you what to work on next —
 using ordinary arithmetic on data you already entered, not a hosted AI
 model.
 
+## What's new in V5 (Commercial upgrade) — beta
+
+V5 (`v5-commercial-upgrade` branch, version `5.0.0-beta.1`, built on V4)
+turns the planner into a product built around one promise: **"Your semester,
+planned automatically — and fixed when life changes."** Nothing is merged
+into `master` or deployed; see the plan in `docs/V5_PRODUCT_PLAN.md`.
+
+* **Onboarding that ends with a real plan.** Purpose → courses → weekly
+  classes → **deadlines with due dates** → availability and a **realistic
+  daily amount** → study style → **"Your first plan" preview** (which day
+  each deadline lands on; a warning when time is short) → Build. Work is
+  split across the days before each due date and saved as linked
+  multi-day parts. The flow then opens Today and its guide. Everything
+  except the first question can be skipped.
+* **Product tours** for Today, Planner, Tasks, Courses, Projects, Goals,
+  Routines, Calendar, Focus, Board and Insights (`src/tour`). They dim the
+  page, highlight the real element, and support Back/Next/Skip/Done, the
+  keyboard, reduced motion, dark mode, mobile bottom sheets and en/zh/ja.
+  Missing elements are skipped. The `?` Help buttons list every guide.
+  Each page offers its guide once.
+* **Smart plan and Catch up** (`src/planner/smartPlan*`,
+  `deadlinePlanner.js`). Missed, overdue and unscheduled work is spread
+  earliest-deadline-first over the days before each due date, using each
+  day's real free time from the workload forecast. Every task gets a
+  plain-language reason ("Due Thursday with 3 h of work left. Wednesday has
+  2 h free, so it starts there.") and you get a warning when there isn't
+  enough time. Nothing changes before **Apply**. Locked sessions never
+  move, rows are only moved or added (never deleted), and minutes are
+  conserved (tested).
+* **Today = "What should I do next?"** A hero card shows the session now,
+  the next session, or the top task with its reason, plus progress and
+  free time left today. **Coming up** lists deadlines in the next 7 days
+  with how much is still unplanned.
+* **Usual day.** New days start with your usual wake/sleep times and daily
+  limit (from onboarding or *Use these times for new days*).
+* **Syllabus import** (`src/import`). Paste text, or choose a CSV or .ics
+  file, then review an editable table. Dates and weekly classes are read
+  deterministically (en/zh/ja). Ambiguous fields (3/4, missing year, several
+  dates, unknown type) block the import until confirmed. Duplicates and
+  past items start unticked. See `docs/V5_IMPORTS_AND_SYNC.md` for the PDF
+  and Google Calendar plans.
+* **Public landing page** (`index.html`) with real product screenshots,
+  Free vs Pro, pricing marked "Coming soon", FAQ, and privacy/terms
+  **drafts**. There's a guided demo (`/dashboard.html?demo=1&tour=1`).
+* **Opt-in product analytics and feedback** (migration 0027,
+  `src/analytics`, `src/feedback`). Nothing is recorded without consent,
+  browsers sending DNT/GPC are never asked, and users can delete their own
+  events. See `docs/ANALYTICS.md`.
+* **Free / Student Pro architecture** (migration 0028, `src/billing`,
+  `supabase/functions/{stripe-webhook,billing-checkout,billing-portal}`).
+  Webhook signatures are verified, events are idempotent and ordered, and
+  only the server writes subscriptions. **Billing is off by default.** Every
+  account is a "Founding beta" with all features, and no purchase button is
+  shown. See `docs/BILLING.md`.
+* Launch kit drafts in `marketing/` (nothing sent or published).
+* Fixes found on the way:
+  * task and routine names inserted unescaped into button attributes (7 places, now escaped with a guard test)
+  * the attendance badge showing raw SVG markup
+  * contrast of future days on the Weekly review in dark mode
+
 ## What's new in V4 (Productivity OS) — beta
 
 V4 (`v4-productivity-os` branch, version `4.0.0-beta.1`) keeps academics
@@ -624,6 +684,27 @@ shown.
 8. Backup → restore into a second account; offline reload shows the snapshot.
 9. zh / ja, dark mode, a phone-width browser.
 
+### V5 migrations 0027-0028
+
+**Not applied anywhere yet.** Apply them after 0001–0026, staging first.
+
+| File | Adds | Used by |
+|---|---|---|
+| `0027_product_events.sql` | `product_events` (allow-listed names, 512-byte props) and `feedback`, both own-row RLS | Opt-in usage counts, Send feedback |
+| `0028_subscriptions.sql` | `subscriptions` (**select-own only**; written by the webhook with the service role) and `stripe_events` (no client access) | Plan & billing |
+
+0028 is the one reviewed exception to "four own-row policies": the tests
+assert that users cannot write their subscription.
+
+**Rollout:**
+1. Run `node tests/db/migrations-pglite.mjs` locally.
+2. Apply 0018 → 0028 on staging.
+3. Deploy the branch to a **Vercel Preview**. Leave `VITE_BILLING_ENABLED` unset, so billing stays off.
+4. Smoke-test with the checklist in `docs/RELEASE_V5.md`.
+
+The V5 frontend runs on older databases: each feature probes for its
+tables, and analytics, feedback and billing quietly stay off without them.
+
 ## Deployment
 
 This app is a **static, multi-page site** (Vite outputs plain `.html` +
@@ -637,9 +718,15 @@ only to Supabase — so it deploys cleanly to any static host.
 - **Routing**: no rewrite/redirect rules are required — every page is a
   real `.html` file Vite already emits, so there's no SPA fallback-routing
   to configure.
-- **PWA**: the manifest's `start_url`/`scope` are both `/`, which works
-  correctly as long as the app is deployed at the domain root; if deployed
-  under a subpath, update `public/manifest.webmanifest` accordingly.
+- **PWA**: the manifest's `scope` is `/` and, since V5, `start_url` is
+  `/dashboard.html` (the installed app opens the app, not the landing page).
+  This works as long as the app is deployed at the domain root. If you
+  deploy under a subpath, update `public/manifest.webmanifest`.
+- **V5 optional variables**:
+  * `VITE_PLAUSIBLE_DOMAIN`: cookieless landing-page stats. Off when unset.
+  * `VITE_BILLING_ENABLED=true`: only on a Preview, and only with the Stripe test setup from `docs/BILLING.md`.
+
+  Stripe secrets are never `VITE_*` variables; they are Edge Function secrets only.
 
 Before/after deploying, also add the deployed domain's
 `/reset-password.html` to Supabase's **Authentication -> URL
