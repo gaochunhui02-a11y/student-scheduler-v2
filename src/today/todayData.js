@@ -10,6 +10,7 @@ import { listDependencies } from '../tasks/tasksData.js';
 import { computeBlockedState } from '../tasks/dependencyModel.js';
 import { listExams } from '../exams/examsData.js';
 import { loadForecastInput } from '../workload/workloadData.js';
+import { buildWorkloadForecast } from '../workload/workloadModel.js';
 import { buildCalendarEvents } from '../calendar/calendarEvents.js';
 import { listClassesForScheduleIds } from '../dashboard/data.js';
 import { listRoutines, listRecentCompletions } from '../routines/routinesData.js';
@@ -47,5 +48,15 @@ export async function loadToday() {
     }).filter((e) => !e.allDay && ['class', 'study', 'external', 'exam'].includes(e.kind));
   }
   const attendance = await todayAttendance(ctx.userId, today).catch(() => new Map());
-  return { today, groups, blocked, courses, exams, events, routines, completions, reviews, attendance };
+  // V5: today's study capacity and load, from the same forecast as Week/Workload.
+  let load = null;
+  if (forecast) {
+    try {
+      const day = buildWorkloadForecast(forecast.input)[0];
+      if (day) load = { capacity: day.capacity, study: day.studyLoad, spare: day.spare };
+    } catch (err) {
+      console.warn('Could not compute today\'s capacity', err);
+    }
+  }
+  return { today, groups, blocked, courses, exams, events, routines, completions, reviews, attendance, load };
 }

@@ -159,7 +159,7 @@ export function uniformDays(start, count, minutesPerDay, { skipWeekdays = [] } =
  * The plan as it will be saved when work doesn't fit: each task's shortfall
  * is added to its last planned day (or `fallbackDate` when nothing fit), so
  * the full estimate is kept and the overflow is visible ("over by") instead
- * of silently dropped.
+ * of silently dropped. `fallbackDate` may be a function of the task summary.
  * @returns {Array<assignment & { overBy: number }>}
  */
 export function withShortfall(plan, fallbackDate) {
@@ -172,7 +172,7 @@ export function withShortfall(plan, fallbackDate) {
       last.minutes += s.shortBy;
       last.overBy = s.shortBy;
     } else {
-      out.push({ taskId: s.taskId, name: s.name, date: fallbackDate, minutes: s.shortBy, tight: true, late: s.late, dayFree: 0, overBy: s.shortBy });
+      out.push({ taskId: s.taskId, name: s.name, date: typeof fallbackDate === 'function' ? fallbackDate(s) : fallbackDate, minutes: s.shortBy, tight: true, late: s.late, dayFree: 0, overBy: s.shortBy });
     }
   });
   return out.sort((a, b) => a.date.localeCompare(b.date) || String(a.name).localeCompare(String(b.name)));

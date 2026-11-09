@@ -115,6 +115,7 @@ import { clearOfflineSnapshots } from '../offline/offlineSnapshot.js';
 import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRows } from '../shared/dataExport.js';
 import { initOnboarding } from './onboarding.js';
 import { initHelpCenter, startTodayTourAfterOnboarding } from '../tour/helpCenter.js';
+import { saveUsualDay, loadUsualDay } from '../planner/usualDay.js';
 import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { displayBlockName, mealLabel } from '../shared/blockLabels.js';
 import { scrollBehavior } from '../shared/motion.js';
@@ -1216,6 +1217,7 @@ async function init(session) {
       { id: 'focus-timer', group: 'commands', title: t('focusTimer.paletteStart'), keywords: ['focus', 'timer', 'pomodoro', 'concentrate'], run: async () => { const { openFocusTimer } = await import('../focus/focusTimer.js'); openFocusTimer(); } },
       ...(hasCapability('unscheduledTasks') ? [{ id: 'plan-backlog', group: 'commands', title: t('backlog.planButton'), keywords: ['backlog', 'unscheduled', 'plan', 'assign days'], run: async () => { const [{ loadToday }, { openPlanBacklog }] = await Promise.all([import('../today/todayData.js'), import('../planner/backlogUI.js')]); const d = await loadToday(); openPlanBacklog(d.groups.filter((g) => !g.done && !g.scheduledDate)); } }] : []),
       { id: 'customize-dashboard', group: 'commands', title: t('dash.customizeTitle'), keywords: ['dashboard', 'widgets', 'home', 'layout'], run: () => { activateView('analyticsView'); setTimeout(() => document.querySelector('[data-action="home-customize"]')?.click(), 400); } },
+      { id: 'plan-deadlines', group: 'commands', title: t('smart.title'), keywords: ['plan', 'deadlines', 'semester', 'schedule', 'auto', 'split', 'due'], run: async () => { const [{ loadToday }, { openSmartPlan }] = await Promise.all([import('../today/todayData.js'), import('../planner/smartPlanUI.js')]); const d = await loadToday(); openSmartPlan(d.groups, { mode: 'all' }); } },
       { id: 'catch-up', group: 'commands', title: t('catchup.title'), keywords: ['missed', 'overdue', 'reschedule', 'catch up', 'carry over', 'behind'], run: async () => { const [{ loadToday }, { openCatchUp }] = await Promise.all([import('../today/todayData.js'), import('../planner/catchUpUI.js')]); const d = await loadToday(); openCatchUp(d.groups); } },
       { id: 'customize-nav', group: 'commands', title: t('nav.customize'), keywords: ['sidebar', 'modules', 'workspace', 'mode', 'navigation'], run: () => openSettingsTab('workspace') },
     ];
@@ -1482,6 +1484,28 @@ async function init(session) {
     });
   }
   daySettingsForm.addEventListener('change', saveScheduleSettings);
+  // V5: "Use these times for new days" — saves this day's times and limits as
+  // the usual day that every newly created day starts with.
+  const usualDayBtn = document.getElementById('useAsUsualDayBtn');
+  if (usualDayBtn) {
+    loadUsualDay(userId).catch(() => {});
+    usualDayBtn.addEventListener('click', async () => {
+      try {
+        const study = collectStudyPrefsFields() || {};
+        await saveUsualDay(userId, {
+          wake_time: wakeTimeEl.value,
+          sleep_time: sleepTimeEl.value,
+          max_daily_study_minutes: study.max_daily_study_minutes,
+          session_cap_minutes: study.session_cap_minutes,
+          preferred_study_period: study.preferred_study_period,
+        });
+        toast(t('usualDay.saved'), { kind: 'success' });
+      } catch (err) {
+        console.error('Could not save the usual day', err);
+        toast(t('v3.saveError'), { kind: 'error' });
+      }
+    });
+  }
   daySettingsForm.addEventListener('change', () => refreshConflictPanel());
   studyPrefsForm.addEventListener('change', saveScheduleSettings);
 
@@ -4791,6 +4815,13 @@ async function init(session) {
     if (plan.prefs.session_cap_minutes) sessionCapEl.value = String(plan.prefs.session_cap_minutes);
     if (plan.prefs.max_daily_study_minutes && maxDailyStudyEl) maxDailyStudyEl.value = String(plan.prefs.max_daily_study_minutes);
     saveScheduleSettings();
+    // V5: these answers are the student's usual day — new days start with them.
+    await saveUsualDay(userId, {
+      ...(plan.day || {}),
+      max_daily_study_minutes: plan.prefs.max_daily_study_minutes,
+      session_cap_minutes: plan.prefs.session_cap_minutes,
+      preferred_study_period: plan.prefs.preferred_study_period,
+    }).catch((err) => console.warn('Could not save the usual day', err));
     await scheduleSaveTarget._savePromise;
 
     const classRows = plan.classes.map((c) => addClassRow(c));

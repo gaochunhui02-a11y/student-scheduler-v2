@@ -7,7 +7,7 @@ import { t, tCount } from '../shared/i18n.js';
 import { has } from '../shared/capabilities.js';
 import { todayStr } from '../shared/dates.js';
 import { app, onChange } from '../app/context.js';
-import { html, raw, setHtml, on } from '../ui/dom.js';
+import { html, raw, setHtml, on, escapeHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageHead, emptyState, button, badge, progressBar, skeletonRows, migrationNotice, errorNotice, segmented, wireSegmented } from '../ui/components.js';
 import { fmtDateLong, fmtDate, fmtMinutes } from '../ui/format.js';
@@ -147,7 +147,7 @@ export function initRoutinesPage() {
             </span>
           </span>
           <span class="list-row-side">
-            ${status === 'done' ? '' : button(status === 'skipped' ? t('routines.unskip') : t('routines.skip'), { size: 'sm', variant: 'ghost', action: status === 'skipped' ? 'unskip' : 'skip', attrs: `data-routine="${r.id}" aria-label="${(status === 'skipped' ? t('routines.unskip') : t('routines.skip'))}: ${r.title}"` })}
+            ${status === 'done' ? '' : button(status === 'skipped' ? t('routines.unskip') : t('routines.skip'), { size: 'sm', variant: 'ghost', action: status === 'skipped' ? 'unskip' : 'skip', attrs: `data-routine="${r.id}" aria-label="${(status === 'skipped' ? t('routines.unskip') : t('routines.skip'))}: ${escapeHtml(r.title)}"` })}
           </span>
         </li>`;
       })}</ul>` : html`<div class="card-body">${emptyState({ iconName: 'check', title: t('routines.noneTodayTitle'), body: t('routines.noneTodayBody'), compact: true })}</div>`}
@@ -187,8 +187,8 @@ export function initRoutinesPage() {
           </span>
           <span class="list-row-side">
             ${st === 'paused'
-              ? button(t('routines.resume'), { size: 'sm', action: 'resume', iconName: 'play', attrs: `data-routine="${r.id}" aria-label="${t('routines.resume')}: ${r.title}"` })
-              : ['active', 'upcoming'].includes(st) ? button(t('routines.pause'), { size: 'sm', variant: 'ghost', action: 'pause', iconName: 'pause', attrs: `data-routine="${r.id}" aria-label="${t('routines.pause')}: ${r.title}"` }) : ''}
+              ? button(t('routines.resume'), { size: 'sm', action: 'resume', iconName: 'play', attrs: `data-routine="${r.id}" aria-label="${t('routines.resume')}: ${escapeHtml(r.title)}"` })
+              : ['active', 'upcoming'].includes(st) ? button(t('routines.pause'), { size: 'sm', variant: 'ghost', action: 'pause', iconName: 'pause', attrs: `data-routine="${r.id}" aria-label="${t('routines.pause')}: ${escapeHtml(r.title)}"` }) : ''}
           </span>
         </li>`;
       })}</ul>` : html`<div class="card-body">${emptyState({ iconName: 'repeat', title: t(`routines.none_${view}`), compact: true })}</div>`}

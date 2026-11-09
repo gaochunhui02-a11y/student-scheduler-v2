@@ -8,7 +8,7 @@ import { t, tCount } from '../shared/i18n.js';
 import { has } from '../shared/capabilities.js';
 import { minutesOfDay } from '../shared/dates.js';
 import { app, onChange } from '../app/context.js';
-import { html, raw, setHtml, on, safeColor } from '../ui/dom.js';
+import { html, raw, setHtml, on, safeColor, escapeHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageHead, emptyState, button, badge, progressBar, skeletonRows, errorNotice } from '../ui/components.js';
 import { fmtDateLong, fmtMinutes, fmtClock } from '../ui/format.js';
@@ -19,7 +19,10 @@ import { taskRowHtml } from '../tasks/taskRow.js';
 import { setCompletion } from '../routines/routinesData.js';
 import { routinesForDay, computeStreak, completionMap } from '../routines/routineModel.js';
 import { loadToday } from './todayData.js';
-import { buildTodayLists, timelineStates, parseQuickTask, todaySummary } from './todayModel.js';
+import { buildTodayLists, timelineStates, parseQuickTask, todaySummary, pickNext } from './todayModel.js';
+import { deadlineCoverage } from '../planner/smartPlanModel.js';
+import { addDays } from '../shared/dates.js';
+import { fmtDue } from '../ui/format.js';
 import { countCatchUp, openCatchUp } from '../planner/catchUpUI.js';
 import { reviewDue } from '../review/reviewModel.js';
 import { buildOfflineSnapshot, saveOfflineSnapshot, loadOfflineSnapshot, isOffline } from '../offline/offlineSnapshot.js';
@@ -57,7 +60,10 @@ export function initTodayPage() {
       eyebrow: d ? fmtDateLong(d.today) : '',
       title: t('nav.today'),
       subtitle: parts.length ? parts.join(' · ') : (d ? t('home3.sumFree') : ''),
-      actions: button(t('today.openPlanner'), { variant: 'primary', action: 'today-planner', iconName: 'calendar' }),
+      actions: [
+        button(t('smart.openButton'), { variant: 'secondary', action: 'today-semester', iconName: 'sparkle' }),
+        button(t('today.openPlanner'), { variant: 'primary', action: 'today-planner', iconName: 'calendar' }),
+      ],
     });
   }
 
@@ -87,8 +93,11 @@ export function initTodayPage() {
     const lists = buildTodayLists(d.groups, d.today, { blocked: d.blocked });
     const summary = todaySummary(lists, d.events, d.today);
     const now = minutesOfDay();
+    // V5: the hero answers "what next"; the list below then shows the rest.
+    const next = pickNext({ events: d.events, top: lists.top, now });
+    const restTop = next.kind === 'task' ? lists.top.slice(1) : lists.top;
     const row = (g, extra = '') => html`<div class="today-task">${taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: Boolean(g.courseId), blockedInfo: d.blocked.get(g.id), today: d.today })}${extra}</div>`;
-    const doToday = (g) => (g.scheduledDate === d.today ? '' : html`<span class="today-task-action">${button(t('today.doToday'), { size: 'sm', variant: 'ghost', action: 'do-today', iconName: 'arrowRight', attrs: `data-task="${g.id}" aria-label="${t('today.doToday')}: ${g.name}"` })}</span>`);
+    const doToday = (g) => (g.scheduledDate === d.today ? '' : html`<span class="today-task-action">${button(t('today.doToday'), { size: 'sm', variant: 'ghost', action: 'do-today', iconName: 'arrowRight', attrs: `data-task="${g.id}" aria-label="${t('today.doToday')}: ${escapeHtml(g.name)}"` })}</span>`);
 
     const capture = html`<form class="card today-capture" data-form="capture" autocomplete="off">
       <label class="sr-only" for="todayCapture">${t('today.captureLabel')}</label>
@@ -114,11 +123,11 @@ export function initTodayPage() {
     </div>` : '';
 
     const topCard = html`<section class="card card-flush v4-flush today-top" aria-labelledby="todayTopHead">
-      <div class="card-head"><div><h2 class="card-title" id="todayTopHead">${t('today.topTitle')}</h2><p class="card-subtitle">${t('today.topSub')}</p></div></div>
-      ${lists.top.length ? html`<ol class="list today-top-list">${lists.top.map(({ group: g, reason }, i) => html`<li class="today-top-item">
-          <span class="today-top-n" aria-hidden="true">${i + 1}</span>
+      <div class="card-head"><div><h2 class="card-title" id="todayTopHead">${restTop === lists.top ? t('today.topTitle') : t('next.alsoTitle')}</h2><p class="card-subtitle">${t('today.topSub')}</p></div></div>
+      ${restTop.length ? html`<ol class="list today-top-list">${restTop.map(({ group: g, reason }, i) => html`<li class="today-top-item">
+          <span class="today-top-n" aria-hidden="true">${i + 1 + (lists.top.length - restTop.length)}</span>
           <div class="today-top-body">${taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: Boolean(g.courseId), blockedInfo: d.blocked.get(g.id), today: d.today })}
-            <span class="today-top-reason">${reason === 'overdue' ? '' : badge(t(`today.reason_${reason}`), REASON_KIND[reason])}${button(t('focusTimer.focus'), { size: 'sm', variant: 'ghost', action: 'focus-task', iconName: 'play', attrs: `data-task="${g.id}" aria-label="${t('focusTimer.focus')}: ${g.name}"` })}</span></div>
+            <span class="today-top-reason">${reason === 'overdue' ? '' : badge(t(`today.reason_${reason}`), REASON_KIND[reason])}${button(t('focusTimer.focus'), { size: 'sm', variant: 'ghost', action: 'focus-task', iconName: 'play', attrs: `data-task="${g.id}" aria-label="${t('focusTimer.focus')}: ${escapeHtml(g.name)}"` })}</span></div>
         </li>`)}</ol>` : html`<div class="card-body">${emptyState({ iconName: 'check', title: t('today.topEmptyTitle'), body: t('today.topEmpty'), compact: true })}</div>`}
     </section>`;
 
@@ -171,8 +180,59 @@ export function initTodayPage() {
       })}</ul>` : html`<div class="card-body"><p class="muted small" style="margin:0">${t('routines.noneTodayTitle')}</p></div>`}
     </section>` : '';
 
-    setHtml(root, [head(d, summary), catchUpBanner, reviewBanner, capture, html`<div class="today-columns">
-      <div class="stack">${topCard}${plannedCard}${dueCard}${overdueCard}</div>
+    // V5: "What should I do next?" — one clear answer, with progress and free time.
+    const upNextLine = next.upNext ? html`<p class="today-next-up">${fill('next.upNext', { title: next.upNext.title, time: fmtClock(next.upNext.start) })}</p>` : '';
+    let nextBody;
+    if (next.kind === 'now' || next.kind === 'next') {
+      const e = next.event;
+      const meta = next.kind === 'now'
+        ? fill('next.nowMeta', { end: fmtClock(e.end), left: fmtMinutes(e.end - now) })
+        : fill('next.nextMeta', { start: fmtClock(e.start), in: fmtMinutes(e.start - now), length: fmtMinutes(e.end - e.start) });
+      nextBody = html`<p class="today-next-kicker">${next.kind === 'now' ? t('next.kickerNow') : t('next.kickerNext')}</p>
+        <h2 class="today-next-title">${e.title}</h2>
+        <p class="today-next-meta">${meta}</p>
+        <div class="today-next-actions">${e.sourceSubjectId ? button(next.kind === 'now' ? t('next.focusNow') : t('next.startEarly'), { variant: 'primary', action: 'focus-next', iconName: 'play', attrs: `data-subject="${e.sourceSubjectId}"` }) : ''}${button(t('today.openPlanner'), { variant: 'ghost', action: 'today-planner' })}</div>`;
+    } else if (next.kind === 'task') {
+      const g = next.group;
+      nextBody = html`<p class="today-next-kicker">${t('next.kickerTask')}</p>
+        <h2 class="today-next-title">${g.name}</h2>
+        <p class="today-next-meta">${badge(t(`today.reason_${next.reason}`), REASON_KIND[next.reason])} ${g.remainingMinutes ? fill('next.left', { time: fmtMinutes(g.remainingMinutes) }) : ''}${g.dueDate ? ` · ${fmtDue(g.dueDate, d.today)}` : ''}</p>
+        ${next.then ? html`<p class="today-next-then">${fill('next.then', { title: next.then.title, time: fmtClock(next.then.start) })}</p>` : ''}
+        <div class="today-next-actions">${button(t('next.focusNow'), { variant: 'primary', action: 'focus-task', iconName: 'play', attrs: `data-task="${g.id}" aria-label="${t('next.focusNow')}: ${escapeHtml(g.name)}"` })}${button(t('next.markDone'), { variant: 'ghost', action: 'next-done', iconName: 'check', attrs: `data-task="${g.id}"` })}</div>`;
+    } else {
+      nextBody = html`<p class="today-next-kicker">${t('next.kickerClear')}</p>
+        <h2 class="today-next-title">${t('next.clearTitle')}</h2>
+        <p class="today-next-meta">${t('next.clearBody')}</p>
+        <div class="today-next-actions">${button(t('smart.openButton'), { variant: 'primary', action: 'today-semester', iconName: 'sparkle' })}</div>`;
+    }
+    const tasksTotal = lists.scheduled.length + lists.doneToday.length;
+    const freeLeft = d.load ? d.load.spare : null;
+    const nextCard = html`<section class="card today-next" id="todayNext" aria-labelledby="todayNextLabel">
+      <div class="today-next-main"><p class="sr-only" id="todayNextLabel">${t('next.label')}</p>${nextBody}${upNextLine}</div>
+      <dl class="today-next-stats">
+        <div><dt>${t('next.statTasks')}</dt><dd class="tabular">${fill('next.ofTotal', { done: lists.doneToday.length, total: tasksTotal })}</dd></div>
+        <div><dt>${t('next.statStudied')}</dt><dd class="tabular">${summary.studyPlanned ? fill('next.ofTotal', { done: fmtMinutes(summary.studyDone), total: fmtMinutes(summary.studyPlanned) }) : '—'}</dd></div>
+        <div><dt>${t('next.statFree')}</dt><dd class="tabular">${freeLeft === null ? '—' : fmtMinutes(freeLeft)}</dd></div>
+      </dl>
+      ${tasksTotal ? progressBar(lists.doneToday.length / tasksTotal, { thin: true, label: t('next.statTasks') }) : ''}
+    </section>`;
+
+    // V5: deadlines in the next 7 days — how much is left and whether it's planned.
+    const coverage = deadlineCoverage(d.groups, d.today, addDays(d.today, 7));
+    const unplannedAny = coverage.some((c) => c.unplanned > 0);
+    const deadlinesCard = coverage.length ? html`<section class="card card-flush v4-flush" aria-labelledby="todayDeadlinesHead">
+      <div class="card-head"><div><h2 class="card-title" id="todayDeadlinesHead">${t('next.deadlinesTitle')} <span class="muted">${coverage.length}</span></h2><p class="card-subtitle">${t('next.deadlinesSub')}</p></div>
+        ${unplannedAny ? button(t('smart.openButton'), { size: 'sm', variant: 'secondary', action: 'today-semester' }) : ''}</div>
+      <ul class="list">${coverage.slice(0, 6).map((c) => html`<li class="list-row today-deadline">
+        <span class="list-row-main"><span class="list-row-title">${c.group.name}</span>
+          <span class="list-row-meta"><span>${fmtDue(c.dueDate, d.today)}</span><span>${fill('next.left', { time: fmtMinutes(c.remaining) })}</span></span></span>
+        ${c.unplanned > 0 ? badge(fill('next.unplanned', { time: fmtMinutes(c.unplanned) }), 'warning') : badge(t('next.covered'), 'success')}
+      </li>`)}</ul>
+      ${coverage.length > 6 ? html`<div class="card-body"><a class="card-link" href="#/tasks">${fill('today.overdueMore', { n: coverage.length - 6 })}</a></div>` : ''}
+    </section>` : '';
+
+    setHtml(root, [head(d, summary), nextCard, catchUpBanner, reviewBanner, capture, html`<div class="today-columns">
+      <div class="stack">${topCard}${deadlinesCard}${plannedCard}${dueCard}${overdueCard}</div>
       <div class="stack">${scheduleCard}${routinesCard}</div>
     </div>`]);
   }
@@ -203,6 +263,26 @@ export function initTodayPage() {
     if (a === 'today-retry') render();
     else if (a === 'today-planner') ctx.openPlannerForDate(d ? d.today : undefined);
     else if (a === 'today-catchup' && d) openCatchUp(d.groups, () => render());
+    else if (a === 'today-semester' && d) {
+      const { openSmartPlan } = await import('../planner/smartPlanUI.js');
+      openSmartPlan(d.groups, { mode: 'all', onDone: () => render() });
+    } else if (a === 'focus-next' && d) {
+      // The session's task (the row it was built from, or its multi-day root).
+      const g = d.groups.find((x) => x.rows.some((r) => r.id === el.dataset.subject));
+      if (g) openFocusTimer({ task: { id: g.root.id, name: g.name, remainingMinutes: g.remainingMinutes } });
+    } else if (a === 'next-done' && d) {
+      const g = d.groups.find((x) => x.id === el.dataset.task);
+      if (!g) return;
+      try {
+        await setTaskDone(g.root.id, true);
+        toast(t('tasks.markedDone'), { kind: 'success', actionLabel: t('common.undo'), onAction: async () => { await setTaskDone(g.root.id, false); render(); } });
+        await render();
+        root.querySelector('#todayNext .btn')?.focus();
+      } catch (err) {
+        console.error(err);
+        toast(err.code === 'needs_migration' ? t('v3.needsUpdateTitle') : t('v3.saveError'), { kind: 'error' });
+      }
+    }
     else if (a === 'focus-task' && d) {
       const g = d.groups.find((x) => x.id === el.dataset.task);
       if (g) openFocusTimer({ task: { id: g.root.id, name: g.name, remainingMinutes: g.remainingMinutes } });

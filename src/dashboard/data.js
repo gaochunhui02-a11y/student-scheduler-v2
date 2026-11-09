@@ -4,12 +4,17 @@ import { aggregateScheduleHistory } from './history.js';
 import { extractPlanningFields, buildCopiedClassRows, buildCopiedSubjectRows } from './copySchedule.js';
 import { peekEnergy } from '../planner/energyData.js';
 import { defaultStudyPeriod } from '../planner/energyModel.js';
+import { peekUsualDay } from '../planner/usualDay.js';
+import { app } from '../app/context.js';
 
-// V4-E: the only non-default value a new day can get is the preferred study
-// period from the student's energy preferences (peak focus time).
+// V4-E: a new day gets the preferred study period from the student's energy
+// preferences (peak focus time). V5-B: and the student's saved "usual day"
+// (wake/sleep, daily limit, session length) when they set one — never
+// values copied from some other date.
 function newDayDefaults() {
+  const usual = app().userId ? peekUsualDay(app().userId) : {};
   const period = defaultStudyPeriod(peekEnergy());
-  return period === 'none' ? {} : { preferred_study_period: period };
+  return { ...usual, ...(period === 'none' ? {} : { preferred_study_period: period }) };
 }
 
 export { tomorrowDateStr, addDaysToDateStr };

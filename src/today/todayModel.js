@@ -130,3 +130,28 @@ export function todaySummary(lists, events = [], today) {
     classes: events.filter((e) => e.kind === 'class' || e.kind === 'external').length,
   };
 }
+
+/**
+ * V5: the one answer to "What should I do next?" — deterministic.
+ *   1. a study session happening now                      → 'now'
+ *   2. the next study session today, if it starts within
+ *      `soon` minutes (or there is no task to fill the gap) → 'next'
+ *   3. the top suggested task (overdue → due today → …)    → 'task'
+ *      (with the next session's start, if any, as "then")
+ *   4. nothing left                                        → 'clear'
+ * Also returns the next timed thing on the schedule of any kind (a class,
+ * an exam…) so the page can say what's coming up after it.
+ * @param {{ events: Array, top: Array<{group, reason}>, now: number, soon?: number }} p
+ */
+export function pickNext({ events = [], top = [], now, soon = 30 }) {
+  const timeline = timelineStates(events.filter((e) => !e.completed), now);
+  const study = timeline.filter((e) => e.kind === 'study' && !e.completed);
+  const current = study.find((e) => e.state === 'now');
+  const upcoming = study.find((e) => e.start > now);
+  const after = (e) => timeline.find((x) => x.start >= (e ? e.end : now) && x !== e && x.state !== 'past') || null;
+  if (current) return { kind: 'now', event: current, upNext: after(current) };
+  const task = top[0] || null;
+  if (upcoming && (!task || upcoming.start - now <= soon)) return { kind: 'next', event: upcoming, upNext: after(upcoming) };
+  if (task) return { kind: 'task', group: task.group, reason: task.reason, then: upcoming || null, upNext: timeline.find((x) => x.start > now) || null };
+  return { kind: 'clear', upNext: timeline.find((x) => x.start > now) || null };
+}

@@ -7,7 +7,7 @@ import { t, tCount } from '../shared/i18n.js';
 import { has } from '../shared/capabilities.js';
 import { todayStr, addDays, diffDays, startOfWeek, minutesOfDay } from '../shared/dates.js';
 import { app, onChange } from '../app/context.js';
-import { html, raw, setHtml, on, h, debounce } from '../ui/dom.js';
+import { html, raw, setHtml, on, h, debounce, escapeHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { pageHead, emptyState, button, badge, skeletonRows, errorNotice, segmented, wireSegmented } from '../ui/components.js';
 import { fmtMinutes, fmtWeekday, fmtDate } from '../ui/format.js';
@@ -174,8 +174,8 @@ export function initTasksPage() {
         <div class="card-head"><div><h2 class="card-title" id="quad-${q}">${t(`matrix.q_${q}`)} <span class="muted">${m[q].tasks.length || ''}</span></h2><p class="card-subtitle">${t(`matrix.h_${q}`)}</p></div>${m[q].minutes ? badge(fmtMinutes(m[q].minutes), QUAD_KIND[q]) : ''}</div>
         ${m[q].tasks.length ? html`<div class="list">${m[q].tasks.map((g) => html`<div class="matrix-task">${taskRowHtml(g, { course: courseById.get(g.courseId), showCourse: true, project: projectById.get(g.projectId), blockedInfo: data.blocked.get(g.id), today: data.today })}
           <span class="matrix-move">${q === 'do' || q === 'plan'
-            ? button(t('matrix.notImportant'), { size: 'sm', variant: 'ghost', action: 'matrix-unimportant', iconName: 'chevronDown', attrs: `data-task="${g.id}" aria-label="${t('matrix.notImportant')}: ${g.name}"` })
-            : button(t('matrix.important'), { size: 'sm', variant: 'ghost', action: 'matrix-important', iconName: 'chevronUp', attrs: `data-task="${g.id}" aria-label="${t('matrix.important')}: ${g.name}"` })}</span>
+            ? button(t('matrix.notImportant'), { size: 'sm', variant: 'ghost', action: 'matrix-unimportant', iconName: 'chevronDown', attrs: `data-task="${g.id}" aria-label="${t('matrix.notImportant')}: ${escapeHtml(g.name)}"` })
+            : button(t('matrix.important'), { size: 'sm', variant: 'ghost', action: 'matrix-important', iconName: 'chevronUp', attrs: `data-task="${g.id}" aria-label="${t('matrix.important')}: ${escapeHtml(g.name)}"` })}</span>
         </div>`)}</div>` : html`<div class="card-body"><p class="muted small" style="margin:0">${t('matrix.empty')}</p></div>`}
       </section>`)}</div>` : html`<div class="card">${emptyState({ iconName: 'check', title: t('tasks.noneMatch'), body: t('tasks.noneMatchBody'), compact: true })}</div>`}`;
     } else if (!data.groups.length) {

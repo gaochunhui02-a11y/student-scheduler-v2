@@ -30,10 +30,21 @@ export function countCatchUp(groups, today = todayStr()) {
 }
 
 /**
+ * V5-B: catch up now runs on the smart planner (split across days before
+ * the due date, explanations from real free time). Same entry point and the
+ * same confirm-first rule; the V4 single-day drawer below is kept as
+ * openCatchUpV4 for reference/tests.
+ */
+export async function openCatchUp(groups, onDone) {
+  const { openSmartPlan } = await import('./smartPlanUI.js');
+  return openSmartPlan(groups, { mode: 'catchup', onDone });
+}
+
+/**
  * @param {Array} groups  task groups (taskModel) — rows and blocks included
  * @param {Function} [onDone]
  */
-export async function openCatchUp(groups, onDone) {
+export async function openCatchUpV4(groups, onDone) {
   const ctx = app();
   const today = todayStr();
   const items = collectCatchUp(groups, today);
