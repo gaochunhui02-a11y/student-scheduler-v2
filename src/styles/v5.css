@@ -282,3 +282,26 @@ body.tour-open { overflow: hidden; }
 }
 .badge-icon { display: inline-flex; width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
 .badge-icon svg { width: 100%; height: 100%; }
+
+/* ---------------- consent card + feedback (V5-D) ---------------- */
+.consent-card {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 900;
+  width: min(380px, calc(100vw - 32px));
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised, var(--surface-1));
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+.consent-title { margin: 0 0 var(--space-1); font-weight: 650; }
+.consent-body { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text-soft); line-height: var(--leading); }
+.consent-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+@media (max-width: 760px) { .consent-card { bottom: 96px; right: var(--space-4); } }
+.feedback-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-bottom: var(--space-3); }
+.feedback-kind { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); }
+.feedback-kind:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.feedback-kind input { accent-color: var(--accent); margin: 0; }

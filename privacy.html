@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy — Student Scheduler</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/src/styles/landing.css">
+</head>
+<body>
+<main class="legal">
+  <p><a href="/">← Student Scheduler</a></p>
+  <h1>Privacy notice</h1>
+  <p class="legal-draft"><strong>Draft for review.</strong> This notice describes how the app is built today. It must be reviewed by a qualified person, completed with the operator's legal name and contact details, and adapted to the laws that apply (e.g. GDPR, CCPA, COPPA/age rules) before public launch.</p>
+
+  <h2>What we store</h2>
+  <ul>
+    <li><strong>Your account</strong>: email address and the name you choose, handled by our database and authentication provider (Supabase).</li>
+    <li><strong>What you put in the app</strong>: courses, tasks, schedules, grades, notes, routines and preferences. Each row belongs to your account and database rules (row-level security) stop any other account from reading or changing it.</li>
+    <li><strong>On your device</strong>: settings such as language and theme, guide progress, and — only if you turn it on — an offline copy of today's plan. You can clear these in Settings → Privacy.</li>
+  </ul>
+
+  <h2 id="analytics">Usage counts (opt-in)</h2>
+  <p>If — and only if — you choose "Share usage counts", the app records events such as "onboarding completed", "plan applied" or "syllabus imported", with small numbers like how many tasks were planned. These never include task or course names, notes, email or anything you typed. Browsers that send Do Not Track or Global Privacy Control are never asked. You can switch this off and delete the recorded events in Settings → Privacy.</p>
+  <p>If the operator enables cookieless page statistics on the public website (Plausible), page views of the public pages are counted without cookies or personal identifiers; it's skipped when your browser sends Do Not Track or Global Privacy Control.</p>
+
+  <h2>Feedback</h2>
+  <p>When you send feedback, we store your message, its type, optionally the page it's about, and the app version — linked to your account so we can follow up.</p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising and no third-party ad trackers.</li>
+    <li>No selling or renting of personal data.</li>
+    <li>No AI processing of your content — planning and syllabus import run as fixed rules in your browser.</li>
+  </ul>
+
+  <h2>Payments</h2>
+  <p>Paid plans are not on sale yet. If they launch, payments will be handled by Stripe; we would store only your subscription status and Stripe customer reference, never card numbers.</p>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Export everything you've entered from Settings → Data at any time.</li>
+    <li>Delete individual items, or ask for account deletion, which removes all rows linked to your account.</li>
+    <li>Contact: <em>[operator contact to be added before launch]</em>.</li>
+  </ul>
+
+  <h2>Age</h2>
+  <p><em>[To be completed after legal review — e.g. minimum age 13, or 16 in parts of the EU, and how younger students may use the app.]</em></p>
+</main>
+</body>
+</html>

@@ -13,6 +13,7 @@ import { isModuleEnabled } from '../workspace/modules.js';
 import { TOUR_IDS, TOUR_ROUTE, TOUR_MODULE, tourForView, markTour, markOffered, shouldOfferTour } from './tourModel.js';
 import { startTour, isTourOpen } from './tourUI.js';
 import { peekTours, loadTours, saveTours } from './tourData.js';
+import { track } from '../analytics/productEvents.js';
 
 let host = {};
 
@@ -47,7 +48,10 @@ export async function runTour(tourId) {
     await waitForView(routeView);
   }
   const started = startTour(tourId, {
-    onEnd: (status) => saveTours(userId, markTour(peekTours(userId), tourId, status)),
+    onEnd: (status) => {
+      if (status === 'done') track('tour_completed', { tour: tourId });
+      return saveTours(userId, markTour(peekTours(userId), tourId, status));
+    },
   });
   if (!started) toast(t('tour.nothingHere'), { kind: 'info' });
   return started;

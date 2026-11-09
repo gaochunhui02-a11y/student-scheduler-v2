@@ -18,6 +18,7 @@ import { catchUpStart } from './catchUpModel.js';
 import { collectPlanItems, proposeSmartPlan } from './smartPlanModel.js';
 import { applySmartPlan } from './smartPlanData.js';
 import { planHorizonDays } from '../billing/entitlements.js';
+import { track } from '../analytics/productEvents.js';
 
 function fill(key, params = {}) {
   let text = t(key);
@@ -178,6 +179,7 @@ export async function openSmartPlan(groups, { mode = 'all', onDone } = {}) {
           if (!n) return;
           b.setBusy(true);
           const res = await applySmartPlan(ctx.userId, result.proposals);
+          track(mode === 'catchup' ? 'catchup_applied' : 'plan_applied', { tasks: res.moved, days: new Set(result.proposals.flatMap((p) => p.parts.map((x) => x.date))).size });
           b.close(true);
           if (res.failed.length) toast(t('catchup.partial').replace('{done}', String(res.moved)).replace('{failed}', res.failed.map((f) => f.name).join(', ')), { kind: 'error' });
           else toast(tCount('smart.done', res.moved), { kind: 'success' });

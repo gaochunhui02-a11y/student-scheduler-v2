@@ -116,6 +116,8 @@ import { EXPORT_TABLES, buildExportPayload, buildExportFilename, totalExportedRo
 import { initOnboarding } from './onboarding.js';
 import { initHelpCenter, startTodayTourAfterOnboarding } from '../tour/helpCenter.js';
 import { saveUsualDay, loadUsualDay } from '../planner/usualDay.js';
+import { track, flushPending } from '../analytics/productEvents.js';
+import { maybeAskConsent } from '../analytics/consentCard.js';
 import { deriveBlockStatus, deriveTaskStatus, statusBadgeHtml, statusLabelKey } from '../shared/statusModel.js';
 import { displayBlockName, mealLabel } from '../shared/blockLabels.js';
 import { scrollBehavior } from '../shared/motion.js';
@@ -1217,6 +1219,7 @@ async function init(session) {
       { id: 'focus-timer', group: 'commands', title: t('focusTimer.paletteStart'), keywords: ['focus', 'timer', 'pomodoro', 'concentrate'], run: async () => { const { openFocusTimer } = await import('../focus/focusTimer.js'); openFocusTimer(); } },
       ...(hasCapability('unscheduledTasks') ? [{ id: 'plan-backlog', group: 'commands', title: t('backlog.planButton'), keywords: ['backlog', 'unscheduled', 'plan', 'assign days'], run: async () => { const [{ loadToday }, { openPlanBacklog }] = await Promise.all([import('../today/todayData.js'), import('../planner/backlogUI.js')]); const d = await loadToday(); openPlanBacklog(d.groups.filter((g) => !g.done && !g.scheduledDate)); } }] : []),
       { id: 'customize-dashboard', group: 'commands', title: t('dash.customizeTitle'), keywords: ['dashboard', 'widgets', 'home', 'layout'], run: () => { activateView('analyticsView'); setTimeout(() => document.querySelector('[data-action="home-customize"]')?.click(), 400); } },
+      { id: 'send-feedback', group: 'commands', title: t('feedback.title'), keywords: ['feedback', 'bug', 'report', 'idea', 'help', 'contact'], run: async () => { const { openFeedback } = await import('../feedback/feedbackUI.js'); openFeedback(); } },
       { id: 'import-syllabus', group: 'commands', title: t('import.title'), keywords: ['import', 'syllabus', 'csv', 'ics', 'paste', 'deadlines', 'course'], run: async () => { const { openImport } = await import('../import/importUI.js'); openImport(); } },
       { id: 'plan-deadlines', group: 'commands', title: t('smart.title'), keywords: ['plan', 'deadlines', 'semester', 'schedule', 'auto', 'split', 'due'], run: async () => { const [{ loadToday }, { openSmartPlan }] = await Promise.all([import('../today/todayData.js'), import('../planner/smartPlanUI.js')]); const d = await loadToday(); openSmartPlan(d.groups, { mode: 'all' }); } },
       { id: 'catch-up', group: 'commands', title: t('catchup.title'), keywords: ['missed', 'overdue', 'reschedule', 'catch up', 'carry over', 'behind'], run: async () => { const [{ loadToday }, { openCatchUp }] = await Promise.all([import('../today/todayData.js'), import('../planner/catchUpUI.js')]); const d = await loadToday(); openCatchUp(d.groups); } },
@@ -4446,6 +4449,7 @@ async function init(session) {
     btn.textContent = t('actions.generating');
     try {
       await runGeneration(lockedBlocksFromCurrent());
+      track('first_schedule_generated', { source: 'planner' });
     } finally {
       generateBtn.disabled = false;
       regenerateBtn.disabled = false;
@@ -4761,7 +4765,13 @@ async function init(session) {
   // (bookmark, reload, shared link) opens that page instead. The Planner's
   // own data is loaded above regardless, so switching to it is instant.
   const initialRoute = parseHash(location.hash);
-  if (initialRoute && initialRoute.view === 'plannerForm') activatePlannerScroll('plannerForm');
+  // V5-D: "Try the demo" from the landing page (?demo=1&tour=1) starts on
+  // Today with its guide: the busy week, the missed work, and the plan to fix it.
+  const guidedDemo = IS_DEMO && !initialRoute && new URLSearchParams(location.search).get('tour') === '1';
+  if (guidedDemo) {
+    await activateView('todayView');
+    setTimeout(() => import('../tour/helpCenter.js').then((m) => m.runTour('today')), 1200);
+  } else if (initialRoute && initialRoute.view === 'plannerForm') activatePlannerScroll('plannerForm');
   else if (initialRoute) await activateView(initialRoute.view, initialRoute.param);
   else {
     showAltView(document.getElementById('analyticsView'));
@@ -4905,6 +4915,11 @@ async function init(session) {
     isV3: () => hasCapability('courses'),
     today: () => todayDateStr(),
     applyPlan: applyOnboardingPlan,
+    onFinish: ({ build, tasks }) => {
+      track(build ? 'onboarding_completed' : 'onboarding_skipped');
+      if (build && tasks) track('first_schedule_generated', { source: 'onboarding', tasks });
+      maybeAskConsent({ delay: 8000 });
+    },
     // V5: finish on Today (the plan's home), then its guide.
     afterBuild: () => {
       if (!document.getElementById('todayView')) return;
@@ -4924,7 +4939,11 @@ async function init(session) {
   initHelpCenter({
     isOnboardingOpen: () => onboarding.isOpen(),
     replayOnboarding: () => onboarding.open(),
+    openFeedback: () => import('../feedback/feedbackUI.js').then((m) => m.openFeedback()),
   }).catch((err) => console.error('Could not start Help', err));
+  // V5-D: opt-in usage events (see src/analytics). Nothing is sent without consent.
+  track('session_start');
+  flushPending();
 
   const replayOnboardingBtn = document.getElementById('settingsReplayOnboardingBtn');
   if (replayOnboardingBtn) {
@@ -4938,6 +4957,7 @@ async function init(session) {
       userHasAnyPlanningData(userId).catch(() => undefined),
     ]);
     if (shouldShowOnboarding({ completedAt, hasExistingData, dismissedLocally: readOnboardingLocalFlag() })) onboarding.open();
+    else maybeAskConsent();
   } catch (err) {
     console.error('Could not check onboarding state:', err);
   }

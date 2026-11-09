@@ -360,6 +360,24 @@ await expectOk('A deletes the course', `delete from public.courses where id = $1
 const afterC = await rows(`select (select count(*)::int from public.notes where id = $1) as n, (select course_id from public.notes where id = $1) as c`, [noteA]);
 afterC[0].n === 1 && afterC[0].c === null ? ok('deleting a course KEEPS its notes (course_id -> null)') : bad('course delete (notes)', JSON.stringify(afterC));
 
+console.log('\n=== V5-D product events + feedback (0027) ===');
+await as(A);
+await ins('A records an allow-listed event', `insert into public.product_events (user_id, name, props) values ($1, 'onboarding_completed', '{"steps":5}')`, [A]);
+await expectErr('unknown event names are rejected', `insert into public.product_events (user_id, name) values ($1, 'page_view_with_email')`, [A], /check/);
+await expectErr('props must be an object', `insert into public.product_events (user_id, name, props) values ($1, 'plan_applied', '[1,2]')`, [A], /check/);
+await expectErr('oversized props are rejected', `insert into public.product_events (user_id, name, props) values ($1, 'plan_applied', jsonb_build_object('x', repeat('a', 2000)))`, [A], /check/);
+await expectErr("A can't write an event as B", `insert into public.product_events (user_id, name) values ($1, 'session_start')`, [B], /row-level security|policy/);
+const fbA = await ins('A sends feedback', `insert into public.feedback (user_id, kind, message, page) values ($1, 'bug', 'The week view jumps', 'week')`, [A]);
+await expectErr('feedback kind is checked', `insert into public.feedback (user_id, kind, message) values ($1, 'rant', 'x')`, [A], /check/);
+await expectErr('empty feedback is rejected', `insert into public.feedback (user_id, message) values ($1, '')`, [A], /check/);
+await as(B);
+const be = (await rows(`select (select count(*)::int from public.product_events) + (select count(*)::int from public.feedback) as n`))[0].n;
+be === 0 ? ok("B sees none of A's events or feedback") : bad('B sees A events/feedback', String(be));
+const bfu = await db.query(`update public.feedback set message = 'x' where id = $1`, [fbA]);
+bfu.affectedRows === 0 ? ok("B can't edit A's feedback") : bad('B edited A feedback', String(bfu.affectedRows));
+await as(A);
+await expectOk('A can delete their own events (right to erase)', `delete from public.product_events where user_id = $1`, [A]);
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

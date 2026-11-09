@@ -15,6 +15,8 @@ export default defineConfig({
         forgotPassword: resolve(__dirname, 'forgot-password.html'),
         resetPassword: resolve(__dirname, 'reset-password.html'),
         dashboard: resolve(__dirname, 'dashboard.html'),
+        privacy: resolve(__dirname, 'privacy.html'),
+        terms: resolve(__dirname, 'terms.html'),
       },
     },
   },

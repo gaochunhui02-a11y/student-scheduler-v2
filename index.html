@@ -3,22 +3,200 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Scheduler</title>
+<title>Student Scheduler — your semester, planned automatically</title>
+<meta name="description" content="Plan your semester, manage deadlines, and automatically reorganize your schedule when life gets busy. Free for students.">
+<meta property="og:title" content="Student Scheduler — your semester, planned automatically">
+<meta property="og:description" content="Plan your semester, manage deadlines, and automatically reorganize your schedule when life gets busy.">
+<meta property="og:image" content="/landing/today.webp">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <meta name="theme-color" content="#10131a">
-<link rel="stylesheet" href="/src/styles/main.css">
-<link rel="stylesheet" href="/src/styles/v3.css">
+<script>
+  // Someone with a stored session is sent to the app (module below); keep
+  // the marketing page hidden meanwhile so it doesn't flash.
+  try {
+    if (Object.keys(localStorage).some(function (k) { return /^sb-.*-auth-token$/.test(k); })) document.documentElement.classList.add('maybe-signed-in');
+  } catch (e) { /* storage blocked: just show the page */ }
+  setTimeout(function () { document.documentElement.classList.remove('maybe-signed-in'); }, 2500);
+</script>
+<link rel="stylesheet" href="/src/styles/landing.css">
 </head>
 <body>
-<p class="loading-text">Loading…</p>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="lp-nav">
+  <div class="lp-wrap lp-nav-inner">
+    <a class="lp-brand" href="/" aria-label="Student Scheduler home"><span class="lp-mark" aria-hidden="true">S</span>Student Scheduler</a>
+    <nav aria-label="Page sections" class="lp-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="lp-nav-cta">
+      <a class="lp-btn lp-btn--ghost" href="/login.html">Log in</a>
+      <a class="lp-btn lp-btn--primary" href="/signup.html" data-cta="nav">Get started free</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="lp-hero">
+    <div class="lp-wrap lp-hero-grid">
+      <div>
+        <p class="lp-eyebrow">For students with too much to keep track of</p>
+        <h1>Stop organizing your workload. Start getting it done.</h1>
+        <p class="lp-lead">Plan your semester, manage deadlines, and automatically reorganize your schedule when life gets busy.</p>
+        <div class="lp-cta-row">
+          <a class="lp-btn lp-btn--primary lp-btn--lg" href="/signup.html" data-cta="hero">Get started free</a>
+          <a class="lp-btn lp-btn--secondary lp-btn--lg" href="/dashboard.html?demo=1&tour=1">Try the demo — no sign-up</a>
+        </div>
+        <p class="lp-fine">Free during the beta. No credit card. English, 中文, 日本語.</p>
+      </div>
+      <figure class="lp-shot lp-shot--hero">
+        <img src="/landing/today.webp" width="1010" height="530" alt="The Today page: a 'Do this next' card showing the most urgent task with Start focus, progress for the day, and a notice that 3 missed tasks need a new day.">
+        <figcaption>The real Today page, with sample data from the demo.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="lp-section" id="how" aria-labelledby="howTitle">
+    <div class="lp-wrap">
+      <h2 id="howTitle">How it works</h2>
+      <ol class="lp-steps">
+        <li><span class="lp-step-n" aria-hidden="true">1</span><h3>Add your courses and deadlines</h3><p>Type them in, or paste your syllabus — dates, exams and weekly classes are picked out for you to check.</p></li>
+        <li><span class="lp-step-n" aria-hidden="true">2</span><h3>Say how much you can really do</h3><p>Pick your usual hours and a realistic amount of work per day. Classes and fixed events are worked around.</p></li>
+        <li><span class="lp-step-n" aria-hidden="true">3</span><h3>Get a day-by-day plan</h3><p>Big assignments are split over the days before they're due, so nothing lands on the night before.</p></li>
+        <li><span class="lp-step-n" aria-hidden="true">4</span><h3>Fall behind? It gets fixed</h3><p>Missed work is moved to days that still have room — you see exactly where and why before anything changes.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="lp-section lp-section--alt" id="features" aria-labelledby="featTitle">
+    <div class="lp-wrap">
+      <h2 id="featTitle">Planning that explains itself</h2>
+      <div class="lp-feature">
+        <div>
+          <h3>Recovery, not guilt</h3>
+          <p>When life happens, “Catch up” finds free time before each deadline and shows its reasoning in plain words — “Due Thursday with 3 h of work left. Wednesday has 2 h free, so it starts there.”</p>
+          <ul class="lp-checks">
+            <li>Every change is previewed first; nothing moves until you confirm</li>
+            <li>Locked sessions and fixed events never move</li>
+            <li>Warns you honestly when there isn't enough time</li>
+          </ul>
+        </div>
+        <figure class="lp-shot lp-shot--tall"><img src="/landing/smart.webp" width="640" height="860" loading="lazy" alt="The Plan my deadlines panel: six tasks with the day each one goes to and a sentence explaining why, plus totals for work and free time."><figcaption>Real planner preview (demo data).</figcaption></figure>
+      </div>
+      <div class="lp-feature lp-feature--flip">
+        <div>
+          <h3>Your syllabus in, minutes not hours</h3>
+          <p>Paste the schedule from your syllabus, or bring a CSV or .ics file. You get an editable table — anything unclear, like whether 3/4 means March 4 or 3 April, waits for your confirmation.</p>
+          <ul class="lp-checks">
+            <li>Never invents dates or deadlines</li>
+            <li>Spots duplicates and past items</li>
+            <li>Weekly classes become your timetable</li>
+          </ul>
+        </div>
+        <figure class="lp-shot lp-shot--tall"><img src="/landing/import.webp" width="640" height="860" loading="lazy" alt="The syllabus import review table with detected assignments, quizzes and exams, one row marked Needs confirmation."><figcaption>Real import review (demo data).</figcaption></figure>
+      </div>
+      <ul class="lp-grid" aria-label="Also included">
+        <li><h3>Courses, exams &amp; grades</h3><p>Course pages, grade and final-exam calculators, exam revision plans, attendance.</p></li>
+        <li><h3>Tasks, projects &amp; goals</h3><p>One task list for school and life, with projects, milestones and goals.</p></li>
+        <li><h3>Routines &amp; focus</h3><p>Habits with streaks, a focus timer, and planned-vs-actual time.</p></li>
+        <li><h3>Calendar &amp; export</h3><p>Month, week and agenda views; .ics import and export; full data export any time.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="lp-section" id="pricing" aria-labelledby="priceTitle">
+    <div class="lp-wrap">
+      <h2 id="priceTitle">Simple pricing</h2>
+      <p class="lp-sub">Free is a complete planner. Student Pro adds depth to the automation. <strong>During the beta, everything is free</strong> — Pro isn't for sale yet.</p>
+      <div class="lp-plans">
+        <div class="lp-plan">
+          <h3>Free</h3>
+          <p class="lp-price">$0</p>
+          <ul class="lp-checks">
+            <li>Courses, tasks, calendar, routines, goals, focus</li>
+            <li>Day schedules and manual planning</li>
+            <li>Smart plan &amp; catch-up for the next 2 weeks</li>
+            <li>Syllabus, CSV and .ics import</li>
+            <li>Reminders, offline view, full data export</li>
+          </ul>
+          <a class="lp-btn lp-btn--secondary" href="/signup.html" data-cta="free">Start free</a>
+        </div>
+        <div class="lp-plan lp-plan--pro">
+          <h3>Student Pro <span class="lp-tag">Coming soon</span></h3>
+          <p class="lp-price">$3.99<span>/month</span></p>
+          <p class="lp-price-alt">or $29/year (save 39%)</p>
+          <ul class="lp-checks">
+            <li>Plan and recover across the whole semester</li>
+            <li>Semester workload forecast and what-if</li>
+            <li>Bulk import across several courses</li>
+            <li>Advanced planning insights</li>
+            <li>Calendar sync — planned, not available yet</li>
+          </ul>
+          <a class="lp-btn lp-btn--primary" href="/signup.html" data-cta="pro">Start free — Pro features included in the beta</a>
+          <p class="lp-fine">When Pro launches you'll see the price and renewal terms before paying, and you can cancel any time. Your data stays yours on either plan.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-section lp-section--alt" id="faq" aria-labelledby="faqTitle">
+    <div class="lp-wrap lp-faq">
+      <h2 id="faqTitle">Questions</h2>
+      <details><summary>Is it really free?</summary><p>Yes. The free plan is a complete planner, and during the beta every feature is free. If Pro launches, free accounts keep everything listed under Free.</p></details>
+      <details><summary>Does it use AI?</summary><p>No. Planning, catch-up and syllabus import are deterministic rules you can inspect — the same input always gives the same plan, and every suggestion explains its reasons. Nothing you type is sent to an AI service.</p></details>
+      <details><summary>Will it guarantee better grades?</summary><p>No app can. It helps you see what's due, spread the work realistically, and recover when you fall behind — the studying is still yours.</p></details>
+      <details><summary>What happens to my data?</summary><p>It's stored in your own account, protected so only you can read it. No ads, no selling data, no third-party trackers. Anonymous usage counts are only collected if you opt in. You can export or delete everything. See the <a href="/privacy.html">privacy notice</a>.</p></details>
+      <details><summary>Can I import my syllabus or PDF?</summary><p>Paste the text of your syllabus (from a document or a text-based PDF), or use a CSV or .ics file. You check every row before it's saved. Scanned PDFs can't be read yet.</p></details>
+      <details><summary>Does it sync with Google Calendar?</summary><p>Not yet. Today you can import and export .ics files, which work with Google Calendar, Apple Calendar and Outlook. Live sync is planned and won't be advertised until it's built and tested.</p></details>
+      <details><summary>Can I try it without signing up?</summary><p>Yes — the <a href="/dashboard.html?demo=1&tour=1">demo</a> runs on sample data in your browser and never touches a real account.</p></details>
+    </div>
+  </section>
+
+  <section class="lp-final">
+    <div class="lp-wrap">
+      <h2>Your semester, planned automatically — and fixed when life changes.</h2>
+      <div class="lp-cta-row lp-cta-row--center">
+        <a class="lp-btn lp-btn--primary lp-btn--lg" href="/signup.html" data-cta="footer">Get started free</a>
+        <a class="lp-btn lp-btn--secondary lp-btn--lg" href="/dashboard.html?demo=1&tour=1">Try the demo</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="lp-footer">
+  <div class="lp-wrap lp-footer-inner">
+    <span>© Student Scheduler</span>
+    <nav aria-label="Legal"><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/login.html">Log in</a></nav>
+  </div>
+</footer>
+
 <script type="module">
   import { supabase } from '/src/lib/supabaseClient.js';
   import { registerServiceWorker } from '/src/shared/pwa.js';
   registerServiceWorker();
-  const { data } = await supabase.auth.getSession();
-  window.location.replace(data.session ? '/dashboard.html' : '/login.html');
+  // Signed-in visitors go straight to the app, as before V5.
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) window.location.replace('/dashboard.html');
+    else document.documentElement.classList.remove('maybe-signed-in');
+  } catch {
+    document.documentElement.classList.remove('maybe-signed-in');
+  }
+  // Optional, cookieless page analytics — only when the owner configures a
+  // domain (VITE_PLAUSIBLE_DOMAIN) and the browser doesn't send DNT/GPC.
+  const domain = import.meta.env.VITE_PLAUSIBLE_DOMAIN;
+  const optOut = navigator.doNotTrack === '1' || navigator.globalPrivacyControl === true;
+  if (domain && !optOut) {
+    const s = document.createElement('script');
+    s.defer = true;
+    s.dataset.domain = domain;
+    s.src = 'https://plausible.io/js/script.outbound-links.js';
+    document.head.appendChild(s);
+  }
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { redirectIfLoggedIn } from '../shared/session.js';
+import { rememberPending } from '../analytics/productEvents.js';
 import { registerServiceWorker } from '../shared/pwa.js';
 import { t, applyTranslations } from '../shared/i18n.js';
 
@@ -41,6 +42,8 @@ form.addEventListener('submit', async (e) => {
   // The "name" here is stored as auth user metadata. A database trigger
   // (see supabase/schema.sql) reads it back out to create the profiles row —
   // this app never writes to profiles directly on sign-up.
+  // V5-D: remembered on this device only; sent later only if the student opts in.
+  rememberPending('signup_started');
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -54,6 +57,7 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
+  rememberPending('signup_completed');
   // If your Supabase project has "Confirm email" turned on, there is no
   // session yet — the user must click the confirmation link first.
   if (!data.session) {

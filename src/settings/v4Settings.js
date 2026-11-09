@@ -111,6 +111,31 @@ export function renderPrivacy(root) {
   ['account', 'device', 'noAi', 'noTracking', 'private'].forEach((k) => list.appendChild(h('li', {}, h('strong', {}, t(`privacy.${k}Title`)), h('span', {}, t(`privacy.${k}Body`)))));
   root.appendChild(list);
 
+  // V5-D: opt-in usage events.
+  root.appendChild(h('h3', { class: 'settings3-subhead', id: 'privacyUsage' }, t('consent.settingsTitle')));
+  const usage = h('input', { type: 'checkbox', id: 'privacyUsageCb' });
+  import('../analytics/productEvents.js').then(({ getConsent, setConsent, deleteMyEvents, browserOptOut }) => {
+    usage.checked = getConsent() === 'granted';
+    usage.addEventListener('change', () => {
+      setConsent(usage.checked ? 'granted' : 'denied');
+      toast(usage.checked ? t('consent.onToast') : t('consent.offToast'));
+    });
+    if (browserOptOut()) root.querySelector('#privacyUsageSignal')?.removeAttribute('hidden');
+    del.addEventListener('click', async () => {
+      try {
+        const n = await deleteMyEvents();
+        toast(t('consent.deleted').replace('{n}', String(n)), { kind: 'success' });
+      } catch {
+        toast(t('v3.saveError'), { kind: 'error' });
+      }
+    });
+  });
+  root.appendChild(h('div', { class: 'checkbox-row' }, usage, h('label', { for: 'privacyUsageCb' }, t('consent.settingsLabel'))));
+  root.appendChild(h('p', { class: 'field-hint' }, t('consent.settingsHint')));
+  root.appendChild(h('p', { class: 'field-hint', id: 'privacyUsageSignal', hidden: true }, t('consent.signalNote')));
+  const del = h('button', { type: 'button', class: 'btn btn--ghost btn--sm' }, h('span', {}, t('consent.deleteMine')));
+  root.appendChild(del);
+
   root.appendChild(h('h3', { class: 'settings3-subhead' }, t('privacy.offlineTitle')));
   const cb = h('input', { type: 'checkbox', id: 'privacyOffline' });
   cb.checked = offlineCopyEnabled();

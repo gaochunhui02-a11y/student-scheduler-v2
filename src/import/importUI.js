@@ -17,6 +17,7 @@ import { parseIcsCalendar } from '../calendar/calendarModel.js';
 import { parseSyllabus, ITEM_KINDS } from './syllabusParser.js';
 import { parseCsv, guessColumns, rowsFromCsv, rowsFromIcsEvents, markDuplicates, markPast, editRow, confirmRow, rowProblem, reviewSummary, buildImportPlan } from './importModel.js';
 import { existingForCourse, currentTerm, applyImport } from './importData.js';
+import { track } from '../analytics/productEvents.js';
 
 const MAX_FILE = 2 * 1024 * 1024;
 
@@ -345,6 +346,7 @@ export async function openImport({ courseId = null, onDone } = {}) {
       toast(t('v3.saveError'), { kind: 'error' });
       return;
     }
+    track('import_completed', { source: state.source, tasks: res.tasks, exams: res.exams, meetings: res.meetings });
     const body = api.body;
     body.innerHTML = '';
     body.appendChild(h('div', { class: 'imp-done', role: 'status' },

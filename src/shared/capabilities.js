@@ -37,6 +37,9 @@ const PROBES = {
   attendance: ['attendance_records', 'id, start_minutes, status'],
   notes: ['notes', 'id, body, pinned, course_id, project_id, goal_id'],
   resourcesV4: ['resources', 'id, project_id, goal_id, exam_id, in_library, favorite, tags'],
+  // V5
+  productEvents: ['product_events', 'id, name, props'],
+  feedback: ['feedback', 'id, kind, message'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -66,6 +69,8 @@ export const FEATURE_MIGRATIONS = {
   attendance: '0024_attendance.sql',
   notes: '0025_notes.sql',
   resourcesV4: '0026_resources_v4.sql',
+  productEvents: '0027_product_events.sql',
+  feedback: '0027_product_events.sql',
 };
 
 let state = null;

@@ -438,6 +438,7 @@ export function initOnboarding(host) {
       }
       await host.markComplete();
       close();
+      if (typeof host.onFinish === 'function') host.onFinish({ build, tasks: build ? buildOnboardingPlan(answers).tasks.length : 0 });
       // V5: land on Today with the plan, and show its guide once.
       if (build && typeof host.afterBuild === 'function') host.afterBuild();
     } catch (err) {
