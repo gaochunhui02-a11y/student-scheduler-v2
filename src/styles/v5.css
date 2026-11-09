@@ -305,3 +305,16 @@ body.tour-open { overflow: hidden; }
 .feedback-kind { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); }
 .feedback-kind:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .feedback-kind input { accent-color: var(--accent); margin: 0; }
+
+/* ---------------- Settings → Plan (V5-E) ---------------- */
+.plan-current { display: grid; gap: var(--space-2); justify-items: start; margin-bottom: var(--space-4); }
+.plan-current p { margin: 0; color: var(--text-soft); }
+.plan-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-4); font-size: var(--text-sm); }
+.plan-table th, .plan-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle); text-align: left; }
+.plan-table thead th { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.plan-table tbody th { font-weight: 500; color: var(--text); }
+.plan-yes { color: var(--success); font-weight: 700; }
+.plan-no { color: var(--muted); }
+.plan-action { display: grid; gap: var(--space-2); justify-items: start; }
+.plan-price { margin: 0; font-weight: 600; }
+.plan-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }

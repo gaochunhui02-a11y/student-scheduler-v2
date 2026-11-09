@@ -4941,6 +4941,10 @@ async function init(session) {
     replayOnboarding: () => onboarding.open(),
     openFeedback: () => import('../feedback/feedbackUI.js').then((m) => m.openFeedback()),
   }).catch((err) => console.error('Could not start Help', err));
+  // V5-E: the account's plan (beta unless billing is configured), and the
+  // return from Stripe Checkout (?billing=success|cancel).
+  import('../billing/billingData.js').then((m) => m.loadSubscription()).catch(() => {});
+  if (new URLSearchParams(location.search).has('billing')) import('../billing/planUI.js').then((m) => m.handleBillingReturn()).catch(() => {});
   // V5-D: opt-in usage events (see src/analytics). Nothing is sent without consent.
   track('session_start');
   flushPending();

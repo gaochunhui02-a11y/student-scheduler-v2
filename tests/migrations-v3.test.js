@@ -103,7 +103,18 @@ console.log('\n=== Row Level Security ===');
 v3.forEach((file) => {
   const sql = sqlOf(file);
   const tables = [...sql.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]);
-  tables.forEach((tbl) => {
+  // V5-E reviewed exception: server-written billing tables. Users may read
+  // their own subscription and nothing else; the webhook log is closed.
+  const SERVER_WRITTEN = { subscriptions: ['select'], stripe_events: [] };
+  tables.filter((tbl) => SERVER_WRITTEN[tbl]).forEach((tbl) => {
+    check(`${tbl}: RLS on, only ${SERVER_WRITTEN[tbl].join('/') || 'no'} policies (service-role writes only)`, () => {
+      assert.match(sql, new RegExp(`alter table public\\.${tbl} enable row level security`));
+      const ops = [...sql.matchAll(new RegExp(`create policy "[^"]+" on public\\.${tbl} for (\\w+)`, 'g'))].map((m) => m[1]);
+      assert.deepEqual(ops, SERVER_WRITTEN[tbl]);
+      ops.forEach(() => assert.match(sql, new RegExp(`on public\\.${tbl} for select using \\(auth\\.uid\\(\\) = user_id\\)`)));
+    });
+  });
+  tables.filter((tbl) => !SERVER_WRITTEN[tbl]).forEach((tbl) => {
     check(`${tbl}: user_id owner column, RLS on, select/insert/update/delete own`, () => {
       const body = sql.slice(sql.indexOf(`create table if not exists public.${tbl}`));
       assert.match(body.slice(0, 400), /user_id uuid not null references auth\.users \(id\) on delete cascade/);

@@ -363,6 +363,7 @@ export function initSettingsV3() {
       if (key === 'planner') renderEnergy(document.getElementById('energySettings'));
       if (key === 'data') renderFileExports(document.getElementById('settingsExportV4'));
       if (key === 'privacy') renderPrivacy(document.getElementById('settingsPanel-privacy'));
+      if (key === 'plan') import('../billing/planUI.js').then((m) => m.renderPlan(document.getElementById('settingsPanel-plan')));
       if (key === 'notifications') renderV4Reminders(document.getElementById('v4ReminderSettings'));
       if (key === 'workspace' && panels.workspace) renderWorkspace(panels.workspace);
       if (key === 'keyboard' && panels.keyboard) renderKeyboard(panels.keyboard);

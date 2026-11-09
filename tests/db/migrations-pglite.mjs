@@ -378,6 +378,30 @@ bfu.affectedRows === 0 ? ok("B can't edit A's feedback") : bad('B edited A feedb
 await as(A);
 await expectOk('A can delete their own events (right to erase)', `delete from public.product_events where user_id = $1`, [A]);
 
+console.log('\n=== V5-E subscriptions + stripe_events (0028) ===');
+await as(A);
+await expectErr('a user cannot create their own subscription row (no self-granted Pro)', `insert into public.subscriptions (user_id, plan, status) values ($1, 'pro', 'active')`, [A], /row-level security|policy/);
+await asAdmin();
+await expectOk('the service role (webhook) writes A\'s subscription', `insert into public.subscriptions (user_id, stripe_customer_id, stripe_subscription_id, plan, status, price_interval, current_period_end) values ($1, 'cus_Test123', 'sub_Test123', 'pro', 'active', 'month', now() + interval '30 days')`, [A]);
+await expectErr('plan values are checked', `insert into public.subscriptions (user_id, plan) values ($1, 'gold')`, [B], /check/);
+await expectErr('Stripe ids must look like Stripe ids', `insert into public.subscriptions (user_id, stripe_customer_id) values ($1, 'not-a-customer')`, [B], /check/);
+await expectOk('the webhook logs an event id', `insert into public.stripe_events (id, type) values ('evt_Test1', 'customer.subscription.updated')`);
+await expectErr('the same Stripe event can only be logged once (idempotency)', `insert into public.stripe_events (id, type) values ('evt_Test1', 'customer.subscription.updated')`, [], /duplicate|unique/);
+await as(A);
+const subA = await rows(`select plan, status from public.subscriptions`);
+subA.length === 1 && subA[0].plan === 'pro' ? ok('A reads their own subscription') : bad('A own subscription', JSON.stringify(subA));
+const upA = await db.query(`update public.subscriptions set plan = 'pro', current_period_end = now() + interval '10 years' where user_id = $1`, [A]);
+upA.affectedRows === 0 ? ok('A cannot extend or change their own subscription') : bad('A updated own subscription', String(upA.affectedRows));
+const delA = await db.query(`delete from public.subscriptions where user_id = $1`, [A]);
+delA.affectedRows === 0 ? ok('A cannot delete the subscription record') : bad('A deleted subscription', String(delA.affectedRows));
+const evA = (await rows(`select count(*)::int n from public.stripe_events`))[0].n;
+evA === 0 ? ok('clients cannot read the Stripe event log') : bad('client read stripe_events', String(evA));
+await expectErr('clients cannot write the Stripe event log', `insert into public.stripe_events (id, type) values ('evt_Fake', 'x')`, [], /row-level security|policy/);
+await as(B);
+const subB = (await rows(`select count(*)::int n from public.subscriptions`))[0].n;
+subB === 0 ? ok("B cannot see A's subscription") : bad('B sees A subscription', String(subB));
+await as(A);
+
 console.log('\n=== cascades ===');
 await expectOk('A deletes the course', `delete from public.courses where id = $1`, [courseA]);
 const t = await rows(`select course_id from public.study_subjects where id = $1`, [taskA]);

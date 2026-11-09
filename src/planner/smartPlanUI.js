@@ -66,6 +66,7 @@ export async function openSmartPlan(groups, { mode = 'all', onDone } = {}) {
   const unchecked = new Set();
   let freeDays = [];
   let horizon = 14;
+  let cappedByPlan = false;
   let result = { proposals: [], totals: { minutes: 0, planned: 0, short: 0, tasks: 0 } };
 
   const api = openDrawer({
@@ -80,7 +81,9 @@ export async function openSmartPlan(groups, { mode = 'all', onDone } = {}) {
     // Far enough to reach the furthest due date (within the plan's horizon).
     const furthest = items.reduce((m, x) => (x.group.dueDate && x.group.dueDate > m ? x.group.dueDate : m), today);
     const limit = planHorizonDays();
-    horizon = Math.min(limit, Math.max(14, diffDays(today, furthest) + 1));
+    const wanted = Math.max(14, diffDays(today, furthest) + 1);
+    horizon = Math.min(limit, wanted);
+    cappedByPlan = wanted > limit;
     const fc = await loadForecastInput(ctx.userId, today, horizon);
     freeDays = freeDaysFromForecast(buildWorkloadForecast(fc.input));
   }
@@ -122,6 +125,8 @@ export async function openSmartPlan(groups, { mode = 'all', onDone } = {}) {
         h('div', {}, h('p', { class: 'notice-title' }, t('smart.shortTitle')), h('p', {}, fill('smart.shortBody', { time: fmtMinutes(t0.short) })))));
     }
 
+    // Free plan (only when billing is on): say plainly what the look-ahead covers.
+    if (cappedByPlan) body.appendChild(h('p', { class: 'hint smart-capped' }, fill('smart.cappedByPlan', { n: horizon })));
     const controls = h('div', { class: 'smart-controls' });
     const startGroup = h('div', { class: 'seg', role: 'group', 'aria-label': t('catchup.startLabel') });
     [['today', today], ['tomorrow', addDays(today, 1)]].forEach(([key, date]) => {

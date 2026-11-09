@@ -40,6 +40,7 @@ const PROBES = {
   // V5
   productEvents: ['product_events', 'id, name, props'],
   feedback: ['feedback', 'id, kind, message'],
+  subscriptions: ['subscriptions', 'user_id, plan, status'],
 };
 
 // Which migration file provides each feature (shown in Settings → About).
@@ -71,6 +72,7 @@ export const FEATURE_MIGRATIONS = {
   resourcesV4: '0026_resources_v4.sql',
   productEvents: '0027_product_events.sql',
   feedback: '0027_product_events.sql',
+  subscriptions: '0028_subscriptions.sql',
 };
 
 let state = null;
